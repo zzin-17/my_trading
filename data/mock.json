@@ -8,7 +8,8 @@
       "quantity": 10,
       "avg_price": 175.5,
       "current_price": 182.3,
-      "currency": "USD"
+      "currency": "USD",
+      "market": "US"
     },
     {
       "id": "u2",
@@ -18,7 +19,8 @@
       "quantity": 5,
       "avg_price": 380.0,
       "current_price": 415.2,
-      "currency": "USD"
+      "currency": "USD",
+      "market": "US"
     },
     {
       "id": "u3",
@@ -28,7 +30,8 @@
       "quantity": 8,
       "avg_price": 450.0,
       "current_price": 495.75,
-      "currency": "USD"
+      "currency": "USD",
+      "market": "US"
     },
     {
       "id": "u4",
@@ -38,7 +41,8 @@
       "quantity": 12,
       "avg_price": 145.2,
       "current_price": 152.4,
-      "currency": "USD"
+      "currency": "USD",
+      "market": "US"
     },
     {
       "id": "u5",
@@ -48,7 +52,8 @@
       "quantity": 6,
       "avg_price": 240.0,
       "current_price": 278.9,
-      "currency": "USD"
+      "currency": "USD",
+      "market": "US"
     },
     {
       "id": "u6",
@@ -58,7 +63,8 @@
       "quantity": 14,
       "avg_price": 165.0,
       "current_price": 178.25,
-      "currency": "USD"
+      "currency": "USD",
+      "market": "US"
     },
     {
       "id": "u7",
@@ -68,7 +74,8 @@
       "quantity": 9,
       "avg_price": 210.0,
       "current_price": 198.5,
-      "currency": "USD"
+      "currency": "USD",
+      "market": "US"
     },
     {
       "id": "u8",
@@ -78,7 +85,8 @@
       "quantity": 4,
       "avg_price": 480.0,
       "current_price": 512.3,
-      "currency": "USD"
+      "currency": "USD",
+      "market": "US"
     },
     {
       "id": "u9",
@@ -88,7 +96,8 @@
       "quantity": 3,
       "avg_price": 620.0,
       "current_price": 645.0,
-      "currency": "USD"
+      "currency": "USD",
+      "market": "US"
     },
     {
       "id": "u10",
@@ -98,7 +107,8 @@
       "quantity": 20,
       "avg_price": 105.0,
       "current_price": 112.8,
-      "currency": "USD"
+      "currency": "USD",
+      "market": "US"
     },
     {
       "id": "u11",
@@ -108,7 +118,8 @@
       "quantity": 7,
       "avg_price": 310.0,
       "current_price": 355.4,
-      "currency": "USD"
+      "currency": "USD",
+      "market": "US"
     },
     {
       "id": "u12",
@@ -118,7 +129,8 @@
       "quantity": 15,
       "avg_price": 135.0,
       "current_price": 142.6,
-      "currency": "USD"
+      "currency": "USD",
+      "market": "US"
     },
     {
       "id": "u13",
@@ -128,7 +140,41 @@
       "quantity": 4,
       "avg_price": 520.0,
       "current_price": 548.2,
-      "currency": "USD"
+      "currency": "USD",
+      "market": "US"
+    },
+    {
+      "id": "k1",
+      "ticker": "005930",
+      "name": "삼성전자",
+      "sector": "Information Technology",
+      "quantity": 100,
+      "avg_price": 70000,
+      "current_price": 71200,
+      "currency": "KRW",
+      "market": "KR"
+    },
+    {
+      "id": "k2",
+      "ticker": "000660",
+      "name": "SK하이닉스",
+      "sector": "Information Technology",
+      "quantity": 30,
+      "avg_price": 128000,
+      "current_price": 135500,
+      "currency": "KRW",
+      "market": "KR"
+    },
+    {
+      "id": "k3",
+      "ticker": "035420",
+      "name": "NAVER",
+      "sector": "Communication Services",
+      "quantity": 20,
+      "avg_price": 210000,
+      "current_price": 198500,
+      "currency": "KRW",
+      "market": "KR"
     }
   ]
 }

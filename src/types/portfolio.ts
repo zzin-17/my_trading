@@ -6,12 +6,15 @@
 /** 통화별 반올림: KRW 0자리, USD 2자리 */
 export type CurrencyCode = 'KRW' | 'USD';
 
+/** 거래 시장: 한국장 / 미국장 (탭·집계 구분) */
+export type Market = 'KR' | 'US';
+
 /** 집중도 경고 임계값 (%). §1.4: 섹터·종목 각각 동일 기준(≥ 이 값). */
 export const CONCENTRATION_WARNING_PCT = 40;
 
 /**
  * 보유 종목 (mock.json / 수동 입력 기준)
- * 스펙 원본 필드에 `currency`만 추가 (반올림 규칙 적용용)
+ * `market` 생략 시 티커 규칙으로 보정: 6자리 숫자 → KR, 그 외 → US (`normalizePosition`)
  */
 export interface Position {
   id: string;
@@ -22,6 +25,7 @@ export interface Position {
   avg_price: number;
   current_price: number;
   currency: CurrencyCode;
+  market: Market;
 }
 
 /** `/data/mock.json` 루트 스키마 */

@@ -52,7 +52,7 @@ export function StockBarChart({ data, currency }: StockBarChartProps) {
           <BarChart
             layout="vertical"
             data={rows}
-            margin={{ top: 4, right: 12, left: 4, bottom: 4 }}
+            margin={{ top: 4, right: 12, left: 8, bottom: 4 }}
           >
             <XAxis
               type="number"
@@ -64,9 +64,38 @@ export function StockBarChart({ data, currency }: StockBarChartProps) {
             <YAxis
               type="category"
               dataKey="label"
-              width={56}
+              width={118}
               stroke="#A0A3BD"
-              tick={{ fill: '#E8EAED', fontSize: 11 }}
+              interval={0}
+              tick={(props: {
+                x?: number;
+                y?: number;
+                payload?: { value?: string };
+              }) => {
+                const { x = 0, y = 0, payload } = props;
+                const key = String(payload?.value ?? '');
+                const row = rows.find((r) => r.label === key);
+                const code = row?.label ?? key;
+                const nameLine = row?.sub ?? '';
+                return (
+                  <g transform={`translate(${x},${y})`}>
+                    <text textAnchor="end" fill="#E8EAED" fontSize={11} fontWeight={600}>
+                      <tspan x={-4} dy={-5}>
+                        {code}
+                      </tspan>
+                      <tspan
+                        x={-4}
+                        dy={14}
+                        fill="#A0A3BD"
+                        fontSize={10}
+                        fontWeight={400}
+                      >
+                        {nameLine}
+                      </tspan>
+                    </text>
+                  </g>
+                );
+              }}
             />
             <Tooltip
               content={({ active, payload }) => {

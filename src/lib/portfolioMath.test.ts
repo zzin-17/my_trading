@@ -21,6 +21,7 @@ function pos(overrides: Partial<Position> & Pick<Position, 'id'>): Position {
     avg_price: 100,
     current_price: 110,
     currency: 'USD',
+    market: 'US',
     ...overrides,
   };
 }

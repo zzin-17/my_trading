@@ -93,7 +93,8 @@ export function EditPriceModal({
           현재가 편집
         </h2>
         <p className="mt-1 text-[12px] text-textMuted">
-          {position.name} ({position.ticker}) · {position.currency}
+          {position.name} ({position.ticker}) · {position.market === 'KR' ? '한국' : '미국'} ·{' '}
+          {position.currency}
         </p>
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
