@@ -1,0 +1,134 @@
+{
+  "positions": [
+    {
+      "id": "u1",
+      "ticker": "AAPL",
+      "name": "애플",
+      "sector": "Information Technology",
+      "quantity": 10,
+      "avg_price": 175.5,
+      "current_price": 182.3,
+      "currency": "USD"
+    },
+    {
+      "id": "u2",
+      "ticker": "MSFT",
+      "name": "마이크로소프트",
+      "sector": "Information Technology",
+      "quantity": 5,
+      "avg_price": 380.0,
+      "current_price": 415.2,
+      "currency": "USD"
+    },
+    {
+      "id": "u3",
+      "ticker": "NVDA",
+      "name": "엔비디아",
+      "sector": "Information Technology",
+      "quantity": 8,
+      "avg_price": 450.0,
+      "current_price": 495.75,
+      "currency": "USD"
+    },
+    {
+      "id": "u4",
+      "ticker": "JPM",
+      "name": "JP모건",
+      "sector": "Financials",
+      "quantity": 12,
+      "avg_price": 145.2,
+      "current_price": 152.4,
+      "currency": "USD"
+    },
+    {
+      "id": "u5",
+      "ticker": "V",
+      "name": "비자",
+      "sector": "Financials",
+      "quantity": 6,
+      "avg_price": 240.0,
+      "current_price": 278.9,
+      "currency": "USD"
+    },
+    {
+      "id": "u6",
+      "ticker": "AMZN",
+      "name": "아마존",
+      "sector": "Consumer Discretionary",
+      "quantity": 14,
+      "avg_price": 165.0,
+      "current_price": 178.25,
+      "currency": "USD"
+    },
+    {
+      "id": "u7",
+      "ticker": "TSLA",
+      "name": "테슬라",
+      "sector": "Consumer Discretionary",
+      "quantity": 9,
+      "avg_price": 210.0,
+      "current_price": 198.5,
+      "currency": "USD"
+    },
+    {
+      "id": "u8",
+      "ticker": "UNH",
+      "name": "유나이티드헬스",
+      "sector": "Health Care",
+      "quantity": 4,
+      "avg_price": 480.0,
+      "current_price": 512.3,
+      "currency": "USD"
+    },
+    {
+      "id": "u9",
+      "ticker": "LLY",
+      "name": "일라이릴리",
+      "sector": "Health Care",
+      "quantity": 3,
+      "avg_price": 620.0,
+      "current_price": 645.0,
+      "currency": "USD"
+    },
+    {
+      "id": "u10",
+      "ticker": "XOM",
+      "name": "엑슨모빌",
+      "sector": "Energy",
+      "quantity": 20,
+      "avg_price": 105.0,
+      "current_price": 112.8,
+      "currency": "USD"
+    },
+    {
+      "id": "u11",
+      "ticker": "META",
+      "name": "메타",
+      "sector": "Communication Services",
+      "quantity": 7,
+      "avg_price": 310.0,
+      "current_price": 355.4,
+      "currency": "USD"
+    },
+    {
+      "id": "u12",
+      "ticker": "GOOGL",
+      "name": "알파벳 A",
+      "sector": "Communication Services",
+      "quantity": 15,
+      "avg_price": 135.0,
+      "current_price": 142.6,
+      "currency": "USD"
+    },
+    {
+      "id": "u13",
+      "ticker": "COST",
+      "name": "코스트코",
+      "sector": "Consumer Staples",
+      "quantity": 4,
+      "avg_price": 520.0,
+      "current_price": 548.2,
+      "currency": "USD"
+    }
+  ]
+}
