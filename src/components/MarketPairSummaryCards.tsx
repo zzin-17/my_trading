@@ -83,13 +83,13 @@ function MarketBlock({
           value={formatMoney(summary.total_market_value, summary.currency)}
         />
         <Mini
-          label="평가손익"
+          label="예상손익"
           value={formatMoney(summary.total_pnl, summary.currency)}
           positive={pnlOk}
           negative={!pnlOk}
         />
         <Mini
-          label="수익률"
+          label="예상수익률"
           value={formatPercent(summary.total_return_pct, true)}
           positive={pnlOk}
           negative={!pnlOk}

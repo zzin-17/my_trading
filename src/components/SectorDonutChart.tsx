@@ -51,6 +51,8 @@ export function SectorDonutChart({ sectors, currency }: SectorDonutChartProps) {
               innerRadius={68}
               outerRadius={100}
               paddingAngle={2}
+              labelLine={false}
+              label={renderInsidePercentLabel}
             >
               {data.map((entry, i) => (
                 <Cell
@@ -114,5 +116,37 @@ export function SectorDonutChart({ sectors, currency }: SectorDonutChartProps) {
         ))}
       </ul>
     </div>
+  );
+}
+
+function renderInsidePercentLabel(props: {
+  cx?: number;
+  cy?: number;
+  midAngle?: number;
+  innerRadius?: number;
+  outerRadius?: number;
+  value?: number;
+}) {
+  const { cx = 0, cy = 0, midAngle = 0, innerRadius = 0, outerRadius = 0, value = 0 } = props;
+  if (value < 5) return null;
+
+  const RADIAN = Math.PI / 180;
+  const r = innerRadius + (outerRadius - innerRadius) * 0.5;
+  const x = cx + r * Math.cos(-midAngle * RADIAN);
+  const y = cy + r * Math.sin(-midAngle * RADIAN);
+
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#E8EAED"
+      textAnchor="middle"
+      dominantBaseline="central"
+      fontSize={12}
+      fontWeight={700}
+      className="tabular-nums"
+    >
+      {value.toFixed(1)}%
+    </text>
   );
 }

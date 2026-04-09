@@ -16,6 +16,8 @@ export interface Trade {
   price: number;
   currency: CurrencyCode;
   note?: string;
+  /** true면 매매일지·통계 목록에 넣지 않음 (보유종목·CSV 등 당일 매매가 아닌 반영) */
+  excludeFromJournal?: boolean;
 }
 
 export interface TradeSeedFile {

@@ -12,6 +12,7 @@ import {
 } from '../lib/market';
 import { roundMoney } from '../lib/portfolioMath';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { lookupKrStockName } from '../lib/krxLookup';
 
 interface AddTradeModalProps {
   open: boolean;
@@ -72,7 +73,7 @@ export function AddTradeModal({
     const rawTk = ticker.trim();
     const tk = /^\d{6}$/.test(rawTk) ? rawTk : rawTk.toUpperCase();
     if (!tk) {
-      setError('티커를 입력하세요.');
+      setError('종목코드를 입력하세요.');
       return;
     }
     const nm = name.trim() || tk;
@@ -124,6 +125,24 @@ export function AddTradeModal({
 
   const inferredLabel =
     inferMarketFromTicker(ticker.trim()) === 'KR' ? '한국(6자리 숫자)' : '미국';
+
+  const handleTickerBlur = () => {
+    const tk = ticker.trim();
+    if (!/^\d{6}$/.test(tk)) return;
+    const mkt = marketManual || inferMarketFromTicker(tk);
+    if (mkt !== 'KR') return;
+    void (async () => {
+      try {
+        const found = await lookupKrStockName(tk);
+        if (found) {
+          setName((n) => (n.trim() ? n : found.name));
+          setSector(found.sector);
+        }
+      } catch {
+        /* KRX 목록 실패 시 무시 */
+      }
+    })();
+  };
 
   return (
     <div
@@ -181,13 +200,14 @@ export function AddTradeModal({
 
           <div>
             <label htmlFor="at-ticker" className="text-[12px] text-textMuted">
-              티커
+              종목코드
             </label>
             <input
               id="at-ticker"
               value={ticker}
               onChange={(e) => setTicker(e.target.value)}
-              placeholder="AAPL · 005930"
+              onBlur={handleTickerBlur}
+              placeholder="예: AAPL, 005930"
               className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
               required
             />
@@ -195,7 +215,7 @@ export function AddTradeModal({
 
           <div>
             <label htmlFor="at-name" className="text-[12px] text-textMuted">
-              종목명 (비우면 티커와 동일)
+              종목명 (비우면 종목코드와 동일)
             </label>
             <input
               id="at-name"
@@ -207,7 +227,7 @@ export function AddTradeModal({
 
           <div>
             <label htmlFor="at-sector" className="text-[12px] text-textMuted">
-              섹터
+              섹터 (한국 6자리·포커스 아웃 시 KRX 업종 자동)
             </label>
             <input
               id="at-sector"

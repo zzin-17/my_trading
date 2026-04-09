@@ -10,8 +10,10 @@ import { SummaryCards } from './components/SummaryCards';
 import { MarketPairSummaryCards } from './components/MarketPairSummaryCards';
 import { HoldingsTable } from './components/HoldingsTable';
 import { TradeJournal } from './components/TradeJournal';
-import { EditPriceModal } from './components/EditPriceModal';
 import { AddTradeModal } from './components/AddTradeModal';
+import { AddHoldingModal, type AddHoldingPayload } from './components/AddHoldingModal';
+import { MarketTodoList } from './components/MarketTodoList';
+import { PositionDetailModal } from './components/PositionDetailModal';
 import { MarketTabs, type MarketTab } from './components/MarketTabs';
 import { MarketSplitCard } from './components/MarketSplitCard';
 import { tradeSeed } from './data/tradeSeed';
@@ -21,8 +23,9 @@ import {
   buildSectorWeights,
   buildTopStockWeights,
   getUnifiedPortfolioCurrency,
+  roundMoney,
 } from './lib/portfolioMath';
-import { filterByMarket } from './lib/market';
+import { defaultCurrencyForMarket, filterByMarket } from './lib/market';
 import { computeLedger, ledgerToPositions } from './lib/ledger';
 import { savePersisted, clearPersisted } from './lib/persistence';
 import {
@@ -30,7 +33,22 @@ import {
   clearInitialAppStateCache,
 } from './lib/portfolioBootstrap';
 import { MixedCurrencyBanner } from './components/MixedCurrencyBanner';
+import type { Market } from './types/portfolio';
 import type { Trade } from './types/trade';
+import type { TradePlanTodo } from './types/todo';
+import { parseHoldingCsv } from './lib/holdingCsv';
+import { applyKrxMetadataToKrTrades } from './lib/krxLookup';
+import { adjustOpeningBalanceTrade } from './lib/positionAdjust';
+import { fetchKrNaverDelayedQuote } from './lib/naverKrQuote';
+import { formatQuoteUpdatedLabel } from './lib/format';
+
+function tickersEqual(a: string, b: string, market: Market): boolean {
+  const na =
+    market === 'KR' ? a.replace(/\s/g, '').trim() : a.trim().toUpperCase();
+  const nb =
+    market === 'KR' ? b.replace(/\s/g, '').trim() : b.trim().toUpperCase();
+  return na === nb;
+}
 
 const SectorDonutChart = lazy(() =>
   import('./components/SectorDonutChart').then((m) => ({
@@ -57,6 +75,7 @@ function ChartSkeleton({ label }: { label: string }) {
 }
 
 export default function App() {
+  const enabledTabs: MarketTab[] = ['KR'];
   const [trades, setTrades] = useState<Trade[]>(
     () => getInitialAppState().trades,
   );
@@ -66,15 +85,38 @@ export default function App() {
   const [positionIds, setPositionIds] = useState<Record<string, string>>(
     () => getInitialAppState().positionIds,
   );
+  const [todos, setTodos] = useState<TradePlanTodo[]>(
+    () => getInitialAppState().todos,
+  );
+  const [notes, setNotes] = useState<Record<string, string>>(
+    () => getInitialAppState().notes,
+  );
+  const [quoteUpdatedAt, setQuoteUpdatedAt] = useState<Record<string, string>>(
+    () => getInitialAppState().quoteUpdatedAt,
+  );
+  const [lastKrQuoteBulkAt, setLastKrQuoteBulkAt] = useState<string | null>(
+    () => getInitialAppState().lastKrQuoteBulkAt,
+  );
 
-  const [marketTab, setMarketTab] = useState<MarketTab>('all');
+  const [marketTab, setMarketTab] = useState<MarketTab>('KR');
   const [filterText, setFilterText] = useState('');
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [addTradeOpen, setAddTradeOpen] = useState(false);
+  const [addHoldingOpen, setAddHoldingOpen] = useState(false);
+  const [krQuoteRefreshing, setKrQuoteRefreshing] = useState(false);
+  const [krxSectorSyncing, setKrxSectorSyncing] = useState(false);
 
   useEffect(() => {
-    savePersisted({ trades, quotes, positionIds });
-  }, [trades, quotes, positionIds]);
+    savePersisted({
+      trades,
+      quotes,
+      positionIds,
+      todos,
+      notes,
+      quoteUpdatedAt,
+      lastKrQuoteBulkAt,
+    });
+  }, [trades, quotes, positionIds, todos, notes, quoteUpdatedAt, lastKrQuoteBulkAt]);
 
   const ledger = useMemo(() => computeLedger(trades), [trades]);
   const positions = useMemo(
@@ -87,6 +129,24 @@ export default function App() {
     [ledger],
   );
 
+  const handleAdjustPosition = useCallback(
+    (
+      ticker: string,
+      qty: number,
+      avg: number,
+      meta: Pick<Trade, 'name' | 'sector' | 'market' | 'currency'>,
+    ): boolean => {
+      const r = adjustOpeningBalanceTrade(trades, ticker, qty, avg, meta);
+      if (!r.ok) {
+        window.alert(r.message);
+        return false;
+      }
+      setTrades(r.trades);
+      return true;
+    },
+    [trades],
+  );
+
   const handleAddTrade = useCallback((t: Trade) => {
     setTrades((prev) => [...prev, t]);
     setPositionIds((prev) =>
@@ -97,13 +157,187 @@ export default function App() {
     );
   }, []);
 
+  const handleAddHolding = useCallback(
+    (payload: AddHoldingPayload) => {
+      const m = payload.market;
+      const existing = positions.find(
+        (p) =>
+          p.market === m &&
+          tickersEqual(p.ticker, payload.ticker, m) &&
+          p.quantity > 0,
+      );
+      if (existing) {
+        const ok = window.confirm(
+          '이미 보유 중인 종목입니다.\n\n보유 종목을 수정하시겠습니까?',
+        );
+        setAddHoldingOpen(false);
+        if (ok) setDetailId(existing.id);
+        return;
+      }
+
+      const trade: Trade = {
+        id: `tr-user-holding-${Date.now()}`,
+        date: payload.date,
+        ticker: payload.ticker,
+        name: payload.name,
+        sector: payload.sector,
+        market: payload.market,
+        side: 'buy',
+        quantity: payload.quantity,
+        price: payload.avgPrice,
+        currency: payload.market === 'KR' ? 'KRW' : 'USD',
+        excludeFromJournal: true,
+        note: '보유종목 추가(일지 제외)',
+      };
+      setTrades((prev) => [...prev, trade]);
+      setPositionIds((prev) =>
+        prev[payload.ticker]
+          ? prev
+          : { ...prev, [payload.ticker]: `p-${Date.now()}` },
+      );
+      setQuotes((prev) => ({ ...prev, [payload.ticker]: payload.currentPrice }));
+    },
+    [positions],
+  );
+
+  const handleUploadCsv = useCallback(async (file: File) => {
+    const text = await file.text();
+    const { rows, errors } = parseHoldingCsv(text);
+    if (rows.length === 0) {
+      window.alert(
+        `업로드 실패: 유효한 행이 없습니다.\n${errors.slice(0, 5).join('\n')}`,
+      );
+      return;
+    }
+
+    const now = Date.now();
+    const importedTrades: Trade[] = rows.map((r, idx) => {
+      const currency = defaultCurrencyForMarket(r.market);
+      return {
+        id: `tr-csv-${now}-${idx}`,
+        date: r.date,
+        ticker: r.ticker,
+        name: r.name,
+        sector: r.sector,
+        market: r.market,
+        side: 'buy',
+        quantity: r.quantity,
+        price: roundMoney(r.avgPrice, currency),
+        currency,
+        excludeFromJournal: true,
+      };
+    });
+
+    setTrades((prev) => [...prev, ...importedTrades]);
+    setPositionIds((prev) => {
+      const next = { ...prev };
+      rows.forEach((r, idx) => {
+        if (!next[r.ticker]) next[r.ticker] = `p-csv-${now}-${idx}`;
+      });
+      return next;
+    });
+    setQuotes((prev) => {
+      const next = { ...prev };
+      rows.forEach((r) => {
+        const currency = defaultCurrencyForMarket(r.market);
+        next[r.ticker] = roundMoney(r.currentPrice, currency);
+      });
+      return next;
+    });
+
+    const doneMsg = `CSV 업로드 완료: ${rows.length}건 반영`;
+    if (errors.length > 0) {
+      window.alert(`${doneMsg}\n(건너뜀 ${errors.length}건)\n${errors.slice(0, 5).join('\n')}`);
+      return;
+    }
+    window.alert(doneMsg);
+  }, []);
+
   const handleResetData = useCallback(() => {
     clearPersisted();
     clearInitialAppStateCache();
     setTrades([...tradeSeed.trades]);
     setQuotes({ ...tradeSeed.quotes });
     setPositionIds({ ...tradeSeed.positionIds });
+    setTodos([]);
+    setNotes({});
+    setQuoteUpdatedAt({});
+    setLastKrQuoteBulkAt(null);
   }, []);
+
+  const refreshKrQuotes = useCallback(async () => {
+    const tickers = [
+      ...new Set(
+        positions
+          .filter((p) => p.market === 'KR' && /^\d{6}$/.test(p.ticker))
+          .map((p) => p.ticker),
+      ),
+    ];
+    if (tickers.length === 0) {
+      window.alert('한국장 6자리 숫자 종목이 없습니다.');
+      return;
+    }
+    setKrQuoteRefreshing(true);
+    let ok = 0;
+    let fail = 0;
+    const nextQuotes: Record<string, number> = {};
+    const nextAt: Record<string, string> = {};
+    const chunk = 5;
+    for (let i = 0; i < tickers.length; i += chunk) {
+      const part = tickers.slice(i, i + chunk);
+      await Promise.all(
+        part.map(async (t) => {
+          try {
+            const r = await fetchKrNaverDelayedQuote(t);
+            nextQuotes[t] = roundMoney(r.price, 'KRW');
+            nextAt[t] = r.fetchedAt;
+            ok += 1;
+          } catch {
+            fail += 1;
+          }
+        }),
+      );
+    }
+    setQuotes((prev) => ({ ...prev, ...nextQuotes }));
+    setQuoteUpdatedAt((prev) => ({ ...prev, ...nextAt }));
+    if (ok > 0) {
+      setLastKrQuoteBulkAt(new Date().toISOString());
+    }
+    setKrQuoteRefreshing(false);
+    if (fail > 0) {
+      window.alert(`시세 갱신: 성공 ${ok}건, 실패 ${fail}건`);
+    }
+  }, [positions]);
+
+  const handleSyncKrxSectors = useCallback(async () => {
+    setKrxSectorSyncing(true);
+    try {
+      const next = await applyKrxMetadataToKrTrades(trades);
+      let changed = 0;
+      next.forEach((t, i) => {
+        const o = trades[i];
+        if (t.sector !== o.sector || t.name !== o.name) changed += 1;
+      });
+      setTrades(next);
+      window.alert(
+        `KRX 상장목록 기준으로 종목명·섹터(업종)를 맞췄습니다. 변경: ${changed}건`,
+      );
+    } catch {
+      window.alert(
+        'KRX 목록을 불러오지 못했습니다. 개발 서버 재시작 후 다시 시도해 주세요.',
+      );
+    } finally {
+      setKrxSectorSyncing(false);
+    }
+  }, [trades]);
+
+  const visibleTodos = useMemo(
+    () =>
+      marketTab === 'all'
+        ? []
+        : todos.filter((x) => x.market === marketTab),
+    [todos, marketTab],
+  );
 
   const marketCounts = useMemo(
     () => ({
@@ -118,6 +352,23 @@ export default function App() {
     () => filterByMarket(positions, marketTab),
     [positions, marketTab],
   );
+
+  const krQuoteDisclaimer = useMemo(() => {
+    if (marketTab !== 'KR') return null;
+    const suffix = '(시차·지연 가능, 예상 손익은 참고용)';
+    if (lastKrQuoteBulkAt) {
+      return `시세: 네이버 증권 지연 시세 · 마지막 일괄 갱신 ${formatQuoteUpdatedLabel(lastKrQuoteBulkAt)} ${suffix}`;
+    }
+    const times = visiblePositions
+      .filter((p) => p.market === 'KR' && /^\d{6}$/.test(p.ticker))
+      .map((p) => quoteUpdatedAt[p.ticker])
+      .filter(Boolean) as string[];
+    if (times.length === 0) {
+      return '시세는 네이버 증권 지연 시세입니다. 「시세 갱신」으로 불러오세요. 장 운영·지연에 따라 실제 체결가와 다를 수 있습니다.';
+    }
+    const latest = times.reduce((a, b) => (a > b ? a : b));
+    return `시세: 네이버 증권 지연 시세 · 시세 기준 ${formatQuoteUpdatedLabel(latest)} ${suffix}`;
+  }, [marketTab, visiblePositions, quoteUpdatedAt, lastKrQuoteBulkAt]);
   const visibleTrades = useMemo(
     () =>
       marketTab === 'all'
@@ -189,9 +440,37 @@ export default function App() {
     } as const;
   }, [visiblePositions, metrics]);
 
-  const editing = editingId
-    ? (positions.find((p) => p.id === editingId) ?? null)
+  const detailPosition = detailId
+    ? (positions.find((p) => p.id === detailId) ?? null)
     : null;
+  const metricById = useMemo(
+    () => new Map(metrics.map((m) => [m.positionId, m])),
+    [metrics],
+  );
+  const detailMetric = detailPosition
+    ? metricById.get(detailPosition.id) ?? null
+    : null;
+  const detailTrades = useMemo(
+    () =>
+      detailPosition
+        ? trades.filter((t) => t.ticker === detailPosition.ticker)
+        : [],
+    [detailPosition, trades],
+  );
+  const detailTodos = useMemo(
+    () =>
+      detailPosition
+        ? todos.filter(
+            (x) =>
+              x.ticker === detailPosition.ticker &&
+              x.market === detailPosition.market,
+          )
+        : [],
+    [detailPosition, todos],
+  );
+  const detailNoteKey = detailPosition
+    ? `${detailPosition.market}:${detailPosition.ticker}`
+    : '';
 
   const unifiedCurrency = useMemo(
     () => getUnifiedPortfolioCurrency(visiblePositions),
@@ -213,6 +492,12 @@ export default function App() {
     positions.length > 0 &&
     unifiedCurrencyAll === null;
 
+  useEffect(() => {
+    if (!enabledTabs.includes(marketTab)) {
+      setMarketTab(enabledTabs[0]);
+    }
+  }, [marketTab, enabledTabs]);
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-surface/90 px-4 py-4 backdrop-blur sm:px-6">
@@ -228,6 +513,7 @@ export default function App() {
           value={marketTab}
           onChange={setMarketTab}
           counts={marketCounts}
+          enabledTabs={enabledTabs}
         />
 
         {visiblePositions.length === 0 ? (
@@ -239,6 +525,15 @@ export default function App() {
                   ? '한국장에 해당하는 종목이 없습니다.'
                   : '미국장에 해당하는 종목이 없습니다.'}
             </p>
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={() => setAddHoldingOpen(true)}
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+              >
+                + 보유종목 추가
+              </button>
+            </div>
           </div>
         ) : (
           <>
@@ -249,7 +544,10 @@ export default function App() {
                 usSummary={usSummaryAll}
               />
             ) : (
-              <SummaryCards summary={summary} />
+              <SummaryCards
+                summary={summary}
+                quoteDisclaimer={krQuoteDisclaimer}
+              />
             )}
             <Suspense
               fallback={
@@ -288,7 +586,16 @@ export default function App() {
               summary={summary}
               filterText={filterText}
               onFilterChange={setFilterText}
-              onEditPrice={setEditingId}
+              onOpenDetail={setDetailId}
+              onOpenAddHolding={() => setAddHoldingOpen(true)}
+              onUploadCsv={handleUploadCsv}
+              krQuoteRefreshing={krQuoteRefreshing}
+              onRefreshKrQuotes={() => void refreshKrQuotes()}
+              lastKrQuoteBulkAt={lastKrQuoteBulkAt}
+              onSyncKrxSectors={
+                marketTab === 'KR' ? () => void handleSyncKrxSectors() : undefined
+              }
+              krxSectorSyncing={krxSectorSyncing}
             />
           </>
         )}
@@ -301,21 +608,79 @@ export default function App() {
           onResetData={handleResetData}
         />
       </main>
-      <EditPriceModal
-        position={editing}
-        onClose={() => setEditingId(null)}
-        onSave={(id, nextPrice) => {
-          const p = positions.find((x) => x.id === id);
-          if (p) {
-            setQuotes((prev) => ({ ...prev, [p.ticker]: nextPrice }));
-          }
-        }}
-      />
+      {marketTab !== 'all' && (
+        <div className="mx-auto mb-6 max-w-7xl px-4 sm:px-6">
+          <MarketTodoList
+            market={marketTab}
+            items={visibleTodos}
+            quotes={quotes}
+            onAdd={(payload) =>
+              setTodos((prev) => [
+                ...prev,
+                {
+                  id: `todo-${Date.now()}`,
+                  done: false,
+                  createdAt: new Date().toISOString(),
+                  ...payload,
+                },
+              ])
+            }
+            onToggleDone={(id) =>
+              setTodos((prev) =>
+                prev.map((x) => (x.id === id ? { ...x, done: !x.done } : x)),
+              )
+            }
+            onDelete={(id) =>
+              setTodos((prev) => prev.filter((x) => x.id !== id))
+            }
+          />
+        </div>
+      )}
       <AddTradeModal
         open={addTradeOpen}
         onClose={() => setAddTradeOpen(false)}
         onAdd={handleAddTrade}
         getAvailableQuantity={getAvailableQuantity}
+      />
+      <AddHoldingModal
+        open={addHoldingOpen}
+        market={marketTab === 'all' ? 'KR' : marketTab}
+        onClose={() => setAddHoldingOpen(false)}
+        onAdd={handleAddHolding}
+      />
+      <PositionDetailModal
+        position={detailPosition}
+        metric={detailMetric}
+        trades={detailTrades}
+        todos={detailTodos}
+        note={detailNoteKey ? notes[detailNoteKey] ?? '' : ''}
+        onSaveNote={(next) => {
+          if (!detailNoteKey) return;
+          setNotes((prev) => ({ ...prev, [detailNoteKey]: next }));
+        }}
+        onAddTodo={(payload) =>
+          setTodos((prev) => [
+            ...prev,
+            {
+              id: `todo-${Date.now()}`,
+              done: false,
+              createdAt: new Date().toISOString(),
+              ...payload,
+            },
+          ])
+        }
+        onClose={() => setDetailId(null)}
+        onAdjustPosition={
+          detailPosition
+            ? (qty, avg) =>
+                handleAdjustPosition(detailPosition.ticker, qty, avg, {
+                  name: detailPosition.name,
+                  sector: detailPosition.sector,
+                  market: detailPosition.market,
+                  currency: detailPosition.currency,
+                })
+            : undefined
+        }
       />
     </div>
   );

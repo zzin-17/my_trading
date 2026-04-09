@@ -18,6 +18,16 @@ export function reconcilePositionIds(
   return next;
 }
 
+function withJournalFlags(trades: Trade[]) {
+  return trades.map((t) => {
+    if (t.excludeFromJournal) return t;
+    if (/^tr-user-holding-/.test(t.id) || /^tr-csv-/.test(t.id)) {
+      return { ...t, excludeFromJournal: true as const };
+    }
+    return t;
+  });
+}
+
 export function buildInitialAppState(): PersistedPortfolioV1 {
   const raw = loadPersisted();
   if (raw) {
@@ -26,15 +36,24 @@ export function buildInitialAppState(): PersistedPortfolioV1 {
       ...raw.positionIds,
     });
     return {
-      trades: raw.trades,
+      trades: withJournalFlags(raw.trades),
       quotes: { ...tradeSeed.quotes, ...raw.quotes },
       positionIds,
+      todos: raw.todos ?? [],
+      notes: raw.notes ?? {},
+      quoteUpdatedAt: { ...(raw.quoteUpdatedAt ?? {}) },
+      lastKrQuoteBulkAt:
+        typeof raw.lastKrQuoteBulkAt === 'string' ? raw.lastKrQuoteBulkAt : null,
     };
   }
   return {
     trades: [...tradeSeed.trades],
     quotes: { ...tradeSeed.quotes },
     positionIds: { ...tradeSeed.positionIds },
+    todos: [],
+    notes: {},
+    quoteUpdatedAt: {},
+    lastKrQuoteBulkAt: null,
   };
 }
 

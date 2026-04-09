@@ -6,6 +6,7 @@ interface MarketTabsProps {
   value: MarketTab;
   onChange: (tab: MarketTab) => void;
   counts: { all: number; KR: number; US: number };
+  enabledTabs?: MarketTab[];
 }
 
 const tabs: { id: MarketTab; label: string }[] = [
@@ -14,14 +15,23 @@ const tabs: { id: MarketTab; label: string }[] = [
   { id: 'US', label: '미국장' },
 ];
 
-export function MarketTabs({ value, onChange, counts }: MarketTabsProps) {
+export function MarketTabs({
+  value,
+  onChange,
+  counts,
+  enabledTabs,
+}: MarketTabsProps) {
+  const visibleTabs =
+    enabledTabs && enabledTabs.length > 0
+      ? tabs.filter((t) => enabledTabs.includes(t.id))
+      : tabs;
   return (
     <div
       role="tablist"
       aria-label="거래 시장"
       className="flex flex-wrap gap-1 rounded-lg border border-border bg-background p-1"
     >
-      {tabs.map((tab) => {
+      {visibleTabs.map((tab) => {
         const active = value === tab.id;
         const n = counts[tab.id === 'all' ? 'all' : tab.id];
         return (

@@ -22,3 +22,13 @@ export function formatPercent(value: number, signed = false): string {
   const s = `${value >= 0 && signed ? '+' : ''}${value.toFixed(2)}%`;
   return s;
 }
+
+/** 시세 갱신 시각 표시 (로컬 시간) */
+export function formatQuoteUpdatedLabel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return new Intl.DateTimeFormat('ko-KR', {
+    dateStyle: 'short',
+    timeStyle: 'medium',
+  }).format(d);
+}

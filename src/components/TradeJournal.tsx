@@ -21,10 +21,15 @@ export function TradeJournal({
 }: TradeJournalProps) {
   const [tickerFilter, setTickerFilter] = useState<string>('');
 
+  const journalTrades = useMemo(
+    () => trades.filter((x) => !x.excludeFromJournal),
+    [trades],
+  );
+
   const tickerOptions = useMemo(() => {
-    const s = new Set(trades.map((x) => x.ticker));
+    const s = new Set(journalTrades.map((x) => x.ticker));
     return [...s].sort((a, b) => a.localeCompare(b));
-  }, [trades]);
+  }, [journalTrades]);
 
   useEffect(() => {
     if (tickerFilter && !tickerOptions.includes(tickerFilter)) {
@@ -33,7 +38,7 @@ export function TradeJournal({
   }, [tickerFilter, tickerOptions]);
 
   const filteredTrades = useMemo(() => {
-    let list = trades;
+    let list = journalTrades;
     if (tickerFilter) {
       list = list.filter((x) => x.ticker === tickerFilter);
     }
@@ -41,7 +46,7 @@ export function TradeJournal({
       const d = b.date.localeCompare(a.date);
       return d !== 0 ? d : b.id.localeCompare(a.id);
     });
-  }, [trades, tickerFilter]);
+  }, [journalTrades, tickerFilter]);
 
   const summaryRow = tickerFilter ? ledger.get(tickerFilter) : undefined;
   const quote =
@@ -81,18 +86,19 @@ export function TradeJournal({
         <div>
           <h3 className="text-sm font-medium text-textMain">매매일지</h3>
           <p className="text-[12px] text-textMuted">
-            종목을 고르면 매수·매도 내역과 장부 기준 평단·손익을 볼 수 있습니다.
+            종목을 고르면 매수·매도 내역과 장부 기준 평단·예상 손익을 볼 수 있습니다. 보유종목·CSV로
+            넣은 분은 매매일지에 포함되지 않습니다.
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-end">
           <label className="flex flex-col gap-1 sm:flex-row sm:items-center">
-            <span className="text-[12px] text-textMuted sm:mr-2">종목</span>
+            <span className="text-[12px] text-textMuted sm:mr-2">종목코드</span>
             <select
               value={tickerFilter}
               onChange={(e) => setTickerFilter(e.target.value)}
               className="rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
             >
-              <option value="">전체 ({trades.length}건)</option>
+              <option value="">전체 ({journalTrades.length}건)</option>
               {tickerOptions.map((tk) => (
                 <option key={tk} value={tk}>
                   {tk}
@@ -149,7 +155,7 @@ export function TradeJournal({
             muted={stats.qty === 0}
           />
           <Stat
-            label="평가손익"
+            label="예상손익"
             value={formatMoney(stats.unreal, summaryRow.currency)}
             positive={stats.unreal > 0}
             negative={stats.unreal < 0}
@@ -165,7 +171,7 @@ export function TradeJournal({
       )}
       {stats && summaryRow && stats.qty > 0 && (
         <p className="mt-2 text-[12px] text-textMuted">
-          평가 수익률(잔여 물량 기준):{' '}
+          예상 수익률(잔여 물량 기준):{' '}
           <span
             className={
               stats.retPct >= 0 ? 'text-positive' : 'text-negative'
@@ -182,11 +188,12 @@ export function TradeJournal({
       )}
 
       <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[720px] border-collapse text-left text-[12px]">
+        <table className="w-full min-w-[860px] border-collapse text-left text-[12px]">
           <thead>
             <tr className="border-b border-border text-textMuted">
               <th className="py-2 pr-3 font-medium">날짜</th>
-              <th className="py-2 pr-3 font-medium">티커</th>
+              <th className="py-2 pr-3 font-medium">종목코드</th>
+              <th className="py-2 pr-3 font-medium">종목명</th>
               <th className="py-2 pr-3 font-medium">구분</th>
               <th className="py-2 pr-3 text-right font-medium tabular-nums">수량</th>
               <th className="py-2 pr-3 text-right font-medium tabular-nums">단가</th>
@@ -197,7 +204,7 @@ export function TradeJournal({
           <tbody>
             {filteredTrades.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-textMuted">
+                <td colSpan={8} className="py-8 text-center text-textMuted">
                   내역이 없습니다.
                 </td>
               </tr>
@@ -214,6 +221,7 @@ export function TradeJournal({
                   >
                     <td className="py-2 pr-3 tabular-nums text-textMain">{tr.date}</td>
                     <td className="py-2 pr-3 font-medium text-textMain">{tr.ticker}</td>
+                    <td className="max-w-[160px] truncate py-2 pr-3 text-textMain">{tr.name}</td>
                     <td className="py-2 pr-3">
                       <span
                         className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${
