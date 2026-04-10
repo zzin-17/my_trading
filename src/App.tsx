@@ -417,16 +417,21 @@ export default function App() {
     setCloudError(null);
     setCloudBusy(true);
     try {
+      if (user) {
+        await pushCloudPortfolio(user.uid, portfolioRef.current);
+      }
       await signOutUser();
       wipePrivatePortfolio();
     } catch (e) {
       setCloudError(
-        e instanceof Error ? e.message : '로그아웃에 실패했습니다.',
+        e instanceof Error
+          ? `로그아웃 전 클라우드 저장/로그아웃 실패: ${e.message}`
+          : '로그아웃 전 클라우드 저장 또는 로그아웃에 실패했습니다.',
       );
     } finally {
       setCloudBusy(false);
     }
-  }, [signOutUser, wipePrivatePortfolio]);
+  }, [signOutUser, wipePrivatePortfolio, user]);
 
   /** 미체결 주문: 일지에 적은 날(local)이 지나면 자동 삭제(당일 자정 이후 미체결 = 무효) */
   useEffect(() => {
