@@ -29,30 +29,37 @@ function withJournalFlags(trades: Trade[]) {
   });
 }
 
+/** 로컬·클라우드·가져오기 공통: 시드 병합·포지션 ID 정리 */
+export function normalizeLoadedPortfolio(
+  raw: PersistedPortfolioV1,
+): PersistedPortfolioV1 {
+  const positionIds = reconcilePositionIds(raw.trades, {
+    ...tradeSeed.positionIds,
+    ...raw.positionIds,
+  });
+  return {
+    trades: withJournalFlags(raw.trades),
+    quotes: { ...tradeSeed.quotes, ...raw.quotes },
+    positionIds,
+    todos: raw.todos ?? [],
+    notes: raw.notes ?? {},
+    quoteUpdatedAt: { ...(raw.quoteUpdatedAt ?? {}) },
+    lastKrQuoteBulkAt:
+      typeof raw.lastKrQuoteBulkAt === 'string' ? raw.lastKrQuoteBulkAt : null,
+    krSellCommissionRate: normalizeKrSellCommissionRate(
+      raw.krSellCommissionRate,
+    ),
+    krPreferExtendedQuote:
+      typeof raw.krPreferExtendedQuote === 'boolean'
+        ? raw.krPreferExtendedQuote
+        : false,
+  };
+}
+
 export function buildInitialAppState(): PersistedPortfolioV1 {
   const raw = loadPersisted();
   if (raw) {
-    const positionIds = reconcilePositionIds(raw.trades, {
-      ...tradeSeed.positionIds,
-      ...raw.positionIds,
-    });
-    return {
-      trades: withJournalFlags(raw.trades),
-      quotes: { ...tradeSeed.quotes, ...raw.quotes },
-      positionIds,
-      todos: raw.todos ?? [],
-      notes: raw.notes ?? {},
-      quoteUpdatedAt: { ...(raw.quoteUpdatedAt ?? {}) },
-      lastKrQuoteBulkAt:
-        typeof raw.lastKrQuoteBulkAt === 'string' ? raw.lastKrQuoteBulkAt : null,
-      krSellCommissionRate: normalizeKrSellCommissionRate(
-        raw.krSellCommissionRate,
-      ),
-      krPreferExtendedQuote:
-        typeof raw.krPreferExtendedQuote === 'boolean'
-          ? raw.krPreferExtendedQuote
-          : false,
-    };
+    return normalizeLoadedPortfolio(raw);
   }
   return {
     trades: [...tradeSeed.trades],

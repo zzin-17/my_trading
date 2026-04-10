@@ -22,42 +22,51 @@ export interface PersistedPortfolioV1 {
   krPreferExtendedQuote?: boolean;
 }
 
+/** JSON·가져오기·클라우드용 동일 검증 */
+export function coercePersistedPortfolio(
+  input: unknown,
+): PersistedPortfolioV1 | null {
+  if (!input || typeof input !== 'object') return null;
+  const data = input as PersistedPortfolioV1;
+  if (!Array.isArray(data.trades)) return null;
+  if (typeof data.quotes !== 'object' || data.quotes === null) return null;
+  if (typeof data.positionIds !== 'object' || data.positionIds === null) {
+    data.positionIds = {};
+  }
+  if (!Array.isArray(data.todos)) {
+    data.todos = [];
+  }
+  if (typeof data.notes !== 'object' || data.notes === null) {
+    data.notes = {};
+  }
+  if (
+    typeof data.quoteUpdatedAt !== 'object' ||
+    data.quoteUpdatedAt === null
+  ) {
+    data.quoteUpdatedAt = {};
+  }
+  data.lastKrQuoteBulkAt =
+    typeof data.lastKrQuoteBulkAt === 'string' ? data.lastKrQuoteBulkAt : null;
+  if (
+    typeof data.krSellCommissionRate === 'number' &&
+    Number.isFinite(data.krSellCommissionRate)
+  ) {
+    /* 유지 */
+  } else {
+    delete data.krSellCommissionRate;
+  }
+  if (typeof data.krPreferExtendedQuote !== 'boolean') {
+    delete data.krPreferExtendedQuote;
+  }
+  return data;
+}
+
 export function loadPersisted(): PersistedPortfolioV1 | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const data = JSON.parse(raw) as PersistedPortfolioV1;
-    if (!data || !Array.isArray(data.trades)) return null;
-    if (typeof data.quotes !== 'object' || data.quotes === null) return null;
-    if (typeof data.positionIds !== 'object' || data.positionIds === null) {
-      data.positionIds = {};
-    }
-    if (!Array.isArray(data.todos)) {
-      data.todos = [];
-    }
-    if (typeof data.notes !== 'object' || data.notes === null) {
-      data.notes = {};
-    }
-    if (
-      typeof data.quoteUpdatedAt !== 'object' ||
-      data.quoteUpdatedAt === null
-    ) {
-      data.quoteUpdatedAt = {};
-    }
-    data.lastKrQuoteBulkAt =
-      typeof data.lastKrQuoteBulkAt === 'string' ? data.lastKrQuoteBulkAt : null;
-    if (
-      typeof data.krSellCommissionRate === 'number' &&
-      Number.isFinite(data.krSellCommissionRate)
-    ) {
-      /* 유지 */
-    } else {
-      delete data.krSellCommissionRate;
-    }
-    if (typeof data.krPreferExtendedQuote !== 'boolean') {
-      delete data.krPreferExtendedQuote;
-    }
-    return data;
+    const parsed: unknown = JSON.parse(raw);
+    return coercePersistedPortfolio(parsed);
   } catch {
     return null;
   }

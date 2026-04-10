@@ -10,6 +10,18 @@ interface AppSettingsModalProps {
   krxSectorSyncing: boolean;
   /** 매매·보유·시세 등 전부 비우기 */
   onConfirmClearHoldings: () => void;
+  /** VITE_FIREBASE_* 설정 시에만 true */
+  firebaseCloudEnabled?: boolean;
+  cloudAuthReady?: boolean;
+  cloudUserEmail?: string | null;
+  cloudBusy?: boolean;
+  cloudSessionReady?: boolean;
+  cloudError?: string | null;
+  onCloudSignIn?: () => void | Promise<void>;
+  onCloudSignOut?: () => void | Promise<void>;
+  onCloudPushNow?: () => void | Promise<void>;
+  onExportPortfolio?: () => void;
+  onImportPortfolioPick?: () => void;
 }
 
 export function AppSettingsModal({
@@ -19,6 +31,17 @@ export function AppSettingsModal({
   onSyncKrxSectors,
   krxSectorSyncing,
   onConfirmClearHoldings,
+  firebaseCloudEnabled = false,
+  cloudAuthReady = true,
+  cloudUserEmail = null,
+  cloudBusy = false,
+  cloudSessionReady = true,
+  cloudError = null,
+  onCloudSignIn,
+  onCloudSignOut,
+  onCloudPushNow,
+  onExportPortfolio,
+  onImportPortfolioPick,
 }: AppSettingsModalProps) {
   useEffect(() => {
     if (!open) return;
@@ -72,6 +95,94 @@ export function AppSettingsModal({
           >
             {krxSectorSyncing ? '섹터 동기화 중…' : 'KRX 기준 섹터·종목명 동기화'}
           </button>
+        </section>
+
+        {firebaseCloudEnabled ? (
+          <section className="mt-5 border-t border-border/60 pt-4">
+            <h3 className="text-[12px] font-semibold text-textMain">
+              Google · 클라우드
+            </h3>
+            <p className="mt-1 text-[12px] leading-relaxed text-textMuted">
+              로그인한 계정의 Firestore에 포트폴리오를 저장합니다. 다른 PC에서도
+              같은 계정으로 이어 쓸 수 있습니다. Firebase 콘솔에서 보안 규칙을
+              본인만 읽고 쓰도록 설정해야 합니다.
+            </p>
+            {!cloudAuthReady ? (
+              <p className="mt-2 text-[12px] text-textMuted">인증 확인 중…</p>
+            ) : cloudUserEmail ? (
+              <p className="mt-2 text-[12px] text-textMain">
+                로그인: <span className="font-medium">{cloudUserEmail}</span>
+              </p>
+            ) : null}
+            {cloudError ? (
+              <p
+                role="alert"
+                className="mt-2 rounded border border-negative/40 bg-negative/10 px-2 py-1.5 text-[12px] text-negative"
+              >
+                {cloudError}
+              </p>
+            ) : null}
+            <div className="mt-3 flex flex-col gap-2">
+              {!cloudUserEmail ? (
+                <button
+                  type="button"
+                  disabled={cloudBusy || !cloudAuthReady}
+                  onClick={() => void onCloudSignIn?.()}
+                  className="rounded-md border border-border bg-background px-3 py-2.5 text-left text-[13px] font-medium text-textMain hover:bg-white/5 disabled:opacity-50"
+                >
+                  Google로 로그인
+                </button>
+              ) : (
+                <>
+                  {!cloudSessionReady ? (
+                    <p className="text-[12px] text-textMuted">
+                      클라우드와 맞추는 중… 잠시만 기다려 주세요.
+                    </p>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={cloudBusy || !cloudSessionReady}
+                    onClick={() => void onCloudPushNow?.()}
+                    className="rounded-md border border-border bg-background px-3 py-2.5 text-left text-[13px] font-medium text-textMain hover:bg-white/5 disabled:opacity-50"
+                  >
+                    {cloudBusy ? '처리 중…' : '지금 클라우드에 저장'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={cloudBusy}
+                    onClick={() => void onCloudSignOut?.()}
+                    className="rounded-md border border-border px-3 py-2.5 text-left text-[13px] font-medium text-textMuted hover:bg-white/5 disabled:opacity-50"
+                  >
+                    로그아웃
+                  </button>
+                </>
+              )}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="mt-5 border-t border-border/60 pt-4">
+          <h3 className="text-[12px] font-semibold text-textMain">JSON 백업</h3>
+          <p className="mt-1 text-[12px] leading-relaxed text-textMuted">
+            파일로 보내거나, 예전에 저장한 파일을 이 기기로 가져옵니다.
+            가져오기는 현재 데이터를 덮어씁니다.
+          </p>
+          <div className="mt-3 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={onExportPortfolio}
+              className="rounded-md border border-border bg-background px-3 py-2.5 text-left text-[13px] font-medium text-textMain hover:bg-white/5"
+            >
+              백업 파일 보내기
+            </button>
+            <button
+              type="button"
+              onClick={onImportPortfolioPick}
+              className="rounded-md border border-border bg-background px-3 py-2.5 text-left text-[13px] font-medium text-textMain hover:bg-white/5"
+            >
+              백업 파일 가져오기…
+            </button>
+          </div>
         </section>
 
         <section className="mt-5 border-t border-border/60 pt-4">

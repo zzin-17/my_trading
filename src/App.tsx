@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { SummaryCards } from './components/SummaryCards';
@@ -28,11 +29,26 @@ import {
 } from './lib/portfolioMath';
 import { defaultCurrencyForMarket, filterByMarket } from './lib/market';
 import { computeLedger, ledgerToPositions } from './lib/ledger';
-import { savePersisted, clearPersisted } from './lib/persistence';
+import {
+  savePersisted,
+  clearPersisted,
+  type PersistedPortfolioV1,
+} from './lib/persistence';
 import {
   getInitialAppState,
   clearInitialAppStateCache,
+  normalizeLoadedPortfolio,
 } from './lib/portfolioBootstrap';
+import {
+  buildExportFile,
+  downloadJsonFile,
+  parsePortfolioImportJson,
+} from './lib/portfolioExport';
+import {
+  fetchCloudPortfolio,
+  pushCloudPortfolio,
+} from './lib/cloudPortfolio';
+import { useAuth } from './auth/AuthContext';
 import { MixedCurrencyBanner } from './components/MixedCurrencyBanner';
 import { KrPnlAssumptionsCard } from './components/KrPnlAssumptionsCard';
 import type { Market } from './types/portfolio';
@@ -122,6 +138,295 @@ export default function App() {
     null,
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const {
+    user,
+    authReady,
+    firebaseConfigured,
+    signInWithGoogle,
+    signOutUser,
+  } = useAuth();
+
+  const initialPortfolio = useMemo(() => getInitialAppState(), []);
+  const portfolioRef = useRef<PersistedPortfolioV1>({
+    trades: initialPortfolio.trades,
+    quotes: initialPortfolio.quotes,
+    positionIds: initialPortfolio.positionIds,
+    todos: initialPortfolio.todos,
+    notes: initialPortfolio.notes,
+    quoteUpdatedAt: initialPortfolio.quoteUpdatedAt,
+    lastKrQuoteBulkAt: initialPortfolio.lastKrQuoteBulkAt,
+    krSellCommissionRate: initialPortfolio.krSellCommissionRate,
+    krPreferExtendedQuote: initialPortfolio.krPreferExtendedQuote,
+  });
+  const importFileRef = useRef<HTMLInputElement>(null);
+  const hadUserRef = useRef(false);
+  const [cloudSessionReady, setCloudSessionReady] = useState(true);
+  const [cloudBusy, setCloudBusy] = useState(false);
+  const [cloudError, setCloudError] = useState<string | null>(null);
+  const cloudMergeChoiceKey = useMemo(
+    () => (user ? `traderos-cloud-merge-choice:${user.uid}` : null),
+    [user],
+  );
+
+  useEffect(() => {
+    portfolioRef.current = {
+      trades,
+      quotes,
+      positionIds,
+      todos,
+      notes,
+      quoteUpdatedAt,
+      lastKrQuoteBulkAt,
+      krSellCommissionRate,
+      krPreferExtendedQuote,
+    };
+  }, [
+    trades,
+    quotes,
+    positionIds,
+    todos,
+    notes,
+    quoteUpdatedAt,
+    lastKrQuoteBulkAt,
+    krSellCommissionRate,
+    krPreferExtendedQuote,
+  ]);
+
+  useEffect(() => {
+    if (!firebaseConfigured) {
+      setCloudSessionReady(true);
+      setCloudBusy(false);
+      setCloudError(null);
+    }
+  }, [firebaseConfigured]);
+
+  useEffect(() => {
+    if (firebaseConfigured && !user) {
+      setCloudSessionReady(true);
+      setCloudBusy(false);
+      setCloudError(null);
+    }
+  }, [firebaseConfigured, user]);
+
+  const applyNormalizedPortfolio = useCallback((h: PersistedPortfolioV1) => {
+    clearInitialAppStateCache();
+    setTrades(h.trades);
+    setQuotes(h.quotes);
+    setPositionIds(h.positionIds);
+    setTodos(h.todos);
+    setNotes(h.notes);
+    setQuoteUpdatedAt(h.quoteUpdatedAt);
+    setLastKrQuoteBulkAt(h.lastKrQuoteBulkAt);
+    setKrSellCommissionRate(normalizeKrSellCommissionRate(h.krSellCommissionRate));
+    setKrPreferExtendedQuote(h.krPreferExtendedQuote === true);
+  }, []);
+
+  /** 로그아웃 시 개인정보(보유·일지·계획·메모 등) 로컬 흔적 제거 */
+  const wipePrivatePortfolio = useCallback(() => {
+    clearPersisted();
+    clearInitialAppStateCache();
+    setTrades([]);
+    setQuotes({});
+    setPositionIds({});
+    setTodos([]);
+    setNotes({});
+    setQuoteUpdatedAt({});
+    setLastKrQuoteBulkAt(null);
+    setDetailId(null);
+    setKrSellCommissionRate(normalizeKrSellCommissionRate(undefined));
+    setKrPreferExtendedQuote(false);
+  }, []);
+
+  useEffect(() => {
+    if (!firebaseConfigured || !authReady) return;
+    if (user) {
+      hadUserRef.current = true;
+      return;
+    }
+    if (hadUserRef.current) {
+      wipePrivatePortfolio();
+      hadUserRef.current = false;
+    }
+  }, [firebaseConfigured, authReady, user, wipePrivatePortfolio]);
+
+  useEffect(() => {
+    if (!firebaseConfigured || !user || !authReady) return;
+    setCloudSessionReady(false);
+    let cancelled = false;
+    void (async () => {
+      setCloudBusy(true);
+      setCloudError(null);
+      try {
+        const remote = await fetchCloudPortfolio(user.uid);
+        if (cancelled) return;
+        if (!remote) {
+          await pushCloudPortfolio(user.uid, portfolioRef.current);
+        } else {
+          const savedChoice =
+            cloudMergeChoiceKey &&
+            typeof window !== 'undefined'
+              ? window.localStorage.getItem(cloudMergeChoiceKey)
+              : null;
+          let useRemote: boolean;
+          if (savedChoice === 'remote') {
+            useRemote = true;
+          } else if (savedChoice === 'local') {
+            useRemote = false;
+          } else {
+            const msg =
+              `클라우드에 저장된 데이터가 있습니다 (${new Date(remote.updatedAtMs).toLocaleString('ko-KR')}).\n\n` +
+              '[확인] 클라우드 데이터를 이 기기에 불러오기\n' +
+              '[취소] 이 기기 데이터로 클라우드 덮어쓰기\n\n' +
+              '(이 선택은 이 기기에서 기억되어 다음 로그인부터 자동 적용됩니다.)';
+            useRemote = window.confirm(msg);
+            if (cloudMergeChoiceKey && typeof window !== 'undefined') {
+              window.localStorage.setItem(
+                cloudMergeChoiceKey,
+                useRemote ? 'remote' : 'local',
+              );
+            }
+          }
+          if (cancelled) return;
+          if (useRemote) {
+            applyNormalizedPortfolio(
+              normalizeLoadedPortfolio(remote.portfolio),
+            );
+          } else {
+            await pushCloudPortfolio(user.uid, portfolioRef.current);
+          }
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setCloudError(
+            e instanceof Error ? e.message : '클라우드 동기화에 실패했습니다.',
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setCloudBusy(false);
+          setCloudSessionReady(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    firebaseConfigured,
+    user?.uid,
+    authReady,
+    applyNormalizedPortfolio,
+    cloudMergeChoiceKey,
+  ]);
+
+  useEffect(() => {
+    if (!firebaseConfigured || !user || !cloudSessionReady) return;
+    const uid = user.uid;
+    const tid = window.setTimeout(() => {
+      void (async () => {
+        try {
+          await pushCloudPortfolio(uid, portfolioRef.current);
+          setCloudError(null);
+        } catch (e) {
+          setCloudError(
+            e instanceof Error
+              ? e.message
+              : '클라우드 자동 저장에 실패했습니다.',
+          );
+        }
+      })();
+    }, 3000);
+    return () => window.clearTimeout(tid);
+  }, [
+    firebaseConfigured,
+    user,
+    cloudSessionReady,
+    trades,
+    quotes,
+    positionIds,
+    todos,
+    notes,
+    quoteUpdatedAt,
+    lastKrQuoteBulkAt,
+    krSellCommissionRate,
+    krPreferExtendedQuote,
+  ]);
+
+  const handleExportPortfolio = useCallback(() => {
+    const file = buildExportFile(portfolioRef.current);
+    const d = new Date().toISOString().slice(0, 10);
+    downloadJsonFile(`traderos-backup-${d}.json`, file);
+  }, []);
+
+  const handleImportPortfolioFiles = useCallback(
+    (list: FileList | null) => {
+      const f = list?.[0];
+      if (!f) return;
+      void (async () => {
+        const text = await f.text();
+        const parsed = parsePortfolioImportJson(text);
+        if (!parsed) {
+          window.alert(
+            '지원하지 않는 백업 형식이거나 데이터가 손상되었습니다.',
+          );
+          return;
+        }
+        if (
+          !window.confirm(
+            '현재 이 기기의 포트폴리오를 백업 파일 내용으로 바꿉니다. 계속할까요?',
+          )
+        ) {
+          return;
+        }
+        applyNormalizedPortfolio(normalizeLoadedPortfolio(parsed));
+        window.alert('가져오기를 완료했습니다.');
+      })();
+    },
+    [applyNormalizedPortfolio],
+  );
+
+  const handleCloudPushNow = useCallback(async () => {
+    if (!user) return;
+    setCloudBusy(true);
+    setCloudError(null);
+    try {
+      await pushCloudPortfolio(user.uid, portfolioRef.current);
+      window.alert('클라우드에 저장했습니다.');
+    } catch (e) {
+      setCloudError(
+        e instanceof Error ? e.message : '클라우드에 저장하지 못했습니다.',
+      );
+    } finally {
+      setCloudBusy(false);
+    }
+  }, [user]);
+
+  const handleCloudSignIn = useCallback(async () => {
+    setCloudError(null);
+    try {
+      await signInWithGoogle();
+    } catch (e) {
+      setCloudError(
+        e instanceof Error ? e.message : 'Google 로그인에 실패했습니다.',
+      );
+    }
+  }, [signInWithGoogle]);
+
+  const handleCloudSignOut = useCallback(async () => {
+    setCloudError(null);
+    setCloudBusy(true);
+    try {
+      await signOutUser();
+      wipePrivatePortfolio();
+    } catch (e) {
+      setCloudError(
+        e instanceof Error ? e.message : '로그아웃에 실패했습니다.',
+      );
+    } finally {
+      setCloudBusy(false);
+    }
+  }, [signOutUser, wipePrivatePortfolio]);
 
   /** 미체결 주문: 일지에 적은 날(local)이 지나면 자동 삭제(당일 자정 이후 미체결 = 무효) */
   useEffect(() => {
@@ -642,13 +947,20 @@ export default function App() {
               매매일지·시세 기반 평단 · 한국장/미국장 탭 · 로컬 저장
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            className="shrink-0 self-start rounded-md border border-border px-3 py-2 text-sm font-medium text-textMuted hover:bg-white/5 hover:text-textMain"
-          >
-            설정
-          </button>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {user ? (
+              <p className="rounded-md border border-border px-2 py-1 text-[12px] text-textMuted">
+                계정: {user.email ?? user.displayName ?? '로그인됨'}
+              </p>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              className="rounded-md border border-border px-3 py-2 text-sm font-medium text-textMuted hover:bg-white/5 hover:text-textMain"
+            >
+              설정
+            </button>
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
@@ -794,6 +1106,17 @@ export default function App() {
           />
         </div>
       )}
+      <input
+        ref={importFileRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        aria-hidden
+        onChange={(e) => {
+          handleImportPortfolioFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
       <AppSettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -801,6 +1124,17 @@ export default function App() {
         onSyncKrxSectors={handleSyncKrxSectors}
         krxSectorSyncing={krxSectorSyncing}
         onConfirmClearHoldings={handleClearHoldings}
+        firebaseCloudEnabled={firebaseConfigured}
+        cloudAuthReady={authReady}
+        cloudUserEmail={user?.email ?? user?.displayName ?? null}
+        cloudBusy={cloudBusy}
+        cloudSessionReady={cloudSessionReady}
+        cloudError={cloudError}
+        onCloudSignIn={handleCloudSignIn}
+        onCloudSignOut={handleCloudSignOut}
+        onCloudPushNow={handleCloudPushNow}
+        onExportPortfolio={handleExportPortfolio}
+        onImportPortfolioPick={() => importFileRef.current?.click()}
       />
       <AddTradeModal
         open={addTradeOpen}

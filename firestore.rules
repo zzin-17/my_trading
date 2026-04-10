@@ -1,0 +1,25 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // TraderOS 클라우드 스냅샷: 경로 users/{uid}/traderos/v1, 필드 body·updatedAt
+    // 로그인한 본인만 접근, 문서 ID는 v1만 허용
+    match /users/{userId}/traderos/{docId} {
+      allow get: if request.auth != null
+        && request.auth.uid == userId
+        && docId == 'v1';
+
+      // updatedAt은 앱에서 serverTimestamp() 사용 → 규칙에서는 timestamp 타입만 검사
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && docId == 'v1'
+        && request.resource.data.keys().hasOnly(['body', 'updatedAt'])
+        && request.resource.data.body is string
+        && request.resource.data.body.size() > 0
+        && request.resource.data.body.size() <= 1000000
+        && request.resource.data.updatedAt is timestamp;
+
+      allow delete, list: if false;
+    }
+  }
+}
