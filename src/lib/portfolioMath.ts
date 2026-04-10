@@ -1,6 +1,7 @@
 import {
   CONCENTRATION_WARNING_PCT,
   type CurrencyCode,
+  type Market,
   type Position,
   type PositionMetrics,
   type PortfolioSummary,
@@ -8,6 +9,10 @@ import {
   type StockWeight,
   type TopStockWeightsResult,
 } from '../types/portfolio';
+import {
+  DEFAULT_KR_SELL_COMMISSION_RATE,
+  KR_SELL_TAX_RATE,
+} from './krTradingAssumptions';
 
 export function roundMoney(value: number, currency: CurrencyCode): number {
   if (currency === 'KRW') return Math.round(value);
@@ -18,12 +23,52 @@ export function roundPercent(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-export function buildPositionMetrics(positions: Position[]): PositionMetrics[] {
+/**
+ * 평가손익: (현재가×수량) − (평단×수량) − 예상비용
+ * - 한국장 예상비용: 매도금액 × (증거래세+농특세 0.18% + 위탁수수료율)
+ * - 미국장: 예상비용 없음(기존 단순 손익)
+ */
+export function estimateNetUnrealizedPnl(
+  market: Market,
+  avgPrice: number,
+  currentPrice: number,
+  quantity: number,
+  currency: CurrencyCode,
+  krSellCommissionRate: number,
+): number {
+  const cost_basis = roundMoney(avgPrice * quantity, currency);
+  const proceeds = roundMoney(currentPrice * quantity, currency);
+  if (market === 'KR') {
+    const exitRate = KR_SELL_TAX_RATE + krSellCommissionRate;
+    const exitCosts = roundMoney(proceeds * exitRate, currency);
+    return roundMoney(proceeds - cost_basis - exitCosts, currency);
+  }
+  return roundMoney(proceeds - cost_basis, currency);
+}
+
+export interface BuildPositionMetricsOptions {
+  /** 한국장 매도 위탁 수수료율(소수). 미주면 기본값 */
+  krSellCommissionRate?: number;
+}
+
+export function buildPositionMetrics(
+  positions: Position[],
+  options?: BuildPositionMetricsOptions,
+): PositionMetrics[] {
+  const comm =
+    options?.krSellCommissionRate ?? DEFAULT_KR_SELL_COMMISSION_RATE;
   const rows: Omit<PositionMetrics, 'weight_pct'>[] = positions.map((p) => ({
     positionId: p.id,
     cost_basis: roundMoney(p.avg_price * p.quantity, p.currency),
     market_value: roundMoney(p.current_price * p.quantity, p.currency),
-    pnl: roundMoney((p.current_price - p.avg_price) * p.quantity, p.currency),
+    pnl: estimateNetUnrealizedPnl(
+      p.market,
+      p.avg_price,
+      p.current_price,
+      p.quantity,
+      p.currency,
+      comm,
+    ),
   }));
 
   const totalMv = rows.reduce((s, r) => s + r.market_value, 0);

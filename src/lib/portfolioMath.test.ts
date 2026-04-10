@@ -6,11 +6,13 @@ import {
   buildPositionMetrics,
   buildSectorWeights,
   buildTopStockWeights,
+  estimateNetUnrealizedPnl,
   getUnifiedPortfolioCurrency,
   isConcentrationRisk,
   roundMoney,
   roundPercent,
 } from './portfolioMath';
+import { KR_SELL_TAX_RATE } from './krTradingAssumptions';
 
 function pos(overrides: Partial<Position> & Pick<Position, 'id'>): Position {
   return {
@@ -74,6 +76,38 @@ describe('buildPositionMetrics', () => {
 
   it('포지션이 없으면 빈 배열', () => {
     expect(buildPositionMetrics([])).toEqual([]);
+  });
+
+  it('한국장: 매도 세금·수수료를 반영한 평가손익', () => {
+    const commission = 0.00015;
+    const positions: Position[] = [
+      pos({
+        id: 'kr',
+        market: 'KR',
+        currency: 'KRW',
+        quantity: 10,
+        avg_price: 10_000,
+        current_price: 11_000,
+      }),
+    ];
+    const m = buildPositionMetrics(positions, {
+      krSellCommissionRate: commission,
+    });
+    const proceeds = 110_000;
+    const exit = roundMoney(proceeds * (KR_SELL_TAX_RATE + commission), 'KRW');
+    const expectPnl = roundMoney(proceeds - 100_000 - exit, 'KRW');
+    expect(m[0].pnl).toBe(expectPnl);
+    expect(m[0].pnl).toBe(
+      estimateNetUnrealizedPnl('KR', 10_000, 11_000, 10, 'KRW', commission),
+    );
+  });
+});
+
+describe('estimateNetUnrealizedPnl', () => {
+  it('미국장은 세후 비용 없음', () => {
+    expect(
+      estimateNetUnrealizedPnl('US', 100, 110, 5, 'USD', 0.00015),
+    ).toBe(50);
   });
 });
 

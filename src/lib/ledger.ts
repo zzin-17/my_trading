@@ -2,6 +2,11 @@ import type { Position } from '../types/portfolio';
 import type { Trade } from '../types/trade';
 import { roundMoney } from './portfolioMath';
 
+/** 장부(보유) 집계에 포함되는 거래 — 미체결(pending) 제외 */
+export function tradeAppliesToLedger(t: Trade): boolean {
+  return t.executionStatus !== 'pending';
+}
+
 /** 티커별 장부 상태 (이동평균 단가·잔여수량·누적실현손익) */
 export interface LedgerRow {
   ticker: string;
@@ -19,7 +24,7 @@ export interface LedgerRow {
  * 매도: 단가는 매도 체결가, 잔여 평단은 매도 전과 동일(이동평균법).
  */
 export function computeLedger(trades: Trade[]): Map<string, LedgerRow> {
-  const sorted = [...trades].sort((a, b) => {
+  const sorted = [...trades].filter(tradeAppliesToLedger).sort((a, b) => {
     const d = a.date.localeCompare(b.date);
     if (d !== 0) return d;
     return a.id.localeCompare(b.id);

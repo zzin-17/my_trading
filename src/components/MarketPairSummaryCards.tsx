@@ -4,6 +4,8 @@ import { formatMoney, formatPercent } from '../lib/format';
 interface MarketPairSummaryCardsProps {
   krSummary: PortfolioSummary | null;
   usSummary: PortfolioSummary | null;
+  /** 한국장 블록 아래 표시할 비용 가정 안내 */
+  krFootnote?: string | null;
 }
 
 /**
@@ -12,6 +14,7 @@ interface MarketPairSummaryCardsProps {
 export function MarketPairSummaryCards({
   krSummary,
   usSummary,
+  krFootnote,
 }: MarketPairSummaryCardsProps) {
   return (
     <div className="space-y-3">
@@ -24,12 +27,14 @@ export function MarketPairSummaryCards({
           badge="KRW"
           accent="border-accent/40 bg-accent/5"
           summary={krSummary}
+          footnote={krFootnote}
         />
         <MarketBlock
           title="미국장"
           badge="USD"
           accent="border-textMuted/40 bg-background"
           summary={usSummary}
+          footnote={null}
         />
       </div>
     </div>
@@ -41,11 +46,13 @@ function MarketBlock({
   badge,
   accent,
   summary,
+  footnote,
 }: {
   title: string;
   badge: string;
   accent: string;
   summary: PortfolioSummary | null;
+  footnote?: string | null;
 }) {
   if (!summary) {
     return (
@@ -95,6 +102,9 @@ function MarketBlock({
           negative={!pnlOk}
         />
       </div>
+      {footnote ? (
+        <p className="mt-2 text-[11px] leading-relaxed text-textMuted">{footnote}</p>
+      ) : null}
     </div>
   );
 }

@@ -13,6 +13,13 @@ export interface PersistedPortfolioV1 {
   quoteUpdatedAt: Record<string, string>;
   /** 마지막 「시세 갱신」 일괄 호출 완료 시각 */
   lastKrQuoteBulkAt: string | null;
+  /**
+   * 한국장 매도 시 위탁 수수료율(소수). 예: 0.00015 = 0.015%
+   * 세금(0.18%)과 별도로 평가손익 계산에 사용.
+   */
+  krSellCommissionRate?: number;
+  /** true면 시세 갱신 시 모바일 API로 장외(Over/NXT) 호가 우선 */
+  krPreferExtendedQuote?: boolean;
 }
 
 export function loadPersisted(): PersistedPortfolioV1 | null {
@@ -39,6 +46,17 @@ export function loadPersisted(): PersistedPortfolioV1 | null {
     }
     data.lastKrQuoteBulkAt =
       typeof data.lastKrQuoteBulkAt === 'string' ? data.lastKrQuoteBulkAt : null;
+    if (
+      typeof data.krSellCommissionRate === 'number' &&
+      Number.isFinite(data.krSellCommissionRate)
+    ) {
+      /* 유지 */
+    } else {
+      delete data.krSellCommissionRate;
+    }
+    if (typeof data.krPreferExtendedQuote !== 'boolean') {
+      delete data.krPreferExtendedQuote;
+    }
     return data;
   } catch {
     return null;

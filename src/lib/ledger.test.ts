@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Trade } from '../types/trade';
-import { computeLedger, ledgerToPositions } from './ledger';
+import { computeLedger, ledgerToPositions, tradeAppliesToLedger } from './ledger';
 
 const t = (partial: Partial<Trade> & Pick<Trade, 'id'>): Trade => ({
   date: '2025-01-01',
@@ -47,6 +47,34 @@ describe('computeLedger', () => {
     expect(row?.quantity).toBe(10);
     expect(row?.avgCost).toBe(175.5);
     expect(row?.realizedPnl).toBe(9);
+  });
+
+  it('미체결(pending) 거래는 장부에 반영되지 않음', () => {
+    const ledger = computeLedger([
+      t({ id: 'a', quantity: 10, price: 100 }),
+      t({
+        id: 'b',
+        date: '2025-01-02',
+        side: 'sell',
+        quantity: 3,
+        price: 110,
+        executionStatus: 'pending',
+      }),
+    ]);
+    const row = ledger.get('AAA');
+    expect(row?.quantity).toBe(10);
+  });
+});
+
+describe('tradeAppliesToLedger', () => {
+  it('pending만 제외', () => {
+    expect(tradeAppliesToLedger(t({ id: 'x', executionStatus: 'pending' }))).toBe(
+      false,
+    );
+    expect(tradeAppliesToLedger(t({ id: 'y', executionStatus: 'filled' }))).toBe(
+      true,
+    );
+    expect(tradeAppliesToLedger(t({ id: 'z' }))).toBe(true);
   });
 });
 

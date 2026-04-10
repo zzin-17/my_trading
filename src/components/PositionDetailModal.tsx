@@ -6,6 +6,7 @@ import { formatMoney, formatPercent } from '../lib/format';
 import { roundMoney } from '../lib/portfolioMath';
 import { fetchKrBoardByTicker } from '../lib/krxLookup';
 import { krBoardBadgeClass, krBoardDisplayLabel } from '../lib/krBoardUi';
+import { tradeAppliesToLedger } from '../lib/ledger';
 
 interface PositionDetailModalProps {
   position: Position | null;
@@ -18,6 +19,7 @@ interface PositionDetailModalProps {
   onClose: () => void;
   /** 보유수량·평단 수정 (매매일지 체결은 유지하고 초기보유 레이어만 조정) */
   onAdjustPosition?: (quantity: number, avgPrice: number) => boolean;
+  onMarkTradeFilled: (id: string) => void;
 }
 
 export function PositionDetailModal({
@@ -30,6 +32,7 @@ export function PositionDetailModal({
   onAddTodo,
   onClose,
   onAdjustPosition,
+  onMarkTradeFilled,
 }: PositionDetailModalProps) {
   const [editingBasis, setEditingBasis] = useState(false);
   const [editQty, setEditQty] = useState('');
@@ -67,10 +70,11 @@ export function PositionDetailModal({
     position.market === 'KR' ? krBoardByTicker.get(position.ticker) : undefined;
 
   const journalTrades = trades.filter((t) => !t.excludeFromJournal);
+  const ledgerJournalTrades = journalTrades.filter(tradeAppliesToLedger);
 
   const retPct =
     metric.cost_basis > 0 ? (metric.pnl / metric.cost_basis) * 100 : 0;
-  const tradeSummary = journalTrades.reduce(
+  const tradeSummary = ledgerJournalTrades.reduce(
     (acc, t) => {
       if (t.side === 'buy') {
         acc.buyQty += t.quantity;
@@ -228,21 +232,44 @@ export function PositionDetailModal({
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <section className="rounded-md border border-border p-3">
             <h3 className="text-sm font-medium text-textMain">매매현황</h3>
+            <p className="mt-1 text-[11px] text-textMuted">
+              위 총매수·총매도·순매수는 체결 건만 집계합니다. 아래 목록에는 미체결 주문도 표시됩니다.
+            </p>
             <ul className="mt-2 max-h-48 space-y-1 overflow-auto text-[12px]">
               {journalTrades.length === 0 ? (
                 <li className="text-textMuted">내역 없음</li>
               ) : (
-                journalTrades.map((t) => (
-                  <li key={t.id} className="flex items-center justify-between gap-2">
-                    <span className="text-textMuted">{t.date}</span>
-                    <span className={t.side === 'buy' ? 'text-positive' : 'text-negative'}>
-                      {t.side === 'buy' ? '매수' : '매도'} {t.quantity}주
-                    </span>
-                    <span className="tabular-nums text-textMain">
-                      {formatMoney(t.price, t.currency)}
-                    </span>
-                  </li>
-                ))
+                journalTrades.map((t) => {
+                  const pending = t.executionStatus === 'pending';
+                  return (
+                    <li
+                      key={t.id}
+                      className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1"
+                    >
+                      <span className="text-textMuted">{t.date}</span>
+                      <span className={t.side === 'buy' ? 'text-positive' : 'text-negative'}>
+                        {t.side === 'buy' ? '매수' : '매도'} {t.quantity}주
+                      </span>
+                      <span className="tabular-nums text-textMain">
+                        {formatMoney(t.price, t.currency)}
+                      </span>
+                      {pending ? (
+                        <span className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
+                          <span className="rounded bg-warning/20 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
+                            미체결
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => onMarkTradeFilled(t.id)}
+                            className="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-textMain hover:bg-white/5"
+                          >
+                            체결 처리
+                          </button>
+                        </span>
+                      ) : null}
+                    </li>
+                  );
+                })
               )}
             </ul>
           </section>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Position, PositionMetrics, PortfolioSummary } from '../types/portfolio';
 import { formatMoney, formatPercent, formatQuoteUpdatedLabel } from '../lib/format';
 import { isConcentrationRisk, roundPercent } from '../lib/portfolioMath';
@@ -13,18 +13,61 @@ function krPnLClass(value: number): string {
 }
 
 export type HoldingSortKey =
-  | 'name'
-  | 'ticker'
-  | 'sector'
   | 'board'
+  | 'ticker'
+  | 'name'
+  | 'current_price'
+  | 'avg_price'
   | 'quantity'
-  | 'cost_basis'
   | 'market_value'
   | 'pnl'
   | 'return_pct'
   | 'weight';
 
 export type SortDir = 'asc' | 'desc';
+
+function SortableColumnHeader({
+  label,
+  columnKey,
+  sortKey,
+  sortDir,
+  onSort,
+  align = 'left',
+  className = '',
+}: {
+  label: string;
+  columnKey: HoldingSortKey;
+  sortKey: HoldingSortKey;
+  sortDir: SortDir;
+  onSort: (k: HoldingSortKey) => void;
+  align?: 'left' | 'right';
+  className?: string;
+}) {
+  const active = sortKey === columnKey;
+  const sortTitle = active
+    ? sortDir === 'asc'
+      ? '오름차순 · 다시 클릭하면 내림차순'
+      : '내림차순 · 다시 클릭하면 오름차순'
+    : '클릭하여 오름차순 정렬';
+  return (
+    <th scope="col" className={className} aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button
+        type="button"
+        onClick={() => onSort(columnKey)}
+        title={sortTitle}
+        className={`inline-flex w-full min-w-0 items-center gap-0.5 rounded px-0.5 py-0.5 text-textMuted transition hover:bg-white/5 hover:text-textMain ${align === 'right' ? 'justify-end' : 'justify-start'}`}
+      >
+        <span>{label}</span>
+        <span
+          className={`shrink-0 text-[10px] tabular-nums ${active ? 'text-accent' : 'text-textMuted/35'}`}
+          aria-hidden
+        >
+          {active ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+        </span>
+      </button>
+    </th>
+  );
+}
 
 interface HoldingsTableProps {
   positions: Position[];
@@ -42,6 +85,9 @@ interface HoldingsTableProps {
   /** 한국장: KRX 상장목록으로 매매일지의 종목명·섹터(업종) 일괄 보정 */
   onSyncKrxSectors?: () => void;
   krxSectorSyncing?: boolean;
+  /** 한국장 전용: 시세 갱신 시 장외(Over/NXT) 호가 우선 */
+  krPreferExtendedQuote?: boolean;
+  onKrPreferExtendedQuoteChange?: (value: boolean) => void;
 }
 
 export function HoldingsTable({
@@ -58,12 +104,24 @@ export function HoldingsTable({
   lastKrQuoteBulkAt,
   onSyncKrxSectors,
   krxSectorSyncing = false,
+  krPreferExtendedQuote,
+  onKrPreferExtendedQuoteChange,
 }: HoldingsTableProps) {
   const [sortKey, setSortKey] = useState<HoldingSortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [krBoardByTicker, setKrBoardByTicker] = useState<Map<string, string>>(
     () => new Map(),
   );
+
+  const handleSortHeader = useCallback((key: HoldingSortKey) => {
+    // setSortDir를 setSortKey 업데이트 함수 안에서 호출하면 배치 순서 때문에 토글이 누락될 수 있음
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }, [sortKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -107,9 +165,6 @@ export function HoldingsTable({
         case 'ticker':
           v = pa.ticker.localeCompare(pb.ticker, undefined, { numeric: true });
           break;
-        case 'sector':
-          v = pa.sector.localeCompare(pb.sector, 'ko');
-          break;
         case 'board': {
           const la = krBoardDisplayLabel(
             pa.market,
@@ -122,11 +177,14 @@ export function HoldingsTable({
           v = la.localeCompare(lb, 'ko');
           break;
         }
+        case 'current_price':
+          v = pa.current_price - pb.current_price;
+          break;
+        case 'avg_price':
+          v = pa.avg_price - pb.avg_price;
+          break;
         case 'quantity':
           v = pa.quantity - pb.quantity;
-          break;
-        case 'cost_basis':
-          v = ma.cost_basis - mb.cost_basis;
           break;
         case 'market_value':
           v = ma.market_value - mb.market_value;
@@ -156,7 +214,8 @@ export function HoldingsTable({
           <div className="min-w-0">
             <h3 className="text-sm font-medium text-textMain">보유 종목</h3>
             <p className="mt-0.5 text-[12px] leading-relaxed text-textMuted">
-              코드·이름으로 검색 · 업종은 종목 클릭 시 표시 · 합계는 현재 탭 기준
+              코드·이름으로 검색 · 헤더 클릭 시 정렬(↑오름 · ↓내림) · 업종은 종목 클릭 시
+              표시 · 합계는 현재 탭 기준
             </p>
           </div>
           {lastKrQuoteBulkAt ? (
@@ -166,53 +225,15 @@ export function HoldingsTable({
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+        <div className="flex flex-col gap-2 border-t border-border/60 pt-3 sm:flex-row sm:items-center sm:gap-3">
           <input
             type="search"
             placeholder="검색…"
             value={filterText}
             onChange={(e) => onFilterChange(e.target.value)}
-            className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+            className="min-w-0 w-full flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent sm:min-w-[12rem]"
           />
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <span className="text-[11px] text-textMuted">정렬</span>
-            <select
-              value={sortKey}
-              onChange={(e) => setSortKey(e.target.value as HoldingSortKey)}
-              className="min-w-[7.5rem] rounded-md border border-border bg-background px-2 py-2 text-sm text-textMain outline-none focus:border-accent"
-            >
-              <option value="name">종목명</option>
-              <option value="ticker">종목코드</option>
-              <option value="sector">섹터</option>
-              <option value="board">코스피·코스닥</option>
-              <option value="quantity">수량</option>
-              <option value="cost_basis">총매입금액</option>
-              <option value="market_value">평가액</option>
-              <option value="pnl">예상손익</option>
-              <option value="return_pct">예상수익률</option>
-              <option value="weight">비중</option>
-            </select>
-            <select
-              value={sortDir}
-              onChange={(e) => setSortDir(e.target.value as SortDir)}
-              className="w-[5.5rem] rounded-md border border-border bg-background px-2 py-2 text-sm text-textMain outline-none focus:border-accent"
-              title="오름차순 / 내림차순"
-            >
-              <option value="asc">오름차순</option>
-              <option value="desc">내림차순</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2 border-t border-border/60 pt-3 sm:flex-row sm:items-center sm:justify-between">
-          <button
-            type="button"
-            onClick={onOpenAddHolding}
-            className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90 sm:w-auto"
-          >
-            + 보유종목
-          </button>
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
             <button
               type="button"
               onClick={onRefreshKrQuotes}
@@ -221,6 +242,28 @@ export function HoldingsTable({
             >
               {krQuoteRefreshing ? '시세 갱신 중…' : '시세 갱신'}
             </button>
+            {krPreferExtendedQuote !== undefined &&
+            onKrPreferExtendedQuoteChange ? (
+              <label
+                className="flex max-w-[14rem] cursor-pointer items-start gap-2 rounded-md border border-border/80 bg-background/40 px-2.5 py-1.5 text-[11px] leading-snug text-textMuted"
+                title="켜면 갱신 시 네이버 모바일 API의 장외(Over market·NXT) 호가를 우선합니다. 없으면 기존 PC 지연 시세로 대체됩니다."
+              >
+                <input
+                  type="checkbox"
+                  checked={krPreferExtendedQuote}
+                  onChange={(e) =>
+                    onKrPreferExtendedQuoteChange(e.target.checked)
+                  }
+                  className="mt-0.5 shrink-0 rounded border-border"
+                />
+                <span>
+                  장외·NXT 호가 우선
+                  <span className="mt-0.5 block text-[10px] text-textMuted/80">
+                    (에프터/장외 반영)
+                  </span>
+                </span>
+              </label>
+            ) : null}
             {onSyncKrxSectors ? (
               <button
                 type="button"
@@ -244,24 +287,108 @@ export function HoldingsTable({
                 }}
               />
             </label>
+            <button
+              type="button"
+              onClick={onOpenAddHolding}
+              className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+            >
+              + 보유종목
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="mt-4 overflow-x-auto">
+      <div className="mt-4 max-h-[min(65vh,720px)] overflow-auto rounded-md border border-border/60">
         <table className="w-full min-w-[880px] border-collapse text-left text-[12px]">
-          <thead>
-            <tr className="border-b border-border text-textMuted">
-              <th className="py-2 pr-2 font-medium">소속</th>
-              <th className="py-2 pr-3 font-medium">코드</th>
-              <th className="min-w-[100px] py-2 pr-3 font-medium">종목</th>
-              <th className="py-2 pr-3 text-right font-medium tabular-nums">현재가</th>
-              <th className="py-2 pr-3 text-right font-medium tabular-nums">평단</th>
-              <th className="py-2 pr-3 text-right font-medium tabular-nums">수량</th>
-              <th className="py-2 pr-3 text-right font-medium tabular-nums">평가액</th>
-              <th className="py-2 pr-3 text-right font-medium tabular-nums">예상손익</th>
-              <th className="py-2 pr-3 text-right font-medium tabular-nums">예상수익률</th>
-              <th className="py-2 pr-3 text-right font-medium tabular-nums">비중</th>
+          <thead className="sticky top-0 z-10 border-b border-border bg-surface shadow-sm">
+            <tr>
+              <SortableColumnHeader
+                label="소속"
+                columnKey="board"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSortHeader}
+                className="py-2 pr-2"
+              />
+              <SortableColumnHeader
+                label="코드"
+                columnKey="ticker"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSortHeader}
+                className="py-2 pr-3"
+              />
+              <SortableColumnHeader
+                label="종목"
+                columnKey="name"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSortHeader}
+                className="min-w-[100px] py-2 pr-3"
+              />
+              <SortableColumnHeader
+                label="현재가"
+                columnKey="current_price"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSortHeader}
+                align="right"
+                className="py-2 pr-3 tabular-nums"
+              />
+              <SortableColumnHeader
+                label="평단"
+                columnKey="avg_price"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSortHeader}
+                align="right"
+                className="py-2 pr-3 tabular-nums"
+              />
+              <SortableColumnHeader
+                label="수량"
+                columnKey="quantity"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSortHeader}
+                align="right"
+                className="py-2 pr-3 tabular-nums"
+              />
+              <SortableColumnHeader
+                label="평가액"
+                columnKey="market_value"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSortHeader}
+                align="right"
+                className="py-2 pr-3 tabular-nums"
+              />
+              <SortableColumnHeader
+                label="예상손익"
+                columnKey="pnl"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSortHeader}
+                align="right"
+                className="py-2 pr-3 tabular-nums"
+              />
+              <SortableColumnHeader
+                label="예상수익률"
+                columnKey="return_pct"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSortHeader}
+                align="right"
+                className="py-2 pr-3 tabular-nums"
+              />
+              <SortableColumnHeader
+                label="비중"
+                columnKey="weight"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSortHeader}
+                align="right"
+                className="py-2 pr-3 tabular-nums"
+              />
             </tr>
           </thead>
           <tbody>
@@ -339,10 +466,13 @@ export function HoldingsTable({
               );
             })}
           </tbody>
-          <tfoot>
+          <tfoot className="sticky bottom-0 z-10 bg-surface shadow-[0_-4px_12px_-2px_rgba(0,0,0,0.25)]">
             <tr className="border-t-2 border-border font-semibold">
-              <td colSpan={6} className="py-3 pr-3 text-textMuted">
-                전체 합계
+              <td colSpan={6} className="py-3 pr-3 align-top text-textMuted">
+                <div className="text-textMain">전체 합계</div>
+                <div className="mt-0.5 text-[11px] font-normal tabular-nums text-textMuted">
+                  전체 {sortedRows.length}개 종목
+                </div>
               </td>
               <td className="py-3 pr-3 text-right tabular-nums text-textMain">
                 {formatMoney(summary.total_market_value, summary.currency)}

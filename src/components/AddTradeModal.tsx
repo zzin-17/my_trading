@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -12,7 +13,7 @@ import {
 } from '../lib/market';
 import { roundMoney } from '../lib/portfolioMath';
 import { useFocusTrap } from '../hooks/useFocusTrap';
-import { lookupKrStockName } from '../lib/krxLookup';
+import { lookupKrStockName, searchKrStocksByName } from '../lib/krxLookup';
 
 interface AddTradeModalProps {
   open: boolean;
@@ -40,7 +41,25 @@ export function AddTradeModal({
   const [price, setPrice] = useState('');
   const [marketManual, setMarketManual] = useState<Market | ''>('');
   const [note, setNote] = useState('');
+  const [orderPending, setOrderPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupMessage, setLookupMessage] = useState<string | null>(null);
+  const [nameSuggestions, setNameSuggestions] = useState<
+    { ticker: string; name: string; sector: string }[]
+  >([]);
+  const [nameSuggestLoading, setNameSuggestLoading] = useState(false);
+
+  const krLookupActive = useMemo(() => {
+    if (marketManual === 'US') return false;
+    if (marketManual === 'KR') return true;
+    const t = ticker.trim();
+    const tDigits = t.replace(/\s/g, '');
+    if (/^\d{6}$/.test(tDigits)) return true;
+    if (/[가-힣]/.test(t)) return true;
+    if (/[가-힣]/.test(name.trim())) return true;
+    return false;
+  }, [marketManual, ticker, name]);
 
   useEffect(() => {
     if (!open) return;
@@ -59,13 +78,45 @@ export function AddTradeModal({
   useEffect(() => {
     if (open) {
       setError(null);
+      setOrderPending(false);
+      setLookupMessage(null);
+      setNameSuggestions([]);
     }
   }, [open]);
 
-  if (!open) return null;
+  useEffect(() => {
+    if (!open || !krLookupActive) {
+      setNameSuggestions([]);
+      return;
+    }
+    const q = name.trim();
+    if (!q) {
+      setNameSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    setNameSuggestLoading(true);
+    searchKrStocksByName(q, 8)
+      .then((items) => {
+        if (cancelled) return;
+        setNameSuggestions(items);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setNameSuggestions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setNameSuggestLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, krLookupActive, name]);
 
   const market: Market = marketManual || inferMarketFromTicker(ticker.trim());
   const currency = defaultCurrencyForMarket(market);
+
+  if (!open) return null;
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -88,7 +139,7 @@ export function AddTradeModal({
       return;
     }
 
-    if (side === 'sell') {
+    if (side === 'sell' && !orderPending) {
       const avail = getAvailableQuantity(tk);
       if (q > avail) {
         setError(`매도 수량이 보유(${avail})를 초과합니다.`);
@@ -107,6 +158,7 @@ export function AddTradeModal({
       quantity: q,
       price: roundMoney(p, currency),
       currency,
+      ...(orderPending ? { executionStatus: 'pending' as const } : {}),
       ...(note.trim() ? { note: note.trim() } : {}),
     };
 
@@ -120,28 +172,78 @@ export function AddTradeModal({
     setPrice('');
     setMarketManual('');
     setNote('');
+    setOrderPending(false);
     setDate(todayIso());
   };
 
   const inferredLabel =
     inferMarketFromTicker(ticker.trim()) === 'KR' ? '한국(6자리 숫자)' : '미국';
 
-  const handleTickerBlur = () => {
-    const tk = ticker.trim();
-    if (!/^\d{6}$/.test(tk)) return;
-    const mkt = marketManual || inferMarketFromTicker(tk);
-    if (mkt !== 'KR') return;
-    void (async () => {
+  /** @param primaryOverride 첫 번째 입력칸 값 (onBlur 시 최신 DOM 값 반영용) */
+  const handleLookup = async (primaryOverride?: string) => {
+    if (!krLookupActive) return;
+    const fromTicker = (primaryOverride ?? ticker).trim();
+    const fromName = name.trim();
+    const codeFromPrimary = fromTicker.replace(/\s/g, '');
+    const codeFromName = fromName.replace(/\s/g, '');
+    const sixDigit =
+      /^\d{6}$/.test(codeFromPrimary) ? codeFromPrimary
+      : /^\d{6}$/.test(codeFromName) ? codeFromName
+      : '';
+
+    if (sixDigit) {
       try {
-        const found = await lookupKrStockName(tk);
-        if (found) {
-          setName((n) => (n.trim() ? n : found.name));
-          setSector(found.sector);
+        setLookupLoading(true);
+        setLookupMessage(null);
+        const found = await lookupKrStockName(sixDigit);
+        if (!found) {
+          setLookupMessage('조회 결과가 없습니다. 종목명 검색을 시도해 보세요.');
+          return;
         }
+        setTicker(found.ticker);
+        setName(found.name);
+        setSector(found.sector);
+        setLookupMessage(`조회 완료: ${found.name}`);
       } catch {
-        /* KRX 목록 실패 시 무시 */
+        setLookupMessage(
+          '자동조회 실패. 잠시 후 다시 시도하거나 종목명을 직접 입력해 주세요.',
+        );
+      } finally {
+        setLookupLoading(false);
       }
-    })();
+      return;
+    }
+
+    const q = fromTicker || fromName;
+    if (!q) {
+      setLookupMessage(
+        '종목코드(6자리) 또는 종목명을 입력한 뒤 조회해 주세요.',
+      );
+      return;
+    }
+
+    try {
+      setLookupLoading(true);
+      setLookupMessage(null);
+      const items = await searchKrStocksByName(q, 8);
+      setNameSuggestions(items);
+      if (items.length === 0) {
+        setLookupMessage('조회 결과가 없습니다. 검색어를 바꿔 보세요.');
+      } else if (items.length === 1) {
+        const item = items[0];
+        setName(item.name);
+        setTicker(item.ticker);
+        setSector(item.sector);
+        setLookupMessage(`조회 완료: ${item.name} (${item.ticker})`);
+      } else {
+        setLookupMessage(`${items.length}건의 후보입니다. 목록에서 선택해 주세요.`);
+      }
+    } catch {
+      setLookupMessage('검색 실패. 잠시 후 다시 시도해 주세요.');
+      setNameSuggestions([]);
+    } finally {
+      setLookupLoading(false);
+    }
   };
 
   return (
@@ -200,18 +302,38 @@ export function AddTradeModal({
 
           <div>
             <label htmlFor="at-ticker" className="text-[12px] text-textMuted">
-              종목코드
+              종목코드 또는 종목명
             </label>
-            <input
-              id="at-ticker"
-              value={ticker}
-              onChange={(e) => setTicker(e.target.value)}
-              onBlur={handleTickerBlur}
-              placeholder="예: AAPL, 005930"
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
-              required
-            />
+            <div className="mt-1 flex gap-2">
+              <input
+                id="at-ticker"
+                value={ticker}
+                onChange={(e) => setTicker(e.target.value)}
+                onBlur={(e) => {
+                  if (!krLookupActive) return;
+                  const t = e.target.value.trim().replace(/\s/g, '');
+                  if (/^\d{6}$/.test(t) && !name.trim()) void handleLookup(e.target.value);
+                }}
+                placeholder="예: AAPL, 005930, 삼성"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+                required
+              />
+              {krLookupActive ? (
+                <button
+                  type="button"
+                  onClick={() => void handleLookup()}
+                  disabled={lookupLoading}
+                  className="shrink-0 rounded-md border border-border px-3 py-2 text-xs text-textMain hover:bg-white/5 disabled:opacity-60"
+                >
+                  {lookupLoading ? '조회중' : '조회'}
+                </button>
+              ) : null}
+            </div>
           </div>
+
+          {lookupMessage ? (
+            <p className="text-[12px] text-textMuted">{lookupMessage}</p>
+          ) : null}
 
           <div>
             <label htmlFor="at-name" className="text-[12px] text-textMuted">
@@ -225,9 +347,52 @@ export function AddTradeModal({
             />
           </div>
 
+          {krLookupActive ? (
+            <div className="rounded-md border border-border bg-background p-2">
+              <div className="mb-1 flex items-center justify-between text-[11px] text-textMuted">
+                <span>종목명 검색 결과</span>
+                {nameSuggestLoading ? <span>조회중…</span> : null}
+              </div>
+              {nameSuggestions.length === 0 ? (
+                <p className="text-[11px] text-textMuted">
+                  {name.trim()
+                    ? '일치하는 후보가 없습니다. 종목명을 직접 입력해도 됩니다.'
+                    : '종목명을 입력하거나, 위 칸에 종목명·코드를 넣고 「조회」하면 후보가 표시됩니다.'}
+                </p>
+              ) : (
+                <ul className="max-h-36 space-y-1 overflow-auto">
+                  {nameSuggestions.map((item) => (
+                    <li key={`${item.ticker}-${item.name}`}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setName(item.name);
+                          setTicker(item.ticker);
+                          setSector(item.sector);
+                          setLookupMessage(`선택됨: ${item.name} (${item.ticker})`);
+                        }}
+                        className="flex w-full flex-col gap-0.5 rounded px-2 py-1 text-left text-xs text-textMain hover:bg-white/5 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <span className="min-w-0 truncate">{item.name}</span>
+                        <div className="flex shrink-0 flex-col items-end gap-0.5 sm:items-end">
+                          <span className="tabular-nums text-textMuted">
+                            {item.ticker}
+                          </span>
+                          <span className="max-w-[200px] truncate text-[10px] text-textMuted/90">
+                            {item.sector}
+                          </span>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : null}
+
           <div>
             <label htmlFor="at-sector" className="text-[12px] text-textMuted">
-              섹터 (한국 6자리·포커스 아웃 시 KRX 업종 자동)
+              섹터 (한국: 조회·검색 시 KRX 업종 자동)
             </label>
             <input
               id="at-sector"
@@ -300,6 +465,19 @@ export function AddTradeModal({
               className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
             />
           </div>
+
+          <label className="flex cursor-pointer items-start gap-2 text-[12px] text-textMain">
+            <input
+              type="checkbox"
+              checked={orderPending}
+              onChange={(e) => setOrderPending(e.target.checked)}
+              className="mt-0.5 rounded border-border"
+            />
+            <span>
+              미체결 주문으로 기록 (장부·보유에는 반영되지 않음. 체결되면 매매일지에서 「체결」로
+              바꿉니다.)
+            </span>
+          </label>
 
           {error && (
             <p className="text-[12px] text-negative" role="alert">

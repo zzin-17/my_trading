@@ -41,6 +41,12 @@ import { applyKrxMetadataToKrTrades } from './lib/krxLookup';
 import { adjustOpeningBalanceTrade } from './lib/positionAdjust';
 import { fetchKrNaverDelayedQuote } from './lib/naverKrQuote';
 import { formatQuoteUpdatedLabel } from './lib/format';
+import { todayIsoLocal, withoutExpiredPendingOrders } from './lib/tradePendingExpiry';
+import {
+  clampKrSellCommissionRate,
+  KR_SELL_TAX_RATE,
+  normalizeKrSellCommissionRate,
+} from './lib/krTradingAssumptions';
 
 function tickersEqual(a: string, b: string, market: Market): boolean {
   const na =
@@ -97,6 +103,12 @@ export default function App() {
   const [lastKrQuoteBulkAt, setLastKrQuoteBulkAt] = useState<string | null>(
     () => getInitialAppState().lastKrQuoteBulkAt,
   );
+  const [krSellCommissionRate, setKrSellCommissionRate] = useState(() =>
+    normalizeKrSellCommissionRate(getInitialAppState().krSellCommissionRate),
+  );
+  const [krPreferExtendedQuote, setKrPreferExtendedQuote] = useState(
+    () => getInitialAppState().krPreferExtendedQuote === true,
+  );
 
   const [marketTab, setMarketTab] = useState<MarketTab>('KR');
   const [filterText, setFilterText] = useState('');
@@ -105,6 +117,30 @@ export default function App() {
   const [addHoldingOpen, setAddHoldingOpen] = useState(false);
   const [krQuoteRefreshing, setKrQuoteRefreshing] = useState(false);
   const [krxSectorSyncing, setKrxSectorSyncing] = useState(false);
+
+  /** 미체결 주문: 일지에 적은 날(local)이 지나면 자동 삭제(당일 자정 이후 미체결 = 무효) */
+  useEffect(() => {
+    const sweep = () => {
+      setTrades((prev) => {
+        const today = todayIsoLocal();
+        const next = withoutExpiredPendingOrders(prev, today);
+        return next.length === prev.length ? prev : next;
+      });
+    };
+    sweep();
+    const id = window.setInterval(sweep, 60_000);
+    const onFocus = () => sweep();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') sweep();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
 
   useEffect(() => {
     savePersisted({
@@ -115,8 +151,20 @@ export default function App() {
       notes,
       quoteUpdatedAt,
       lastKrQuoteBulkAt,
+      krSellCommissionRate,
+      krPreferExtendedQuote,
     });
-  }, [trades, quotes, positionIds, todos, notes, quoteUpdatedAt, lastKrQuoteBulkAt]);
+  }, [
+    trades,
+    quotes,
+    positionIds,
+    todos,
+    notes,
+    quoteUpdatedAt,
+    lastKrQuoteBulkAt,
+    krSellCommissionRate,
+    krPreferExtendedQuote,
+  ]);
 
   const ledger = useMemo(() => computeLedger(trades), [trades]);
   const positions = useMemo(
@@ -125,9 +173,28 @@ export default function App() {
   );
 
   const getAvailableQuantity = useCallback(
-    (ticker: string) => ledger.get(ticker)?.quantity ?? 0,
-    [ledger],
+    (ticker: string) => {
+      const q = ledger.get(ticker)?.quantity ?? 0;
+      const pendingSell = trades
+        .filter(
+          (tr) =>
+            tr.ticker === ticker &&
+            tr.side === 'sell' &&
+            tr.executionStatus === 'pending',
+        )
+        .reduce((sum, tr) => sum + tr.quantity, 0);
+      return Math.max(0, q - pendingSell);
+    },
+    [ledger, trades],
   );
+
+  const handleMarkTradeFilled = useCallback((id: string) => {
+    setTrades((prev) =>
+      prev.map((tr) =>
+        tr.id === id ? { ...tr, executionStatus: 'filled' as const } : tr,
+      ),
+    );
+  }, []);
 
   const handleAdjustPosition = useCallback(
     (
@@ -263,6 +330,8 @@ export default function App() {
     setNotes({});
     setQuoteUpdatedAt({});
     setLastKrQuoteBulkAt(null);
+    setKrSellCommissionRate(normalizeKrSellCommissionRate(undefined));
+    setKrPreferExtendedQuote(false);
   }, []);
 
   const refreshKrQuotes = useCallback(async () => {
@@ -288,7 +357,9 @@ export default function App() {
       await Promise.all(
         part.map(async (t) => {
           try {
-            const r = await fetchKrNaverDelayedQuote(t);
+            const r = await fetchKrNaverDelayedQuote(t, {
+              preferExtendedQuote: krPreferExtendedQuote,
+            });
             nextQuotes[t] = roundMoney(r.price, 'KRW');
             nextAt[t] = r.fetchedAt;
             ok += 1;
@@ -307,7 +378,7 @@ export default function App() {
     if (fail > 0) {
       window.alert(`시세 갱신: 성공 ${ok}건, 실패 ${fail}건`);
     }
-  }, [positions]);
+  }, [positions, krPreferExtendedQuote]);
 
   const handleSyncKrxSectors = useCallback(async () => {
     setKrxSectorSyncing(true);
@@ -356,19 +427,45 @@ export default function App() {
   const krQuoteDisclaimer = useMemo(() => {
     if (marketTab !== 'KR') return null;
     const suffix = '(시차·지연 가능, 예상 손익은 참고용)';
+    const pnlNote =
+      `한국장 예상손익·수익률: 현재가로 전량 매도 가정 시 증권거래세+농특세 ${(KR_SELL_TAX_RATE * 100).toFixed(2)}%` +
+      ` 및 위탁 수수료 ${(krSellCommissionRate * 100).toFixed(3)}%(설정값)을 매도금액 기준으로 차감했습니다. 매수측 수수료는 평단에 포함된 것으로 보지 않고 별도로 빼지 않습니다.`;
+    let head: string;
+    const extLine = krPreferExtendedQuote
+      ? '갱신 시 네이버 모바일 API로 장외(Over market·NXT 등) 호가를 우선하며, 없으면 PC 지연 시세로 대체합니다. KRX 「시간외 단일가」 전용 표기와 숫자가 다를 수 있습니다.'
+      : '';
     if (lastKrQuoteBulkAt) {
-      return `시세: 네이버 증권 지연 시세 · 마지막 일괄 갱신 ${formatQuoteUpdatedLabel(lastKrQuoteBulkAt)} ${suffix}`;
+      head = `시세: 네이버 증권 지연 시세 · 마지막 일괄 갱신 ${formatQuoteUpdatedLabel(lastKrQuoteBulkAt)} ${suffix}`;
+    } else {
+      const times = visiblePositions
+        .filter((p) => p.market === 'KR' && /^\d{6}$/.test(p.ticker))
+        .map((p) => quoteUpdatedAt[p.ticker])
+        .filter(Boolean) as string[];
+      if (times.length === 0) {
+        head =
+          '시세는 네이버 증권 지연 시세입니다. 「시세 갱신」으로 불러오세요. 장 운영·지연에 따라 실제 체결가와 다를 수 있습니다.';
+      } else {
+        const latest = times.reduce((a, b) => (a > b ? a : b));
+        head = `시세: 네이버 증권 지연 시세 · 시세 기준 ${formatQuoteUpdatedLabel(latest)} ${suffix}`;
+      }
     }
-    const times = visiblePositions
-      .filter((p) => p.market === 'KR' && /^\d{6}$/.test(p.ticker))
-      .map((p) => quoteUpdatedAt[p.ticker])
-      .filter(Boolean) as string[];
-    if (times.length === 0) {
-      return '시세는 네이버 증권 지연 시세입니다. 「시세 갱신」으로 불러오세요. 장 운영·지연에 따라 실제 체결가와 다를 수 있습니다.';
-    }
-    const latest = times.reduce((a, b) => (a > b ? a : b));
-    return `시세: 네이버 증권 지연 시세 · 시세 기준 ${formatQuoteUpdatedLabel(latest)} ${suffix}`;
-  }, [marketTab, visiblePositions, quoteUpdatedAt, lastKrQuoteBulkAt]);
+    const lines = [head, pnlNote];
+    if (extLine) lines.push(extLine);
+    return lines.join('\n');
+  }, [
+    marketTab,
+    visiblePositions,
+    quoteUpdatedAt,
+    lastKrQuoteBulkAt,
+    krSellCommissionRate,
+    krPreferExtendedQuote,
+  ]);
+
+  const krPnlCostFootnote = useMemo(
+    () =>
+      `한국장 손익: 매도 시 세금 ${(KR_SELL_TAX_RATE * 100).toFixed(2)}% + 수수료 ${(krSellCommissionRate * 100).toFixed(3)}%(설정) 반영.`,
+    [krSellCommissionRate],
+  );
   const visibleTrades = useMemo(
     () =>
       marketTab === 'all'
@@ -378,8 +475,11 @@ export default function App() {
   );
 
   const metrics = useMemo(
-    () => buildPositionMetrics(visiblePositions),
-    [visiblePositions],
+    () =>
+      buildPositionMetrics(visiblePositions, {
+        krSellCommissionRate,
+      }),
+    [visiblePositions, krSellCommissionRate],
   );
   const summary = useMemo(
     () => buildPortfolioSummary(visiblePositions, metrics),
@@ -403,8 +503,11 @@ export default function App() {
     [positions],
   );
   const krMetricsAll = useMemo(
-    () => buildPositionMetrics(allKrPositions),
-    [allKrPositions],
+    () =>
+      buildPositionMetrics(allKrPositions, {
+        krSellCommissionRate,
+      }),
+    [allKrPositions, krSellCommissionRate],
   );
   const usMetricsAll = useMemo(
     () => buildPositionMetrics(allUsPositions),
@@ -516,6 +619,32 @@ export default function App() {
           enabledTabs={enabledTabs}
         />
 
+        {marketTab === 'KR' ? (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-border/80 bg-surface/60 px-3 py-2.5 text-[12px] text-textMuted">
+            <span className="font-medium text-textMain">한국장 매도 비용 가정</span>
+            <label className="flex items-center gap-2">
+              <span className="whitespace-nowrap">위탁 수수료율 (%)</span>
+              <input
+                type="number"
+                min={0.01}
+                max={0.15}
+                step={0.005}
+                value={krSellCommissionRate * 100}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  if (!Number.isFinite(v)) return;
+                  setKrSellCommissionRate(clampKrSellCommissionRate(v / 100));
+                }}
+                className="w-24 rounded border border-border bg-background px-2 py-1 text-sm tabular-nums text-textMain outline-none focus:border-accent"
+              />
+            </label>
+            <span className="min-w-0 text-[11px] leading-snug">
+              예상손익에 증거래세+농특세 {(KR_SELL_TAX_RATE * 100).toFixed(2)}%를 더해
+              반영합니다. (손실이어도 매도금액 기준)
+            </span>
+          </div>
+        ) : null}
+
         {visiblePositions.length === 0 ? (
           <div className="rounded-lg border border-border bg-surface px-4 py-14 text-center">
             <p className="text-sm text-textMuted">
@@ -542,6 +671,7 @@ export default function App() {
               <MarketPairSummaryCards
                 krSummary={krSummaryAll}
                 usSummary={usSummaryAll}
+                krFootnote={krPnlCostFootnote}
               />
             ) : (
               <SummaryCards
@@ -596,6 +726,12 @@ export default function App() {
                 marketTab === 'KR' ? () => void handleSyncKrxSectors() : undefined
               }
               krxSectorSyncing={krxSectorSyncing}
+              krPreferExtendedQuote={
+                marketTab === 'KR' ? krPreferExtendedQuote : undefined
+              }
+              onKrPreferExtendedQuoteChange={
+                marketTab === 'KR' ? setKrPreferExtendedQuote : undefined
+              }
             />
           </>
         )}
@@ -606,6 +742,8 @@ export default function App() {
           quotes={quotes}
           onOpenAddTrade={() => setAddTradeOpen(true)}
           onResetData={handleResetData}
+          onMarkTradeFilled={handleMarkTradeFilled}
+          krSellCommissionRate={krSellCommissionRate}
         />
       </main>
       {marketTab !== 'all' && (
@@ -681,6 +819,7 @@ export default function App() {
                 })
             : undefined
         }
+        onMarkTradeFilled={handleMarkTradeFilled}
       />
     </div>
   );

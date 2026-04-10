@@ -2,6 +2,9 @@ import type { CurrencyCode, Market } from './portfolio';
 
 export type TradeSide = 'buy' | 'sell';
 
+/** 미체결 주문 vs 체결 (장부·보유에는 체결만 반영) */
+export type TradeExecutionStatus = 'pending' | 'filled';
+
 /** 매매일지 1건 (평단·실현손익은 장부 로직으로 집계) */
 export interface Trade {
   id: string;
@@ -18,6 +21,11 @@ export interface Trade {
   note?: string;
   /** true면 매매일지·통계 목록에 넣지 않음 (보유종목·CSV 등 당일 매매가 아닌 반영) */
   excludeFromJournal?: boolean;
+  /**
+   * 미체결 주문은 장부·보유에 넣지 않음. 생략·filled는 체결로 간주.
+   * 매매일지에서 「체결 처리」로 pending → filled 전환 가능.
+   */
+  executionStatus?: TradeExecutionStatus;
 }
 
 export interface TradeSeedFile {

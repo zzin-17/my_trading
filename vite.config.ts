@@ -1,5 +1,6 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
+import { fetchKrQuote } from './api/krQuoteFetch.js';
 
 export default defineConfig({
   plugins: [
@@ -12,6 +13,9 @@ export default defineConfig({
             const reqUrl = (req as { url?: string }).url ?? '/';
             const u = new URL(reqUrl, 'http://vite.local');
             const code = u.searchParams.get('code');
+            const extended =
+              u.searchParams.get('extended') === '1' ||
+              u.searchParams.get('extended') === 'true';
             if (!code || !/^\d{6}$/.test(code)) {
               res.statusCode = 400;
               res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -20,39 +24,19 @@ export default defineConfig({
               );
               return;
             }
-            const upstream = `https://finance.naver.com/item/main.naver?code=${code}`;
-            const r = await fetch(upstream, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0',
-                Accept: 'text/html,application/xhtml+xml',
-              },
-            });
-            if (!r.ok) {
-              res.statusCode = 502;
-              res.setHeader('Content-Type', 'application/json; charset=utf-8');
-              res.end(JSON.stringify({ message: `Upstream ${r.status}` }));
-              return;
-            }
-            const html = await r.text();
-            const price = parseNaverMainPrice(html);
-            if (price === null) {
+            const result = await fetchKrQuote(code, { extended });
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            res.end(JSON.stringify(result));
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : '';
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            if (msg === 'parse_fail' || msg === 'mobile_parse_fail') {
               res.statusCode = 422;
-              res.setHeader('Content-Type', 'application/json; charset=utf-8');
               res.end(JSON.stringify({ message: '시세 파싱 실패' }));
               return;
             }
-            res.statusCode = 200;
-            res.setHeader('Content-Type', 'application/json; charset=utf-8');
-            res.end(
-              JSON.stringify({
-                price,
-                fetchedAt: new Date().toISOString(),
-                source: 'naver_finance_delayed',
-              }),
-            );
-          } catch {
             res.statusCode = 502;
-            res.setHeader('Content-Type', 'application/json; charset=utf-8');
             res.end(JSON.stringify({ message: '시세 조회 실패' }));
           }
         });
@@ -144,19 +128,4 @@ function stripTags(s: string): string {
     .replace(/<[^>]*>/g, '')
     .replace(/&nbsp;/g, ' ')
     .trim();
-}
-
-function parseNaverMainPrice(html: string): number | null {
-  let m = html.match(/오늘의시세\s*([\d,]+)\s*포인트/);
-  if (!m) {
-    const krx = html.match(/id="rate_info_krx"[\s\S]*?<\/table>/);
-    if (krx) m = krx[0].match(/오늘의시세\s*([\d,]+)\s*포인트/);
-  }
-  if (!m) {
-    const block = html.match(/<p class="no_today"[\s\S]*?<\/p>/);
-    if (block) m = block[0].match(/<span class="blind">([\d,]+)<\/span>/);
-  }
-  if (!m) return null;
-  const n = parseInt(m[1].replace(/,/g, ''), 10);
-  return Number.isFinite(n) ? n : null;
 }

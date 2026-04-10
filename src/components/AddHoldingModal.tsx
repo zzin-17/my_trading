@@ -121,26 +121,68 @@ export function AddHoldingModal({
     setDate(todayIso());
   };
 
-  const handleLookup = async () => {
+  /** @param primaryOverride 첫 번째 입력칸 값 (onBlur 시 최신 DOM 값 반영용) */
+  const handleLookup = async (primaryOverride?: string) => {
     if (market !== 'KR') return;
-    const code = ticker.trim();
-    if (!/^\d{6}$/.test(code)) {
-      setLookupMessage('한국 종목코드는 6자리 숫자로 입력해 주세요.');
+    const fromTicker = (primaryOverride ?? ticker).trim();
+    const fromName = name.trim();
+    const codeFromPrimary = fromTicker.replace(/\s/g, '');
+    const codeFromName = fromName.replace(/\s/g, '');
+    const sixDigit =
+      /^\d{6}$/.test(codeFromPrimary) ? codeFromPrimary
+      : /^\d{6}$/.test(codeFromName) ? codeFromName
+      : '';
+
+    if (sixDigit) {
+      try {
+        setLookupLoading(true);
+        setLookupMessage(null);
+        const found = await lookupKrStockName(sixDigit);
+        if (!found) {
+          setLookupMessage('조회 결과가 없습니다. 종목명 검색을 시도해 보세요.');
+          return;
+        }
+        setTicker(found.ticker);
+        setName(found.name);
+        setSector(found.sector);
+        setLookupMessage(`조회 완료: ${found.name}`);
+      } catch {
+        setLookupMessage(
+          '자동조회 실패. 잠시 후 다시 시도하거나 종목명을 직접 입력해 주세요.',
+        );
+      } finally {
+        setLookupLoading(false);
+      }
       return;
     }
+
+    const q = fromTicker || fromName;
+    if (!q) {
+      setLookupMessage(
+        '종목코드(6자리) 또는 종목명을 입력한 뒤 조회해 주세요.',
+      );
+      return;
+    }
+
     try {
       setLookupLoading(true);
       setLookupMessage(null);
-      const found = await lookupKrStockName(code);
-      if (!found) {
-        setLookupMessage('조회 결과가 없습니다. 종목명을 직접 입력해 주세요.');
-        return;
+      const items = await searchKrStocksByName(q, 8);
+      setNameSuggestions(items);
+      if (items.length === 0) {
+        setLookupMessage('조회 결과가 없습니다. 검색어를 바꿔 보세요.');
+      } else if (items.length === 1) {
+        const item = items[0];
+        setName(item.name);
+        setTicker(item.ticker);
+        setSector(item.sector);
+        setLookupMessage(`조회 완료: ${item.name} (${item.ticker})`);
+      } else {
+        setLookupMessage(`${items.length}건의 후보입니다. 목록에서 선택해 주세요.`);
       }
-      setName(found.name);
-      setSector(found.sector);
-      setLookupMessage(`조회 완료: ${found.name}`);
     } catch {
-      setLookupMessage('자동조회 실패. 잠시 후 다시 시도하거나 종목명을 직접 입력해 주세요.');
+      setLookupMessage('검색 실패. 잠시 후 다시 시도해 주세요.');
+      setNameSuggestions([]);
     } finally {
       setLookupLoading(false);
     }
@@ -173,11 +215,13 @@ export function AddHoldingModal({
             />
             <div className="flex gap-2">
               <input
-                placeholder="종목코드"
+                placeholder="종목코드 또는 종목명"
                 value={ticker}
                 onChange={(e) => setTicker(e.target.value)}
-                onBlur={() => {
-                  if (market === 'KR' && !name.trim()) void handleLookup();
+                onBlur={(e) => {
+                  if (market !== 'KR') return;
+                  const t = e.target.value.trim().replace(/\s/g, '');
+                  if (/^\d{6}$/.test(t) && !name.trim()) void handleLookup(e.target.value);
                 }}
                 className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
                 required
@@ -211,7 +255,7 @@ export function AddHoldingModal({
                 <p className="text-[11px] text-textMuted">
                   {name.trim()
                     ? '일치하는 후보가 없습니다. 종목명을 직접 입력해도 됩니다.'
-                    : '종목명을 입력하면 코드 후보가 표시됩니다.'}
+                    : '종목명을 입력하거나, 위 칸에 종목명·코드를 넣고 「조회」하면 후보가 표시됩니다.'}
                 </p>
               ) : (
                 <ul className="max-h-36 space-y-1 overflow-auto">

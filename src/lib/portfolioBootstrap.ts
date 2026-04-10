@@ -1,6 +1,7 @@
 import type { Trade } from '../types/trade';
 import { tradeSeed } from '../data/tradeSeed';
 import { loadPersisted, type PersistedPortfolioV1 } from './persistence';
+import { normalizeKrSellCommissionRate } from './krTradingAssumptions';
 
 /** 티커별 positionId가 없으면 자동 발급 */
 export function reconcilePositionIds(
@@ -44,6 +45,13 @@ export function buildInitialAppState(): PersistedPortfolioV1 {
       quoteUpdatedAt: { ...(raw.quoteUpdatedAt ?? {}) },
       lastKrQuoteBulkAt:
         typeof raw.lastKrQuoteBulkAt === 'string' ? raw.lastKrQuoteBulkAt : null,
+      krSellCommissionRate: normalizeKrSellCommissionRate(
+        raw.krSellCommissionRate,
+      ),
+      krPreferExtendedQuote:
+        typeof raw.krPreferExtendedQuote === 'boolean'
+          ? raw.krPreferExtendedQuote
+          : false,
     };
   }
   return {
@@ -54,6 +62,8 @@ export function buildInitialAppState(): PersistedPortfolioV1 {
     notes: {},
     quoteUpdatedAt: {},
     lastKrQuoteBulkAt: null,
+    krSellCommissionRate: normalizeKrSellCommissionRate(undefined),
+    krPreferExtendedQuote: false,
   };
 }
 
