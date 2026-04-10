@@ -2,6 +2,7 @@ import {
   Bar,
   BarChart,
   Cell,
+  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -41,18 +42,32 @@ export function StockBarChart({ data, currency }: StockBarChartProps) {
 
   const maxW = Math.max(8, ...rows.map((r) => r.weight_pct));
 
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-lg border border-border bg-surface p-4">
+        <h3 className="text-sm font-medium text-textMain">종목별 비중 (Top 10 + Others)</h3>
+        <p className="mt-0.5 text-[12px] text-textMuted">
+          1.4 · 단일 종목 비중 ≥40% 시 막대 경고(주황)
+        </p>
+        <p className="mt-10 text-center text-[13px] text-textMuted">
+          표시할 보유 종목이 없습니다.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
       <h3 className="text-sm font-medium text-textMain">종목별 비중 (Top 10 + Others)</h3>
       <p className="mt-0.5 text-[12px] text-textMuted">
-        §1.4 · 단일 종목 비중 ≥40% 시 막대 경고(주황)
+        1.4 · 단일 종목 비중 ≥40% 시 막대 경고(주황)
       </p>
       <div className="mt-3 h-[360px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             layout="vertical"
             data={rows}
-            margin={{ top: 4, right: 12, left: 8, bottom: 4 }}
+            margin={{ top: 4, right: 40, left: 8, bottom: 4 }}
           >
             <XAxis
               type="number"
@@ -127,6 +142,17 @@ export function StockBarChart({ data, currency }: StockBarChartProps) {
                   fill={entry.warn ? '#FF9F1C' : '#4C7DFF'}
                 />
               ))}
+              <LabelList
+                dataKey="weight_pct"
+                position="right"
+                offset={6}
+                formatter={(v: number | string) =>
+                  `${typeof v === 'number' ? v.toFixed(1) : Number(v).toFixed(1)}%`
+                }
+                fill="#E8EAED"
+                fontSize={10}
+                className="tabular-nums"
+              />
             </Bar>
           </BarChart>
         </ResponsiveContainer>

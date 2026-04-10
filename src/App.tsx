@@ -10,6 +10,7 @@ import { SummaryCards } from './components/SummaryCards';
 import { MarketPairSummaryCards } from './components/MarketPairSummaryCards';
 import { HoldingsTable } from './components/HoldingsTable';
 import { TradeJournal } from './components/TradeJournal';
+import { RealizedPnlPanel } from './components/RealizedPnlPanel';
 import { AddTradeModal } from './components/AddTradeModal';
 import { AddHoldingModal, type AddHoldingPayload } from './components/AddHoldingModal';
 import { MarketTodoList } from './components/MarketTodoList';
@@ -20,7 +21,6 @@ import { tradeSeed } from './data/tradeSeed';
 import {
   buildPortfolioSummary,
   buildPositionMetrics,
-  buildSectorWeights,
   buildTopStockWeights,
   getUnifiedPortfolioCurrency,
   roundMoney,
@@ -56,15 +56,15 @@ function tickersEqual(a: string, b: string, market: Market): boolean {
   return na === nb;
 }
 
-const SectorDonutChart = lazy(() =>
-  import('./components/SectorDonutChart').then((m) => ({
-    default: m.SectorDonutChart,
-  })),
-);
-
 const StockBarChart = lazy(() =>
   import('./components/StockBarChart').then((m) => ({
     default: m.StockBarChart,
+  })),
+);
+
+const RealizedDailyBarChart = lazy(() =>
+  import('./components/RealizedDailyBarChart').then((m) => ({
+    default: m.RealizedDailyBarChart,
   })),
 );
 
@@ -485,10 +485,6 @@ export default function App() {
     () => buildPortfolioSummary(visiblePositions, metrics),
     [visiblePositions, metrics],
   );
-  const sectors = useMemo(
-    () => buildSectorWeights(visiblePositions, metrics),
-    [visiblePositions, metrics],
-  );
   const topStocks = useMemo(
     () => buildTopStockWeights(visiblePositions, metrics, 10),
     [visiblePositions, metrics],
@@ -679,37 +675,6 @@ export default function App() {
                 quoteDisclaimer={krQuoteDisclaimer}
               />
             )}
-            <Suspense
-              fallback={
-                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                  <ChartSkeleton label="시장별 차트 불러오는 중…" />
-                  <ChartSkeleton label="섹터 차트 불러오는 중…" />
-                </div>
-              }
-            >
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                {marketTab === 'all' ? (
-                  <>
-                    <MarketSplitCard weights={marketSplitWeights} />
-                    <SectorDonutChart
-                      sectors={sectors}
-                      currency={summary.currency}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <SectorDonutChart
-                      sectors={sectors}
-                      currency={summary.currency}
-                    />
-                    <StockBarChart
-                      data={topStocks}
-                      currency={summary.currency}
-                    />
-                  </>
-                )}
-              </div>
-            </Suspense>
             <HoldingsTable
               positions={visiblePositions}
               metrics={metrics}
@@ -736,6 +701,10 @@ export default function App() {
           </>
         )}
 
+        <RealizedPnlPanel
+          trades={visibleTrades}
+          krSellCommissionRate={krSellCommissionRate}
+        />
         <TradeJournal
           trades={visibleTrades}
           ledger={ledger}
@@ -745,6 +714,32 @@ export default function App() {
           onMarkTradeFilled={handleMarkTradeFilled}
           krSellCommissionRate={krSellCommissionRate}
         />
+
+        <Suspense
+          fallback={
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              <ChartSkeleton label="종목 비중 차트 불러오는 중…" />
+              <ChartSkeleton label="실현손익 차트 불러오는 중…" />
+            </div>
+          }
+        >
+          <div className="space-y-6">
+            {marketTab === 'all' ? (
+              <MarketSplitCard weights={marketSplitWeights} />
+            ) : null}
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              <StockBarChart
+                data={topStocks}
+                currency={summary.currency}
+              />
+              <RealizedDailyBarChart
+                trades={visibleTrades}
+                krSellCommissionRate={krSellCommissionRate}
+                marketTab={marketTab}
+              />
+            </div>
+          </div>
+        </Suspense>
       </main>
       {marketTab !== 'all' && (
         <div className="mx-auto mb-6 max-w-7xl px-4 sm:px-6">
