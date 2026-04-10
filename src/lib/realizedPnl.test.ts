@@ -5,6 +5,7 @@ import {
   aggregateRealizedByTickerForPeriod,
   buildDailyRealizedBarRows,
   computeRealizedSellEvents,
+  lastNKrTradingDays,
   lastNWeekdayDates,
   periodKeyForGranularity,
   summarizeRealizedByPeriod,
@@ -143,6 +144,13 @@ describe('lastNWeekdayDates', () => {
       '2025-01-09',
       '2025-01-10',
     ]);
+  });
+});
+
+describe('lastNKrTradingDays', () => {
+  it('신정·연말 휴장 등 KRX 휴장일은 제외', () => {
+    const days = lastNKrTradingDays('2025-01-03', 3);
+    expect(days).toEqual(['2024-12-30', '2025-01-02', '2025-01-03']);
   });
 });
 

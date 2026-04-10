@@ -63,11 +63,13 @@ export function loadPersisted(): PersistedPortfolioV1 | null {
   }
 }
 
-export function savePersisted(data: PersistedPortfolioV1): void {
+/** 저장 성공 여부(용량 초과·비공개 모드 등 시 false) */
+export function savePersisted(data: PersistedPortfolioV1): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    return true;
   } catch {
-    /* quota / private mode */
+    return false;
   }
 }
 

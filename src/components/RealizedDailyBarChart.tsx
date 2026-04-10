@@ -19,6 +19,7 @@ import {
 } from '../lib/realizedPnl';
 import { todayIsoLocal } from '../lib/tradePendingExpiry';
 import type { Trade } from '../types/trade';
+import { KR_MARKET_HOLIDAY_DATA_LAST_YEAR } from '../data/krMarketHolidays';
 
 interface RealizedDailyBarChartProps {
   trades: Trade[];
@@ -151,7 +152,8 @@ export function RealizedDailyBarChart({
         최근 {TRADING_DAYS}거래일 실현손익 (세후)
       </h3>
       <p className="mt-0.5 text-[12px] text-textMuted">
-        주말 제외·공휴일 미반영. 매도 체결만 집계합니다.
+        KRX 휴장일 반영(~{KR_MARKET_HOLIDAY_DATA_LAST_YEAR}년 목록)·주말 제외. 그
+        이후 연도는 평일만 거래일로 봅니다. 매도 체결만 집계합니다.
       </p>
       <div className="mt-3 h-[360px] w-full">
         <ResponsiveContainer width="100%" height="100%">

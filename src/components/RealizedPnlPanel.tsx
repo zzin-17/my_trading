@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CurrencyCode } from '../types/portfolio';
 import type { Trade } from '../types/trade';
 import { formatMoney, formatPercent } from '../lib/format';
@@ -32,6 +32,104 @@ const GRANULARITIES: { id: RealizedPeriodGranularity; label: string }[] = [
   { id: 'month', label: '월' },
   { id: 'year', label: '년' },
 ];
+
+function RealizedPnlConceptTooltip({ taxPctLabel }: { taxPctLabel: string }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (wrapRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  return (
+    <div className="relative shrink-0" ref={wrapRef}>
+      <button
+        type="button"
+        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-[12px] font-bold leading-none text-textMuted transition-colors hover:border-accent hover:text-textMain focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        aria-expanded={open}
+        aria-label="실현손익 집계 안내 열기"
+        onClick={() => setOpen((v) => !v)}
+      >
+        ?
+      </button>
+      {open ? (
+        <div
+          role="tooltip"
+          className="absolute left-0 top-full z-[80] mt-2 w-[min(22rem,calc(100vw-3rem))] rounded-lg border border-border bg-surface px-3 py-3 shadow-lg"
+        >
+          <p className="text-[12px] leading-relaxed text-textMain">
+            장부에 반영된 매도(체결)만 집계합니다. 한국장은 매도 대금 기준
+            증거래세·농특세 {taxPctLabel}%와 설정한 위탁 수수료율을 차감한
+            금액입니다.
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PeriodTableHelpTooltip() {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (wrapRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  return (
+    <div className="relative inline-flex shrink-0 align-middle" ref={wrapRef}>
+      <button
+        type="button"
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border bg-background text-[10px] font-bold leading-none text-textMuted transition-colors hover:border-accent hover:text-textMain focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+        aria-expanded={open}
+        aria-label="기간 목록 사용 안내 열기"
+        onClick={() => setOpen((v) => !v)}
+      >
+        ?
+      </button>
+      {open ? (
+        <div
+          role="tooltip"
+          className="absolute left-0 top-full z-[100] mt-1.5 w-[min(18rem,calc(100vw-3rem))] rounded-lg border border-border bg-surface px-3 py-2.5 shadow-lg"
+        >
+          <p className="text-[12px] leading-relaxed text-textMain">
+            행을 누르면 그 기간의 종목별 실현손익을 볼 수 있습니다.
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export function RealizedPnlPanel({
   trades,
@@ -67,14 +165,13 @@ export function RealizedPnlPanel({
   return (
     <div className="rounded-lg border border-border bg-surface p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-textMain tracking-tight">
+        <div className="flex min-w-0 items-center gap-2">
+          <h3 className="shrink-0 text-sm font-semibold text-textMain tracking-tight">
             실현손익
           </h3>
-          <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-textMuted">
-            장부에 반영된 매도(체결)만 집계합니다. 한국장은 매도 대금 기준 증거래세·농특세{' '}
-            {(KR_SELL_TAX_RATE * 100).toFixed(2)}%와 설정한 위탁 수수료율을 차감한 금액입니다.
-          </p>
+          <RealizedPnlConceptTooltip
+            taxPctLabel={(KR_SELL_TAX_RATE * 100).toFixed(2)}
+          />
         </div>
         <div
           className="flex shrink-0 flex-wrap gap-1 rounded-md border border-border bg-background p-0.5"
@@ -111,7 +208,12 @@ export function RealizedPnlPanel({
           <table className="w-full min-w-[420px] border-collapse text-left text-[12px]">
             <thead>
               <tr className="border-b border-border text-textMuted">
-                <th className="py-2 pr-3 font-medium">기간</th>
+                <th className="py-2 pr-3 font-medium">
+                  <span className="inline-flex items-center gap-1.5">
+                    기간
+                    <PeriodTableHelpTooltip />
+                  </span>
+                </th>
                 <th className="py-2 pr-3 font-medium">통화</th>
                 <th className="py-2 pr-3 text-right font-medium tabular-nums">
                   실현손익(세후)
@@ -156,11 +258,6 @@ export function RealizedPnlPanel({
               )}
             </tbody>
           </table>
-          {periodRows.length > 0 && (
-            <p className="mt-2 text-[11px] text-textMuted">
-              행을 누르면 그 기간의 종목별 실현손익을 볼 수 있습니다.
-            </p>
-          )}
         </div>
       ) : (
         <div className="mt-4">

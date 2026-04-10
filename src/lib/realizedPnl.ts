@@ -1,5 +1,6 @@
 import type { CurrencyCode, Market } from '../types/portfolio';
 import type { Trade } from '../types/trade';
+import { isKrMarketClosureDay } from '../data/krMarketHolidays';
 import { tradeAppliesToLedger } from './ledger';
 import { KR_SELL_TAX_RATE } from './krTradingAssumptions';
 import { roundMoney, roundPercent } from './portfolioMath';
@@ -267,7 +268,7 @@ export function formatPeriodLabel(
 
 /**
  * endInclusive(YYYY-MM-DD)부터 거슬러 올라가며 주말을 제외한 날짜 n개.
- * 공휴일은 반영하지 않음. 반환은 시간순(가장 과거 → 가장 최근).
+ * 반환은 시간순(가장 과거 → 가장 최근).
  */
 export function lastNWeekdayDates(endInclusive: string, n: number): string[] {
   const parts = endInclusive.split('-').map((x) => parseInt(x, 10));
@@ -301,6 +302,45 @@ export function lastNWeekdayDates(endInclusive: string, n: number): string[] {
   return picked.reverse();
 }
 
+/**
+ * KRX 휴장일(내장 목록) + 주말을 제외한 최근 n거래일.
+ * 목록에 없는 연도의 공휴일은 반영되지 않음.
+ */
+export function lastNKrTradingDays(endInclusive: string, n: number): string[] {
+  const parts = endInclusive.split('-').map((x) => parseInt(x, 10));
+  const y0 = parts[0];
+  const m0 = parts[1];
+  const d0 = parts[2];
+  if (
+    y0 === undefined ||
+    m0 === undefined ||
+    d0 === undefined ||
+    !Number.isFinite(y0) ||
+    !Number.isFinite(m0) ||
+    !Number.isFinite(d0)
+  ) {
+    return [];
+  }
+  const picked: string[] = [];
+  const cur = new Date(y0, m0 - 1, d0);
+  let safety = 0;
+  while (picked.length < n && safety < 400) {
+    const wd = cur.getDay();
+    if (wd !== 0 && wd !== 6) {
+      const y = cur.getFullYear();
+      const mo = String(cur.getMonth() + 1).padStart(2, '0');
+      const da = String(cur.getDate()).padStart(2, '0');
+      const iso = `${y}-${mo}-${da}`;
+      if (!isKrMarketClosureDay(iso)) {
+        picked.push(iso);
+      }
+    }
+    cur.setDate(cur.getDate() - 1);
+    safety++;
+  }
+  return picked.reverse();
+}
+
 /** 막대차트용: 최근 n거래일(주말 제외)별 실현손익 net 합, 통화별 */
 export interface DailyRealizedBarRow {
   date: string;
@@ -315,7 +355,7 @@ export function buildDailyRealizedBarRows(
   endInclusive: string,
   tradingDayCount: number,
 ): DailyRealizedBarRow[] {
-  const days = lastNWeekdayDates(endInclusive, tradingDayCount);
+  const days = lastNKrTradingDays(endInclusive, tradingDayCount);
   const krwByDay = new Map<string, number>();
   const usdByDay = new Map<string, number>();
   for (const d of days) {

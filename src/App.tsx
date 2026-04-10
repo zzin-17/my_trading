@@ -10,6 +10,7 @@ import { SummaryCards } from './components/SummaryCards';
 import { MarketPairSummaryCards } from './components/MarketPairSummaryCards';
 import { HoldingsTable } from './components/HoldingsTable';
 import { TradeJournal } from './components/TradeJournal';
+import { AppSettingsModal } from './components/AppSettingsModal';
 import { RealizedPnlPanel } from './components/RealizedPnlPanel';
 import { AddTradeModal } from './components/AddTradeModal';
 import { AddHoldingModal, type AddHoldingPayload } from './components/AddHoldingModal';
@@ -33,6 +34,7 @@ import {
   clearInitialAppStateCache,
 } from './lib/portfolioBootstrap';
 import { MixedCurrencyBanner } from './components/MixedCurrencyBanner';
+import { KrPnlAssumptionsCard } from './components/KrPnlAssumptionsCard';
 import type { Market } from './types/portfolio';
 import type { Trade } from './types/trade';
 import type { TradePlanTodo } from './types/todo';
@@ -43,7 +45,6 @@ import { fetchKrNaverDelayedQuote } from './lib/naverKrQuote';
 import { formatQuoteUpdatedLabel } from './lib/format';
 import { todayIsoLocal, withoutExpiredPendingOrders } from './lib/tradePendingExpiry';
 import {
-  clampKrSellCommissionRate,
   KR_SELL_TAX_RATE,
   normalizeKrSellCommissionRate,
 } from './lib/krTradingAssumptions';
@@ -117,6 +118,10 @@ export default function App() {
   const [addHoldingOpen, setAddHoldingOpen] = useState(false);
   const [krQuoteRefreshing, setKrQuoteRefreshing] = useState(false);
   const [krxSectorSyncing, setKrxSectorSyncing] = useState(false);
+  const [persistenceWarning, setPersistenceWarning] = useState<string | null>(
+    null,
+  );
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   /** 미체결 주문: 일지에 적은 날(local)이 지나면 자동 삭제(당일 자정 이후 미체결 = 무효) */
   useEffect(() => {
@@ -143,7 +148,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    savePersisted({
+    const ok = savePersisted({
       trades,
       quotes,
       positionIds,
@@ -154,6 +159,11 @@ export default function App() {
       krSellCommissionRate,
       krPreferExtendedQuote,
     });
+    setPersistenceWarning(
+      ok
+        ? null
+        : '브라우저에 저장하지 못했습니다. 저장 공간 부족·비공개 모드일 수 있습니다. 이 사이트의 저장 용량을 줄인 뒤 다시 시도해 주세요.',
+    );
   }, [
     trades,
     quotes,
@@ -334,7 +344,25 @@ export default function App() {
     setKrPreferExtendedQuote(false);
   }, []);
 
+  /** 매매·보유·시세 등 전부 비움 (샘플 아님) */
+  const handleClearHoldings = useCallback(() => {
+    clearInitialAppStateCache();
+    setTrades([]);
+    setQuotes({});
+    setPositionIds({});
+    setTodos([]);
+    setNotes({});
+    setQuoteUpdatedAt({});
+    setLastKrQuoteBulkAt(null);
+  }, []);
+
   const refreshKrQuotes = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      window.alert(
+        '네트워크에 연결되어 있지 않습니다. 연결 후 시세 갱신을 다시 시도해 주세요.',
+      );
+      return;
+    }
     const tickers = [
       ...new Set(
         positions
@@ -376,7 +404,12 @@ export default function App() {
     }
     setKrQuoteRefreshing(false);
     if (fail > 0) {
-      window.alert(`시세 갱신: 성공 ${ok}건, 실패 ${fail}건`);
+      const allFailed = ok === 0;
+      window.alert(
+        allFailed
+          ? `시세를 가져오지 못했습니다(${fail}건). 네트워크·배포 환경의 시세 프록시(/api/kr-quote)를 확인해 주세요.`
+          : `시세 갱신: 성공 ${ok}건, 실패 ${fail}건`,
+      );
     }
   }, [positions, krPreferExtendedQuote]);
 
@@ -600,12 +633,23 @@ export default function App() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-surface/90 px-4 py-4 backdrop-blur sm:px-6">
-        <h1 className="text-lg font-semibold tracking-tight text-textMain">
-          TraderOS — Portfolio Visual
-        </h1>
-        <p className="text-[12px] text-textMuted">
-          매매일지·시세 기반 평단 · 한국장/미국장 탭 · 로컬 저장
-        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-lg font-semibold tracking-tight text-textMain">
+              TraderOS — Portfolio Visual
+            </h1>
+            <p className="text-[12px] text-textMuted">
+              매매일지·시세 기반 평단 · 한국장/미국장 탭 · 로컬 저장
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="shrink-0 self-start rounded-md border border-border px-3 py-2 text-sm font-medium text-textMuted hover:bg-white/5 hover:text-textMain"
+          >
+            설정
+          </button>
+        </div>
       </header>
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
         <MarketTabs
@@ -615,30 +659,22 @@ export default function App() {
           enabledTabs={enabledTabs}
         />
 
-        {marketTab === 'KR' ? (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-border/80 bg-surface/60 px-3 py-2.5 text-[12px] text-textMuted">
-            <span className="font-medium text-textMain">한국장 매도 비용 가정</span>
-            <label className="flex items-center gap-2">
-              <span className="whitespace-nowrap">위탁 수수료율 (%)</span>
-              <input
-                type="number"
-                min={0.01}
-                max={0.15}
-                step={0.005}
-                value={krSellCommissionRate * 100}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  if (!Number.isFinite(v)) return;
-                  setKrSellCommissionRate(clampKrSellCommissionRate(v / 100));
-                }}
-                className="w-24 rounded border border-border bg-background px-2 py-1 text-sm tabular-nums text-textMain outline-none focus:border-accent"
-              />
-            </label>
-            <span className="min-w-0 text-[11px] leading-snug">
-              예상손익에 증거래세+농특세 {(KR_SELL_TAX_RATE * 100).toFixed(2)}%를 더해
-              반영합니다. (손실이어도 매도금액 기준)
-            </span>
+        {persistenceWarning ? (
+          <div
+            role="alert"
+            className="rounded-lg border border-warning/50 bg-warning/15 px-3 py-2.5 text-[12px] leading-snug text-warning"
+          >
+            {persistenceWarning}
           </div>
+        ) : null}
+
+        {marketTab === 'KR' ? (
+          <KrPnlAssumptionsCard
+            krSellCommissionRate={krSellCommissionRate}
+            onKrSellCommissionRateChange={setKrSellCommissionRate}
+            krPreferExtendedQuote={krPreferExtendedQuote}
+            onKrPreferExtendedQuoteChange={setKrPreferExtendedQuote}
+          />
         ) : null}
 
         {visiblePositions.length === 0 ? (
@@ -687,16 +723,6 @@ export default function App() {
               krQuoteRefreshing={krQuoteRefreshing}
               onRefreshKrQuotes={() => void refreshKrQuotes()}
               lastKrQuoteBulkAt={lastKrQuoteBulkAt}
-              onSyncKrxSectors={
-                marketTab === 'KR' ? () => void handleSyncKrxSectors() : undefined
-              }
-              krxSectorSyncing={krxSectorSyncing}
-              krPreferExtendedQuote={
-                marketTab === 'KR' ? krPreferExtendedQuote : undefined
-              }
-              onKrPreferExtendedQuoteChange={
-                marketTab === 'KR' ? setKrPreferExtendedQuote : undefined
-              }
             />
           </>
         )}
@@ -710,7 +736,6 @@ export default function App() {
           ledger={ledger}
           quotes={quotes}
           onOpenAddTrade={() => setAddTradeOpen(true)}
-          onResetData={handleResetData}
           onMarkTradeFilled={handleMarkTradeFilled}
           krSellCommissionRate={krSellCommissionRate}
         />
@@ -769,6 +794,14 @@ export default function App() {
           />
         </div>
       )}
+      <AppSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onConfirmResetSample={handleResetData}
+        onSyncKrxSectors={handleSyncKrxSectors}
+        krxSectorSyncing={krxSectorSyncing}
+        onConfirmClearHoldings={handleClearHoldings}
+      />
       <AddTradeModal
         open={addTradeOpen}
         onClose={() => setAddTradeOpen(false)}

@@ -82,12 +82,6 @@ interface HoldingsTableProps {
   onRefreshKrQuotes: () => void;
   /** 마지막 시세 갱신 버튼으로 일괄 반영한 시각 */
   lastKrQuoteBulkAt: string | null;
-  /** 한국장: KRX 상장목록으로 매매일지의 종목명·섹터(업종) 일괄 보정 */
-  onSyncKrxSectors?: () => void;
-  krxSectorSyncing?: boolean;
-  /** 한국장 전용: 시세 갱신 시 장외(Over/NXT) 호가 우선 */
-  krPreferExtendedQuote?: boolean;
-  onKrPreferExtendedQuoteChange?: (value: boolean) => void;
 }
 
 export function HoldingsTable({
@@ -102,10 +96,6 @@ export function HoldingsTable({
   krQuoteRefreshing,
   onRefreshKrQuotes,
   lastKrQuoteBulkAt,
-  onSyncKrxSectors,
-  krxSectorSyncing = false,
-  krPreferExtendedQuote,
-  onKrPreferExtendedQuoteChange,
 }: HoldingsTableProps) {
   const [sortKey, setSortKey] = useState<HoldingSortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -242,38 +232,6 @@ export function HoldingsTable({
             >
               {krQuoteRefreshing ? '시세 갱신 중…' : '시세 갱신'}
             </button>
-            {krPreferExtendedQuote !== undefined &&
-            onKrPreferExtendedQuoteChange ? (
-              <label
-                className="flex max-w-[14rem] cursor-pointer items-start gap-2 rounded-md border border-border/80 bg-background/40 px-2.5 py-1.5 text-[11px] leading-snug text-textMuted"
-                title="켜면 갱신 시 네이버 모바일 API의 장외(Over market·NXT) 호가를 우선합니다. 없으면 기존 PC 지연 시세로 대체됩니다."
-              >
-                <input
-                  type="checkbox"
-                  checked={krPreferExtendedQuote}
-                  onChange={(e) =>
-                    onKrPreferExtendedQuoteChange(e.target.checked)
-                  }
-                  className="mt-0.5 shrink-0 rounded border-border"
-                />
-                <span>
-                  장외·NXT 호가 우선
-                  <span className="mt-0.5 block text-[10px] text-textMuted/80">
-                    (에프터/장외 반영)
-                  </span>
-                </span>
-              </label>
-            ) : null}
-            {onSyncKrxSectors ? (
-              <button
-                type="button"
-                onClick={onSyncKrxSectors}
-                disabled={krxSectorSyncing}
-                className="rounded-md border border-border px-3 py-2 text-sm font-medium text-textMain hover:bg-white/5 disabled:opacity-50"
-              >
-                {krxSectorSyncing ? '섹터 동기화 중…' : '섹터 동기화'}
-              </button>
-            ) : null}
             <label className="cursor-pointer rounded-md border border-border px-3 py-2 text-sm font-medium text-textMain hover:bg-white/5">
               CSV
               <input

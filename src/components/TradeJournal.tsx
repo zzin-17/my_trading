@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { tradeAppliesToLedger, type LedgerRow } from '../lib/ledger';
 import { formatMoney, formatPercent } from '../lib/format';
 import {
@@ -6,6 +6,7 @@ import {
   roundMoney,
   roundPercent,
 } from '../lib/portfolioMath';
+import { todayIsoLocal } from '../lib/tradePendingExpiry';
 import type { Trade } from '../types/trade';
 
 interface TradeJournalProps {
@@ -13,9 +14,38 @@ interface TradeJournalProps {
   ledger: Map<string, LedgerRow>;
   quotes: Record<string, number>;
   onOpenAddTrade: () => void;
-  onResetData: () => void;
   onMarkTradeFilled: (id: string) => void;
   krSellCommissionRate: number;
+}
+
+type MainTab = 'today' | 'history';
+type HistoryView = 'month' | 'calendar' | 'list';
+
+const WEEK_HEADERS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
+
+function monthKey(dateStr: string): string {
+  return dateStr.slice(0, 7);
+}
+
+function formatMonthTitle(key: string): string {
+  const [y, m] = key.split('-');
+  if (!y || !m) return key;
+  return `${y}년 ${parseInt(m, 10)}월`;
+}
+
+/** 해당 월의 날짜 셀(1..lastDay), 앞뒤 null 패딩 */
+function calendarCellsForMonth(year: number, monthIndex0: number): (number | null)[][] {
+  const firstDow = new Date(year, monthIndex0, 1).getDay();
+  const lastDay = new Date(year, monthIndex0 + 1, 0).getDate();
+  const flat: (number | null)[] = [];
+  for (let i = 0; i < firstDow; i++) flat.push(null);
+  for (let d = 1; d <= lastDay; d++) flat.push(d);
+  while (flat.length % 7 !== 0) flat.push(null);
+  const rows: (number | null)[][] = [];
+  for (let i = 0; i < flat.length; i += 7) {
+    rows.push(flat.slice(i, i + 7));
+  }
+  return rows;
 }
 
 export function TradeJournal({
@@ -23,11 +53,24 @@ export function TradeJournal({
   ledger,
   quotes,
   onOpenAddTrade,
-  onResetData,
   onMarkTradeFilled,
   krSellCommissionRate,
 }: TradeJournalProps) {
+  const [today, setToday] = useState(todayIsoLocal);
+  const [mainTab, setMainTab] = useState<MainTab>('today');
+  const [historyView, setHistoryView] = useState<HistoryView>('month');
   const [tickerFilter, setTickerFilter] = useState<string>('');
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const t = todayIsoLocal().split('-').map(Number);
+    return { y: t[0]!, m: t[1]! };
+  });
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+
+  useEffect(() => {
+    const sync = () => setToday(todayIsoLocal());
+    window.addEventListener('focus', sync);
+    return () => window.removeEventListener('focus', sync);
+  }, []);
 
   const journalTrades = useMemo(
     () => trades.filter((x) => !x.excludeFromJournal),
@@ -45,16 +88,60 @@ export function TradeJournal({
     }
   }, [tickerFilter, tickerOptions]);
 
-  const filteredTrades = useMemo(() => {
-    let list = journalTrades;
-    if (tickerFilter) {
-      list = list.filter((x) => x.ticker === tickerFilter);
+  const applyTicker = useCallback(
+    (list: Trade[]) =>
+      tickerFilter ? list.filter((x) => x.ticker === tickerFilter) : list,
+    [tickerFilter],
+  );
+
+  const todayTrades = useMemo(() => {
+    const list = journalTrades.filter((x) => x.date === today);
+    return applyTicker(list).sort((a, b) => b.id.localeCompare(a.id));
+  }, [journalTrades, today, applyTicker]);
+
+  const pastTrades = useMemo(() => {
+    const list = journalTrades.filter((x) => x.date < today);
+    return applyTicker(list);
+  }, [journalTrades, today, applyTicker]);
+
+  const futureTrades = useMemo(() => {
+    const list = journalTrades.filter((x) => x.date > today);
+    return applyTicker(list).sort((a, b) => a.date.localeCompare(b.date));
+  }, [journalTrades, today, applyTicker]);
+
+  const pastSortedDesc = useMemo(
+    () =>
+      [...pastTrades].sort((a, b) => {
+        const d = b.date.localeCompare(a.date);
+        return d !== 0 ? d : b.id.localeCompare(a.id);
+      }),
+    [pastTrades],
+  );
+
+  const monthGroups = useMemo(() => {
+    const map = new Map<string, Trade[]>();
+    for (const tr of pastSortedDesc) {
+      const k = monthKey(tr.date);
+      const cur = map.get(k) ?? [];
+      cur.push(tr);
+      map.set(k, cur);
     }
-    return [...list].sort((a, b) => {
-      const d = b.date.localeCompare(a.date);
-      return d !== 0 ? d : b.id.localeCompare(a.id);
-    });
-  }, [journalTrades, tickerFilter]);
+    const keys = [...map.keys()].sort((a, b) => b.localeCompare(a));
+    return keys.map((k) => ({ key: k, trades: map.get(k)! }));
+  }, [pastSortedDesc]);
+
+  const tradesOnSelectedCalendarDay = useMemo(() => {
+    if (!selectedDay) return [];
+    return pastSortedDesc.filter((t) => t.date === selectedDay);
+  }, [pastSortedDesc, selectedDay]);
+
+  const countByDate = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of pastTrades) {
+      m.set(t.date, (m.get(t.date) ?? 0) + 1);
+    }
+    return m;
+  }, [pastTrades]);
 
   const summaryRow = tickerFilter ? ledger.get(tickerFilter) : undefined;
   const quote =
@@ -97,9 +184,32 @@ export function TradeJournal({
     };
   }, [tickerFilter, summaryRow, quote, krSellCommissionRate]);
 
+  const calRows = useMemo(
+    () => calendarCellsForMonth(calendarMonth.y, calendarMonth.m - 1),
+    [calendarMonth.y, calendarMonth.m],
+  );
+
+  const monthLabelNav = `${calendarMonth.y}년 ${calendarMonth.m}월`;
+
+  const shiftCalendarMonth = (delta: number) => {
+    setCalendarMonth((prev) => {
+      let m = prev.m + delta;
+      let y = prev.y;
+      while (m < 1) {
+        m += 12;
+        y -= 1;
+      }
+      while (m > 12) {
+        m -= 12;
+        y += 1;
+      }
+      return { y, m };
+    });
+    setSelectedDay(null);
+  };
+
   return (
     <div className="rounded-lg border border-border bg-surface p-4 sm:p-5">
-      {/* 제목 + 도움말 · 종목 필터 */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="flex min-w-0 items-center gap-2">
           <h3 className="shrink-0 text-sm font-semibold text-textMain tracking-tight">
@@ -112,7 +222,7 @@ export function TradeJournal({
             htmlFor="journal-ticker-filter"
             className="shrink-0 whitespace-nowrap text-[12px] text-textMuted"
           >
-            종목 보기
+            종목 필터
           </label>
           <select
             id="journal-ticker-filter"
@@ -130,28 +240,45 @@ export function TradeJournal({
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border/60 pt-4">
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div
+          className="flex flex-wrap gap-1 rounded-md border border-border bg-background p-0.5"
+          role="tablist"
+          aria-label="매매일지 구분"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mainTab === 'today'}
+            onClick={() => setMainTab('today')}
+            className={`rounded px-3 py-1.5 text-[12px] font-medium transition ${
+              mainTab === 'today'
+                ? 'bg-accent text-white'
+                : 'text-textMuted hover:bg-white/5 hover:text-textMain'
+            }`}
+          >
+            오늘 ({todayTrades.length}건)
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mainTab === 'history'}
+            onClick={() => setMainTab('history')}
+            className={`rounded px-3 py-1.5 text-[12px] font-medium transition ${
+              mainTab === 'history'
+                ? 'bg-accent text-white'
+                : 'text-textMuted hover:bg-white/5 hover:text-textMain'
+            }`}
+          >
+            과거 ({pastTrades.length}건)
+          </button>
+        </div>
         <button
           type="button"
           onClick={onOpenAddTrade}
-          className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+          className="shrink-0 self-end rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90 sm:self-center"
         >
           거래 추가
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (
-              confirm(
-                '저장된 매매일지·시세를 지우고 샘플 데이터로 돌아갑니다. 계속할까요?',
-              )
-            ) {
-              onResetData();
-            }
-          }}
-          className="rounded-md border border-border px-3 py-2 text-sm font-medium text-textMuted hover:bg-white/5 hover:text-textMain"
-        >
-          샘플로 초기화
         </button>
       </div>
 
@@ -204,89 +331,317 @@ export function TradeJournal({
         </p>
       )}
 
-      <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[960px] border-collapse text-left text-[12px]">
-          <thead>
-            <tr className="border-b border-border text-textMuted">
-              <th className="py-2 pr-3 font-medium">날짜</th>
-              <th className="py-2 pr-3 font-medium">종목코드</th>
-              <th className="py-2 pr-3 font-medium">종목명</th>
-              <th className="py-2 pr-3 font-medium">구분</th>
-              <th className="py-2 pr-3 font-medium">체결</th>
-              <th className="py-2 pr-3 text-right font-medium tabular-nums">수량</th>
-              <th className="py-2 pr-3 text-right font-medium tabular-nums">단가</th>
-              <th className="py-2 pr-3 text-right font-medium tabular-nums">거래금액</th>
-              <th className="py-2 pr-3 font-medium">비고</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredTrades.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="py-8 text-center text-textMuted">
-                  내역이 없습니다.
-                </td>
-              </tr>
-            ) : (
-              filteredTrades.map((tr) => {
-                const amt = roundMoney(tr.quantity * tr.price, tr.currency);
-                const sell = tr.side === 'sell';
-                const pending = !tradeAppliesToLedger(tr);
-                return (
-                  <tr
-                    key={tr.id}
-                    className={`border-b border-border/60 ${
-                      pending ? 'opacity-90' : ''
-                    } ${sell ? 'bg-negative/5' : 'bg-positive/5'}`}
-                  >
-                    <td className="py-2 pr-3 tabular-nums text-textMain">{tr.date}</td>
-                    <td className="py-2 pr-3 font-medium text-textMain">{tr.ticker}</td>
-                    <td className="max-w-[160px] truncate py-2 pr-3 text-textMain">{tr.name}</td>
-                    <td className="py-2 pr-3">
-                      <span
-                        className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${
-                          sell ? 'text-negative' : 'text-positive'
-                        }`}
-                      >
-                        {sell ? '매도' : '매수'}
-                      </span>
-                    </td>
-                    <td className="py-2 pr-3">
-                      {pending ? (
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="rounded bg-warning/20 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
-                            미체결
+      {mainTab === 'today' ? (
+        <>
+          <p className="mt-3 text-[12px] text-textMuted">
+            기준일 <span className="tabular-nums text-textMain">{today}</span>
+            의 매매만 표시합니다.
+          </p>
+          <JournalTradesTable
+            trades={todayTrades}
+            onMarkTradeFilled={onMarkTradeFilled}
+            emptyLabel="오늘 등록된 매매가 없습니다."
+          />
+        </>
+      ) : (
+        <>
+          <div
+            className="mt-3 flex flex-wrap gap-1 rounded-md border border-border/80 bg-background/50 p-0.5"
+            role="tablist"
+            aria-label="과거 매매 보기 방식"
+          >
+            {(
+              [
+                ['month', '월별'],
+                ['calendar', '캘린더'],
+                ['list', '목록'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={historyView === id}
+                onClick={() => {
+                  setHistoryView(id);
+                  if (id !== 'calendar') setSelectedDay(null);
+                }}
+                className={`rounded px-2.5 py-1 text-[11px] font-medium transition ${
+                  historyView === id
+                    ? 'bg-white/10 text-textMain'
+                    : 'text-textMuted hover:text-textMain'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {pastTrades.length === 0 && futureTrades.length === 0 ? (
+            <p className="mt-4 py-8 text-center text-[13px] text-textMuted">
+              과거·예정 일자 매매가 없습니다.
+            </p>
+          ) : (
+            <>
+              {historyView === 'list' && (
+                <JournalTradesTable
+                  trades={pastSortedDesc}
+                  onMarkTradeFilled={onMarkTradeFilled}
+                  emptyLabel="표시할 과거 매매가 없습니다."
+                />
+              )}
+
+              {historyView === 'month' && (
+                <div className="mt-4 space-y-6">
+                  {monthGroups.length === 0 ? (
+                    <p className="py-6 text-center text-[13px] text-textMuted">
+                      표시할 과거 매매가 없습니다.
+                    </p>
+                  ) : (
+                    monthGroups.map(({ key, trades: group }) => (
+                      <div key={key}>
+                        <h4 className="mb-2 text-[13px] font-semibold text-textMain">
+                          {formatMonthTitle(key)}{' '}
+                          <span className="font-normal text-textMuted">
+                            ({group.length}건)
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => onMarkTradeFilled(tr.id)}
-                            className="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-textMain hover:bg-white/5"
-                          >
-                            체결 처리
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-textMuted">체결</span>
-                      )}
-                    </td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-textMain">
-                      {tr.quantity}
-                    </td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-textMain">
-                      {formatMoney(tr.price, tr.currency)}
-                    </td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-textMain">
-                      {formatMoney(amt, tr.currency)}
-                    </td>
-                    <td className="max-w-[200px] truncate py-2 pr-2 text-textMuted">
-                      {tr.note ?? '—'}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                        </h4>
+                        <JournalTradesTable
+                          trades={group}
+                          onMarkTradeFilled={onMarkTradeFilled}
+                          emptyLabel=""
+                        />
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {historyView === 'calendar' && (
+                <div className="mt-4 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => shiftCalendarMonth(-1)}
+                      className="rounded border border-border px-2 py-1 text-[12px] text-textMain hover:bg-white/5"
+                      aria-label="이전 달"
+                    >
+                      ←
+                    </button>
+                    <span className="text-[13px] font-medium text-textMain">
+                      {monthLabelNav}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => shiftCalendarMonth(1)}
+                      className="rounded border border-border px-2 py-1 text-[12px] text-textMain hover:bg-white/5"
+                      aria-label="다음 달"
+                    >
+                      →
+                    </button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[280px] border-collapse text-center text-[11px]">
+                      <thead>
+                        <tr className="text-textMuted">
+                          {WEEK_HEADERS_KO.map((h) => (
+                            <th key={h} className="py-1 font-medium">
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {calRows.map((row, ri) => (
+                          <tr key={ri}>
+                            {row.map((cell, ci) => {
+                              if (cell === null) {
+                                return (
+                                  <td
+                                    key={ci}
+                                    className="border border-border/40 p-0.5"
+                                  />
+                                );
+                              }
+                              const iso = `${calendarMonth.y}-${String(calendarMonth.m).padStart(2, '0')}-${String(cell).padStart(2, '0')}`;
+                              const n = countByDate.get(iso) ?? 0;
+                              const isPastDay = iso < today;
+                              const active = selectedDay === iso;
+                              return (
+                                <td
+                                  key={ci}
+                                  className="border border-border/40 p-0.5 align-top"
+                                >
+                                  <button
+                                    type="button"
+                                    disabled={!isPastDay || n === 0}
+                                    onClick={() =>
+                                      setSelectedDay((d) =>
+                                        d === iso ? null : iso,
+                                      )
+                                    }
+                                    className={`flex min-h-[3rem] w-full flex-col items-center justify-start rounded px-0.5 py-1 ${
+                                      !isPastDay || n === 0
+                                        ? 'cursor-default text-textMuted/50'
+                                        : 'text-textMain hover:bg-white/5'
+                                    } ${active ? 'bg-accent/20 ring-1 ring-accent' : ''}`}
+                                  >
+                                    <span className="tabular-nums">{cell}</span>
+                                    {n > 0 ? (
+                                      <span className="mt-0.5 rounded bg-border/60 px-1 text-[10px] tabular-nums text-textMuted">
+                                        {n}건
+                                      </span>
+                                    ) : null}
+                                  </button>
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-[11px] text-textMuted">
+                    과거 일자만 선택할 수 있습니다. 건수는 종목 필터를 반영합니다.
+                  </p>
+                  {selectedDay ? (
+                    <div>
+                      <h4 className="mb-2 text-[12px] font-medium text-textMain">
+                        {selectedDay} ({tradesOnSelectedCalendarDay.length}건)
+                      </h4>
+                      <JournalTradesTable
+                        trades={tradesOnSelectedCalendarDay}
+                        onMarkTradeFilled={onMarkTradeFilled}
+                        emptyLabel="이 날짜에 표시할 매매가 없습니다."
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-[12px] text-textMuted">
+                      날짜를 눌러 그날의 매매만 볼 수 있습니다.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {futureTrades.length > 0 ? (
+                <div className="mt-8 border-t border-border/60 pt-4">
+                  <h4 className="text-[12px] font-semibold text-textMain">
+                    오늘 이후 일자(예정)
+                  </h4>
+                  <p className="mt-1 text-[11px] text-textMuted">
+                    일지에 미래 날짜로 적어 둔 건입니다.
+                  </p>
+                  <div className="mt-3">
+                    <JournalTradesTable
+                      trades={futureTrades}
+                      onMarkTradeFilled={onMarkTradeFilled}
+                      emptyLabel=""
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function JournalTradesTable({
+  trades,
+  onMarkTradeFilled,
+  emptyLabel,
+}: {
+  trades: Trade[];
+  onMarkTradeFilled: (id: string) => void;
+  emptyLabel: string;
+}) {
+  return (
+    <div className="mt-4 overflow-x-auto">
+      <table className="w-full min-w-[960px] border-collapse text-left text-[12px]">
+        <thead>
+          <tr className="border-b border-border text-textMuted">
+            <th className="py-2 pr-3 font-medium">날짜</th>
+            <th className="py-2 pr-3 font-medium">종목코드</th>
+            <th className="py-2 pr-3 font-medium">종목명</th>
+            <th className="py-2 pr-3 font-medium">구분</th>
+            <th className="py-2 pr-3 font-medium">체결</th>
+            <th className="py-2 pr-3 text-right font-medium tabular-nums">수량</th>
+            <th className="py-2 pr-3 text-right font-medium tabular-nums">단가</th>
+            <th className="py-2 pr-3 text-right font-medium tabular-nums">거래금액</th>
+            <th className="py-2 pr-3 font-medium">비고</th>
+          </tr>
+        </thead>
+        <tbody>
+          {trades.length === 0 ? (
+            <tr>
+              <td colSpan={9} className="py-8 text-center text-textMuted">
+                {emptyLabel}
+              </td>
+            </tr>
+          ) : (
+            trades.map((tr) => {
+              const amt = roundMoney(tr.quantity * tr.price, tr.currency);
+              const sell = tr.side === 'sell';
+              const pending = !tradeAppliesToLedger(tr);
+              return (
+                <tr
+                  key={tr.id}
+                  className={`border-b border-border/60 ${
+                    pending ? 'opacity-90' : ''
+                  } ${sell ? 'bg-negative/5' : 'bg-positive/5'}`}
+                >
+                  <td className="py-2 pr-3 tabular-nums text-textMain">{tr.date}</td>
+                  <td className="py-2 pr-3 font-medium text-textMain">{tr.ticker}</td>
+                  <td className="max-w-[160px] truncate py-2 pr-3 text-textMain">
+                    {tr.name}
+                  </td>
+                  <td className="py-2 pr-3">
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                        sell ? 'text-negative' : 'text-positive'
+                      }`}
+                    >
+                      {sell ? '매도' : '매수'}
+                    </span>
+                  </td>
+                  <td className="py-2 pr-3">
+                    {pending ? (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="rounded bg-warning/20 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
+                          미체결
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => onMarkTradeFilled(tr.id)}
+                          className="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-textMain hover:bg-white/5"
+                        >
+                          체결 처리
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-textMuted">체결</span>
+                    )}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums text-textMain">
+                    {tr.quantity}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums text-textMain">
+                    {formatMoney(tr.price, tr.currency)}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums text-textMain">
+                    {formatMoney(amt, tr.currency)}
+                  </td>
+                  <td className="max-w-[200px] truncate py-2 pr-2 text-textMuted">
+                    {tr.note ?? '—'}
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -338,15 +693,23 @@ function JournalHelpTooltip() {
         >
           <div className="max-h-[min(70vh,24rem)] space-y-2 overflow-y-auto text-[12px] leading-relaxed text-textMain">
             <p>
-              종목을 고르면 매수·매도 내역과 장부 기준 평단·예상 손익을 볼 수 있습니다.
+              <span className="font-semibold text-textMain">오늘</span> 탭은 오늘
+              날짜로 적힌 매매만,{' '}
+              <span className="font-semibold text-textMain">과거</span> 탭에서는 그
+              이전 일자를 월별·캘린더·목록으로 볼 수 있습니다.
             </p>
             <p>
-              미체결 주문은 일지에만 표시되며 「체결」 후 장부·보유에 반영됩니다. 일지에 적은
-              날(로컬)이 지나도 미체결이면 자동 삭제됩니다.
+              종목 필터는 두 탭 모두에 적용됩니다. 캘린더의 일별 건수도 필터 반영
+              수입니다.
+            </p>
+            <p>
+              미체결 주문은 일지에만 표시되며 「체결」 후 장부·보유에 반영됩니다.
+              일지에 적은 날(로컬)이 지나도 미체결이면 자동 삭제됩니다.
             </p>
             <p>보유종목·CSV로 넣은 분은 매매일지에 포함되지 않습니다.</p>
             <p className="text-[11px] leading-normal text-textMuted">
-              매매·시세는 이 브라우저 localStorage에 저장됩니다.
+              매매·시세는 이 브라우저 localStorage에 저장됩니다. KRX 섹터 동기화·
+              보유 초기화·샘플 복구는 상단 헤더의 설정에서 할 수 있습니다.
             </p>
           </div>
         </div>

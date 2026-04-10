@@ -3,6 +3,10 @@ import { defineConfig } from 'vitest/config';
 import { fetchKrQuote } from './api/krQuoteFetch.js';
 
 export default defineConfig({
+  /** 같은 Wi‑Fi의 아이폰 등에서 http://<맥 IP>:5173 접속 가능 */
+  server: {
+    host: true,
+  },
   plugins: [
     react(),
     {
