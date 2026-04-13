@@ -60,28 +60,38 @@ npm run build
 
 그래도 동일하면 `npm install` 한 번 더 실행해 보세요.
 
-## 5. 링크로 공유 (Firebase Hosting + Functions)
+## 5. 링크로 공유 (배포)
 
-친구에게 **URL만** 주려면 정적 파일뿐 아니라 **시세·KRX 프록시**(`/api/kr-quote`, `/api/krx-kind`)도 같은 도메인에서 열려야 합니다. 이 레포는 Firebase Hosting이 위 경로를 Cloud Functions로 넘기도록 설정되어 있습니다.
+친구에게 **URL만** 주려면 **시세·KRX 프록시**(`/api/kr-quote`, `/api/krx-kind`)까지 **같은 도메인**에서 열려야 합니다. 무료로 시작하려면 **Vercel**을 쓰는 편이 간단합니다. **Firebase Hosting + Cloud Functions**는 **Blaze(종량제)** 가 필요하므로, 트래픽·요구가 커졌을 때 옮기거나 병행하면 됩니다.
 
-1. [Firebase 콘솔](https://console.firebase.google.com/)에서 프로젝트를 만들고, **프로젝트 ID**를 확인합니다.
-2. 로컬에서 한 번만 연결합니다.
-   ```bash
-   npm ci
-   cd functions && npm install && cd ..
-   firebase login
-   firebase use --add   # 방금 프로젝트 선택 → .firebaserc 생성
-   ```
-3. **과금(Blaze)**  
-   Cloud Functions가 네이버·KRX 등 **외부 URL로 나가는 요청**을 하므로, Firebase에서 **Blaze(종량제)** 로 올려야 할 수 있습니다. 무료 한도 내에서도 소규모 테스트는 가능한 경우가 많습니다.
-4. 배포합니다.
-   ```bash
-   npm run deploy:hosting
-   ```
-   - `dist`를 Hosting에 올리고, `api/`를 `functions/api`로 복사한 뒤 Functions `krQuote`, `krxKind`를 함께 배포합니다.
-5. Hosting 주소를 공유합니다. 예: `https://<프로젝트ID>.web.app`  
-   웹 앱은 기본값으로 **같은 출처**의 `/api/kr-quote`를 쓰므로, 별도 `VITE_KR_QUOTE_BASE` 없이 시세 갱신·KRX 동기화가 동작합니다.
+### 5-1. Vercel (Hobby · 무료, 권장 시작 경로)
 
-**Firebase(로그인·Firestore)** 를 쓰려면 빌드 전 `.env`에 `VITE_FIREBASE_*`를 넣고 배포합니다. 미설정이면 클라우드 블록만 숨겨지고, 나머지는 로컬 저장으로 동작합니다.
+- 루트 **`api/*.js`** 가 서버리스 함수로 배포되어, 프로덕션에서도 **`/api/kr-quote`**, **`/api/krx-kind`** 가 동작합니다.
+- **`vercel.json`** 에서 Vite 빌드(`dist`)와 `/api` 제외 SPA 라우팅을 맞춰 두었습니다.
 
-**참고:** `firebaserc.example`은 예시입니다. 실제 `firebase use --add`로 만든 `.firebaserc`를 쓰면 됩니다.
+1. [Vercel](https://vercel.com/)에 로그인 후 **GitHub 레포를 Import**합니다.
+2. Framework는 **Vite**로 자동 인식되는지 확인하고, **Build Command** `npm run build`, **Output** `dist` 로 두면 됩니다.
+3. **환경 변수** (Google 로그인·Firestore를 쓸 때만): Vite는 빌드 시점에 주입하므로, Vercel 프로젝트 **Settings → Environment Variables**에 `.env.example`과 같은 **`VITE_FIREBASE_*`** 를 **Production**에 넣은 뒤 **Redeploy** 합니다.
+4. **Firebase Auth** 를 쓰는 경우: Firebase 콘솔 → **Authentication → Settings → 승인된 도메인**에 배포 URL(예: `xxx.vercel.app`, 커스텀 도메인)을 추가합니다.
+5. 배포가 끝나면 **`https://<프로젝트>.vercel.app`** 주소를 공유하면 됩니다.
+
+**참고:** Vercel Hobby의 서버리스 함수는 **실행 시간 상한(기본 10초)** 이 있습니다. KRX 목록 동기화(`krx-kind`)가 타임아웃 나면 한 번 더 시도하거나, 나중에 Firebase Blaze·유료 플랜 등으로 옮기는 식으로 조정할 수 있습니다.
+
+로컬에서 CLI로 올리려면: `npx vercel --prod` (Vercel 로그인 필요).
+
+### 5-2. Firebase Hosting + Functions (Blaze 필요)
+
+Firebase에 **프론트와 Functions를 한곳에** 두고 싶을 때 사용합니다. Cloud Functions를 쓰려면 프로젝트를 **Blaze** 로 올려야 합니다.
+
+```bash
+npm ci
+cd functions && npm install && cd ..
+firebase login
+firebase use --add
+npm run deploy:hosting
+```
+
+- Hosting 주소 예: `https://<프로젝트ID>.web.app`
+- **`firebaserc.example`** 참고, 실제는 **`firebase use --add`** 로 만든 `.firebaserc` 를 사용합니다.
+
+**Firebase만** 쓰는 경우(로그인·Firestore): 배포 호스트가 Vercel이든 Firebase든, 위 **`VITE_FIREBASE_*`** 와 **승인된 도메인** 설정은 동일합니다.
