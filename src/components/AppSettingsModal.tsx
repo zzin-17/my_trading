@@ -24,6 +24,12 @@ interface AppSettingsModalProps {
   onCloudPushNow?: () => void | Promise<void>;
   onExportPortfolio?: () => void;
   onImportPortfolioPick?: () => void;
+  themeMode?: 'dark' | 'light';
+  onThemeModeChange?: (mode: 'dark' | 'light') => void;
+  appLockEnabled?: boolean;
+  onSetAppPin?: () => void | Promise<void>;
+  onDisableAppPin?: () => void | Promise<void>;
+  onLockNow?: () => void;
 }
 
 export function AppSettingsModal({
@@ -45,6 +51,12 @@ export function AppSettingsModal({
   onCloudPushNow,
   onExportPortfolio,
   onImportPortfolioPick,
+  themeMode = 'dark',
+  onThemeModeChange,
+  appLockEnabled = false,
+  onSetAppPin,
+  onDisableAppPin,
+  onLockNow,
 }: AppSettingsModalProps) {
   useEffect(() => {
     if (!open) return;
@@ -183,6 +195,77 @@ export function AppSettingsModal({
             </div>
           </section>
         ) : null}
+
+        <section className="mt-5 border-t border-border/60 pt-4">
+          <h3 className="text-[12px] font-semibold text-textMain">화면 테마</h3>
+          <p className="mt-1 text-[12px] leading-relaxed text-textMuted">
+            취향과 주변 밝기에 맞게 일반(라이트)/다크 모드를 선택하세요.
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => onThemeModeChange?.('light')}
+              className={`rounded-md border px-3 py-2.5 text-[13px] font-medium ${
+                themeMode === 'light'
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'border-border bg-background text-textMain hover:bg-white/5'
+              }`}
+            >
+              일반(라이트)
+            </button>
+            <button
+              type="button"
+              onClick={() => onThemeModeChange?.('dark')}
+              className={`rounded-md border px-3 py-2.5 text-[13px] font-medium ${
+                themeMode === 'dark'
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'border-border bg-background text-textMain hover:bg-white/5'
+              }`}
+            >
+              다크
+            </button>
+          </div>
+        </section>
+
+        <section className="mt-5 border-t border-border/60 pt-4">
+          <h3 className="text-[12px] font-semibold text-textMain">앱 잠금 (PIN)</h3>
+          <p className="mt-1 text-[12px] leading-relaxed text-textMuted">
+            이 기기에서 앱을 다시 열 때 4자리 PIN을 요구합니다. 분실 시 복구가
+            어려우니 백업 파일을 함께 관리해 주세요.
+          </p>
+          <p className="mt-1 text-[12px] leading-relaxed text-textMuted">
+            PIN이 켜져 있으면 약 5분 미사용 시 자동 잠금되며, 다른 탭/앱으로
+            전환해도 잠금됩니다.
+          </p>
+          <p className="mt-1 text-[12px] text-textMain">
+            상태: {appLockEnabled ? '설정됨' : '미설정'}
+          </p>
+          <div className="mt-3 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => void onSetAppPin?.()}
+              className="rounded-md border border-border bg-background px-3 py-2.5 text-left text-[13px] font-medium text-textMain hover:bg-white/5"
+            >
+              {appLockEnabled ? 'PIN 변경' : 'PIN 설정'}
+            </button>
+            <button
+              type="button"
+              disabled={!appLockEnabled}
+              onClick={() => void onLockNow?.()}
+              className="rounded-md border border-border bg-background px-3 py-2.5 text-left text-[13px] font-medium text-textMain hover:bg-white/5 disabled:opacity-50"
+            >
+              지금 잠그기
+            </button>
+            <button
+              type="button"
+              disabled={!appLockEnabled}
+              onClick={() => void onDisableAppPin?.()}
+              className="rounded-md border border-negative/40 bg-negative/10 px-3 py-2.5 text-left text-[13px] font-medium text-negative hover:bg-negative/15 disabled:opacity-50"
+            >
+              PIN 제거
+            </button>
+          </div>
+        </section>
 
         <section className="mt-5 border-t border-border/60 pt-4">
           <h3 className="text-[12px] font-semibold text-textMain">JSON 백업</h3>

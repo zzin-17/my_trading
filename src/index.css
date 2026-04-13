@@ -2,12 +2,54 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-background: 15 17 21;
+  --color-surface: 23 26 33;
+  --color-border: 38 43 54;
+  --color-text-main: 232 234 237;
+  --color-text-muted: 160 163 189;
+  --color-positive: 20 199 132;
+  --color-negative: 255 77 79;
+  --color-accent: 76 125 255;
+  --color-warning: 255 159 28;
+  --color-ui-hover: 255 255 255;
+  --ui-hover-alpha: 0.05;
+}
+
+:root[data-theme='light'] {
+  --color-background: 255 255 255;
+  --color-surface: 255 255 255;
+  --color-border: 218 223 233;
+  --color-text-main: 17 24 39;
+  --color-text-muted: 75 85 99;
+  --color-positive: 16 163 127;
+  --color-negative: 225 29 72;
+  --color-accent: 37 99 235;
+  --color-warning: 217 119 6;
+  --color-ui-hover: 17 24 39;
+  --ui-hover-alpha: 0.06;
+}
+
+body[data-theme='light'] {
+  --color-background: 255 255 255;
+  --color-surface: 255 255 255;
+  --color-border: 218 223 233;
+  --color-text-main: 17 24 39;
+  --color-text-muted: 75 85 99;
+  --color-positive: 16 163 127;
+  --color-negative: 225 29 72;
+  --color-accent: 37 99 235;
+  --color-warning: 217 119 6;
+  --color-ui-hover: 17 24 39;
+  --ui-hover-alpha: 0.06;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
   min-height: 100dvh;
-  background-color: #0f1115;
-  color: #e8eaed;
+  background-color: rgb(var(--color-background));
+  color: rgb(var(--color-text-main));
   font-family: Pretendard, Inter, system-ui, sans-serif;
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
@@ -15,4 +57,9 @@ body {
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* 기존 hover:bg-white/5 유틸을 테마별 hover 톤으로 통일 */
+.hover\:bg-white\/5:hover {
+  background-color: rgb(var(--color-ui-hover) / var(--ui-hover-alpha)) !important;
 }

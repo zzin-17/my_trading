@@ -1,10 +1,20 @@
 /** 네이버 시세 프록시 — CORS 우회 (PC 지연 시세 또는 모바일·장외 호가) */
 import { fetchKrQuote } from './krQuoteFetch.js';
+import { enforceRateLimit } from './_rateLimit.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
     return res.status(405).send('Method Not Allowed');
+  }
+  if (
+    !enforceRateLimit(req, res, {
+      bucket: 'kr-quote',
+      windowMs: 60 * 1000,
+      max: 60,
+    })
+  ) {
+    return;
   }
 
   const code = req.query?.code;

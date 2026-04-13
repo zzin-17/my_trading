@@ -8,11 +8,18 @@
 ## SPA 라우팅
 
 - 루트 `vercel.json`의 `rewrites`는 `/api/*`를 제외한 요청을 `index.html`로 넘깁니다. API 라우트(`api/` 폴더의 서버리스 함수)는 그대로 `/api/...`에서 동작합니다.
+- `vercel.json`의 `headers`에서 보안 헤더를 함께 설정합니다.
+  - `Content-Security-Policy`
+  - `Strict-Transport-Security`
+  - `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`
 
 ## 시세·KRX 프록시
 
 - 한국 시세: `api/kr-quote.js` → 클라이언트는 기본적으로 `/api/kr-quote`로 요청합니다.
 - KRX 종목 메타: `api/krx-kind.js` → `/api/krx-kind`.
+- 두 라우트 모두 `api/_rateLimit.js`의 IP 기반 고정 윈도우 레이트리밋을 적용합니다.
+  - `kr-quote`: 1분당 60회
+  - `krx-kind`: 10분당 20회
 - 프로덕션에서 다른 호스트로내려면 환경 변수로 베이스 URL만 바꿉니다(비밀 아님).
   - `VITE_KR_QUOTE_BASE`
   - `VITE_KRX_PROXY_BASE`
@@ -29,6 +36,7 @@
 3. **[웹 앱 등록]** 톱니바퀴 **프로젝트 설정 → 일반 → 내 앱**에서 **웹** `</>` 아이콘 → 앱 닉네임 입력 → **앱 등록**.
 4. 등록 직후 코드 블록에 `firebaseConfig` 객체가 보입니다. 값 4개를 복사합니다: `apiKey`, `authDomain`, `projectId`, `appId`.  
    (나중에 다시 보려면: 프로젝트 설정 → 일반 → 내 앱에서 해당 웹 앱 선택 → **구성** 스니펫.)
+5. (권장) Firebase 콘솔 → **App Check**에서 웹 앱을 등록하고 **reCAPTCHA v3 site key**를 발급합니다.
 
 ### 로컬에서 할 일(저장소 루트)
 
@@ -41,6 +49,7 @@
 | `authDomain` | `VITE_FIREBASE_AUTH_DOMAIN` |
 | `projectId` | `VITE_FIREBASE_PROJECT_ID` |
 | `appId` | `VITE_FIREBASE_APP_ID` |
+| App Check site key (선택·권장) | `VITE_FIREBASE_APP_CHECK_SITE_KEY` |
 
 3. 저장 후 **개발 서버를 완전히 끄고** 다시 `npm run dev`를 실행합니다. (Vite는 기동 시에만 `import.meta.env`를 읽습니다.)
 4. 브라우저에서 앱 → **설정** → **Google로 로그인** → 필요 시 **지금 클라우드에 저장** 또는 데이터 수정 후 자동 동기화.
@@ -49,6 +58,7 @@
 ### 자주 나는 문제
 
 - **설정에 클라우드 섹션이 없음:** `.env` 없음·변수名 오타·서버 재시작 안 함. `VITE_FIREBASE_API_KEY`와 `VITE_FIREBASE_PROJECT_ID` 둘 다 있어야 섹션이 보입니다 (`src/lib/firebase/client.ts`).
+- **App Check 관련 경고/실패:** `VITE_FIREBASE_APP_CHECK_SITE_KEY`를 비웠다면 무시됩니다(no-op). 보안을 강화하려면 콘솔 App Check 등록 후 site key를 환경 변수에 넣고 재배포하세요.
 - **`auth/unauthorized-domain`:** Authentication → **설정** → **승인된 도메인**에 `localhost`가 있는지 확인(로컬은 보통 기본 포함).
 - **`Permission denied`:** Firestore 규칙 미게시 또는 다른 프로젝트의 `.env`를 쓰는 경우.
 - **`auth/api-key-not-valid` / `API_KEY_INVALID`:** 브라우저·Vite가 아니라 **Google 쪽이 해당 API 키를 Identity Toolkit(로그인)에 쓸 수 없다**고 거부하는 상태입니다. 아래를 순서대로 점검하세요.

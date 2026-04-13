@@ -1,9 +1,19 @@
 import { fetchNaverEtfEtnRows, mergeStockAndFunds } from './mergeListedFunds.js';
+import { enforceRateLimit } from './_rateLimit.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
     return res.status(405).send('Method Not Allowed');
+  }
+  if (
+    !enforceRateLimit(req, res, {
+      bucket: 'krx-kind',
+      windowMs: 10 * 60 * 1000,
+      max: 20,
+    })
+  ) {
+    return;
   }
 
   const qs = new URLSearchParams({

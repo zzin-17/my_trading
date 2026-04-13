@@ -70,6 +70,92 @@ import {
 } from './lib/krTradingAssumptions';
 import { humanizeCloudError } from './lib/cloudMessages';
 
+const APP_PIN_HASH_KEY = 'traderos-app-pin-hash-v1';
+const APP_AUTO_LOCK_MS = 5 * 60 * 1000;
+const APP_PIN_MAX_FAILS = 5;
+const APP_PIN_LOCKOUT_MS = 30 * 1000;
+const THEME_MODE_KEY = 'traderos-theme-mode-v1';
+
+type ThemeMode = 'dark' | 'light';
+
+async function sha256Hex(input: string): Promise<string> {
+  const bytes = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function loadAppPinHash(): string | null {
+  try {
+    return window.localStorage.getItem(APP_PIN_HASH_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function loadThemeMode(): ThemeMode {
+  try {
+    const v = window.localStorage.getItem(THEME_MODE_KEY);
+    if (v === 'light' || v === 'dark') return v;
+  } catch {
+    /* ignore */
+  }
+  return 'dark';
+}
+
+function applyThemeVariables(mode: ThemeMode): void {
+  const root = document.documentElement;
+  const body = document.body;
+  const target = mode === 'light'
+    ? {
+        '--color-background': '255 255 255',
+        '--color-surface': '255 255 255',
+        '--color-border': '218 223 233',
+        '--color-text-main': '17 24 39',
+        '--color-text-muted': '75 85 99',
+        '--color-positive': '16 163 127',
+        '--color-negative': '225 29 72',
+        '--color-accent': '37 99 235',
+        '--color-warning': '217 119 6',
+        '--color-ui-hover': '17 24 39',
+        '--ui-hover-alpha': '0.06',
+      }
+    : {
+        '--color-background': '15 17 21',
+        '--color-surface': '23 26 33',
+        '--color-border': '38 43 54',
+        '--color-text-main': '232 234 237',
+        '--color-text-muted': '160 163 189',
+        '--color-positive': '20 199 132',
+        '--color-negative': '255 77 79',
+        '--color-accent': '76 125 255',
+        '--color-warning': '255 159 28',
+        '--color-ui-hover': '255 255 255',
+        '--ui-hover-alpha': '0.05',
+      };
+  for (const [k, v] of Object.entries(target)) {
+    root.style.setProperty(k, v);
+    body.style.setProperty(k, v);
+  }
+}
+
+async function verifyCurrentPinOrAlert(storedHash: string): Promise<boolean> {
+  const current = window.prompt('현재 PIN 4자리를 입력하세요.');
+  if (current === null) return false;
+  const pin = current.trim();
+  if (!/^\d{4}$/.test(pin)) {
+    window.alert('현재 PIN 형식이 올바르지 않습니다.');
+    return false;
+  }
+  const hash = await sha256Hex(pin);
+  if (hash !== storedHash) {
+    window.alert('현재 PIN이 일치하지 않습니다.');
+    return false;
+  }
+  return true;
+}
+
 const StockBarChart = lazy(() =>
   import('./components/StockBarChart').then((m) => ({
     default: m.StockBarChart,
@@ -140,6 +226,20 @@ export default function App() {
     null,
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => loadThemeMode());
+  const [appLockEnabled, setAppLockEnabled] = useState(
+    () => !!loadAppPinHash(),
+  );
+  const [appLocked, setAppLocked] = useState(
+    () => !!loadAppPinHash(),
+  );
+  const [unlockPin, setUnlockPin] = useState('');
+  const [unlockBusy, setUnlockBusy] = useState(false);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [unlockFailCount, setUnlockFailCount] = useState(0);
+  const [unlockBlockedUntil, setUnlockBlockedUntil] = useState(0);
+  const [unlockNowTs, setUnlockNowTs] = useState(() => Date.now());
+  const autoLockTimerRef = useRef<number | null>(null);
 
   const {
     user,
@@ -454,6 +554,202 @@ export default function App() {
       setCloudBusy(false);
     }
   }, [signOutUser, wipePrivatePortfolio, user]);
+
+  const handleSetAppPin = useCallback(async () => {
+    const stored = loadAppPinHash();
+    if (stored) {
+      const okCurrent = await verifyCurrentPinOrAlert(stored);
+      if (!okCurrent) return;
+    }
+    const first = window.prompt('설정할 4자리 PIN을 입력하세요.');
+    if (first === null) return;
+    const pin = first.trim();
+    if (!/^\d{4}$/.test(pin)) {
+      window.alert('PIN은 숫자 4자리로 입력해 주세요.');
+      return;
+    }
+    const second = window.prompt('확인을 위해 같은 PIN을 다시 입력하세요.');
+    if (second === null) return;
+    if (pin !== second.trim()) {
+      window.alert('PIN이 일치하지 않습니다.');
+      return;
+    }
+    try {
+      const hash = await sha256Hex(pin);
+      window.localStorage.setItem(APP_PIN_HASH_KEY, hash);
+      setAppLockEnabled(true);
+      setAppLocked(false);
+      setUnlockPin('');
+      setUnlockError(null);
+      setUnlockFailCount(0);
+      setUnlockBlockedUntil(0);
+      window.alert('앱 잠금 PIN을 저장했습니다.');
+    } catch {
+      window.alert('PIN 저장 중 오류가 발생했습니다.');
+    }
+  }, []);
+
+  const handleDisableAppPin = useCallback(async () => {
+    const stored = loadAppPinHash();
+    if (!stored) {
+      setAppLockEnabled(false);
+      setAppLocked(false);
+      return;
+    }
+    const okCurrent = await verifyCurrentPinOrAlert(stored);
+    if (!okCurrent) return;
+    const ok = window.confirm('앱 잠금 PIN을 제거할까요?');
+    if (!ok) return;
+    try {
+      window.localStorage.removeItem(APP_PIN_HASH_KEY);
+    } catch {
+      /* ignore */
+    }
+    setAppLockEnabled(false);
+    setAppLocked(false);
+    setUnlockPin('');
+    setUnlockError(null);
+    setUnlockFailCount(0);
+    setUnlockBlockedUntil(0);
+  }, []);
+
+  const handleLockNow = useCallback(() => {
+    if (!appLockEnabled) return;
+    setSettingsOpen(false);
+    setAppLocked(true);
+    setUnlockPin('');
+    setUnlockError(null);
+    setUnlockFailCount(0);
+    setUnlockBlockedUntil(0);
+  }, [appLockEnabled]);
+
+  const handleUnlockApp = useCallback(async () => {
+    const now = Date.now();
+    if (unlockBlockedUntil > now) {
+      const sec = Math.ceil((unlockBlockedUntil - now) / 1000);
+      setUnlockError(`잠시 후 다시 시도해 주세요. (${sec}초)`);
+      return;
+    }
+    if (!appLockEnabled) {
+      setAppLocked(false);
+      return;
+    }
+    const stored = loadAppPinHash();
+    if (!stored) {
+      setAppLockEnabled(false);
+      setAppLocked(false);
+      return;
+    }
+    if (!/^\d{4}$/.test(unlockPin.trim())) {
+      setUnlockError('PIN은 숫자 4자리입니다.');
+      return;
+    }
+    setUnlockBusy(true);
+    setUnlockError(null);
+    try {
+      const hash = await sha256Hex(unlockPin.trim());
+      if (hash !== stored) {
+        const nextFail = unlockFailCount + 1;
+        setUnlockFailCount(nextFail);
+        if (nextFail >= APP_PIN_MAX_FAILS) {
+          const until = Date.now() + APP_PIN_LOCKOUT_MS;
+          setUnlockBlockedUntil(until);
+          setUnlockNowTs(Date.now());
+          setUnlockError('실패 횟수 초과로 30초 동안 잠금 해제 시도가 제한됩니다.');
+        } else {
+          setUnlockError(
+            `PIN이 일치하지 않습니다. (${nextFail}/${APP_PIN_MAX_FAILS})`,
+          );
+        }
+        return;
+      }
+      setAppLocked(false);
+      setUnlockPin('');
+      setUnlockError(null);
+      setUnlockFailCount(0);
+      setUnlockBlockedUntil(0);
+      setUnlockNowTs(Date.now());
+    } finally {
+      setUnlockBusy(false);
+    }
+  }, [appLockEnabled, unlockPin, unlockFailCount, unlockBlockedUntil]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = themeMode;
+    document.body.dataset.theme = themeMode;
+    applyThemeVariables(themeMode);
+    try {
+      window.localStorage.setItem(THEME_MODE_KEY, themeMode);
+    } catch {
+      /* ignore */
+    }
+  }, [themeMode]);
+
+  const unlockBlockedSec = Math.max(
+    0,
+    Math.ceil((unlockBlockedUntil - unlockNowTs) / 1000),
+  );
+
+  useEffect(() => {
+    if (unlockBlockedUntil <= Date.now()) return;
+    const id = window.setInterval(() => {
+      setUnlockNowTs(Date.now());
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [unlockBlockedUntil]);
+
+  useEffect(() => {
+    if (!appLockEnabled || appLocked) {
+      if (autoLockTimerRef.current) {
+        window.clearTimeout(autoLockTimerRef.current);
+        autoLockTimerRef.current = null;
+      }
+      return;
+    }
+
+    const armAutoLock = () => {
+      if (autoLockTimerRef.current) {
+        window.clearTimeout(autoLockTimerRef.current);
+      }
+      autoLockTimerRef.current = window.setTimeout(() => {
+        setAppLocked(true);
+        setUnlockPin('');
+        setUnlockError(null);
+      }, APP_AUTO_LOCK_MS);
+    };
+
+    const onActivity = () => armAutoLock();
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        setAppLocked(true);
+        setUnlockPin('');
+        setUnlockError(null);
+      } else {
+        armAutoLock();
+      }
+    };
+
+    armAutoLock();
+    window.addEventListener('mousedown', onActivity);
+    window.addEventListener('keydown', onActivity);
+    window.addEventListener('touchstart', onActivity, { passive: true });
+    window.addEventListener('scroll', onActivity, { passive: true });
+    window.addEventListener('focus', onActivity);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      if (autoLockTimerRef.current) {
+        window.clearTimeout(autoLockTimerRef.current);
+        autoLockTimerRef.current = null;
+      }
+      window.removeEventListener('mousedown', onActivity);
+      window.removeEventListener('keydown', onActivity);
+      window.removeEventListener('touchstart', onActivity);
+      window.removeEventListener('scroll', onActivity);
+      window.removeEventListener('focus', onActivity);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [appLockEnabled, appLocked]);
 
   /** 미체결 주문: 일지에 적은 날(local)이 지나면 자동 삭제(당일 자정 이후 미체결 = 무효) */
   useEffect(() => {
@@ -1065,6 +1361,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen min-h-[100dvh] bg-background">
+      <div
+        className={
+          appLocked
+            ? 'pointer-events-none select-none blur-[2px]'
+            : undefined
+        }
+      >
       <header className="border-b border-border bg-surface/90 px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top,0px))] backdrop-blur sm:px-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -1277,6 +1580,12 @@ export default function App() {
         onCloudPushNow={handleCloudPushNow}
         onExportPortfolio={handleExportPortfolio}
         onImportPortfolioPick={() => importFileRef.current?.click()}
+        themeMode={themeMode}
+        onThemeModeChange={setThemeMode}
+        appLockEnabled={appLockEnabled}
+        onSetAppPin={handleSetAppPin}
+        onDisableAppPin={handleDisableAppPin}
+        onLockNow={handleLockNow}
       />
       <AddTradeModal
         open={addTradeOpen}
@@ -1328,6 +1637,53 @@ export default function App() {
         }
         onMarkTradeFilled={handleMarkTradeFilled}
       />
+      </div>
+      {appLocked ? (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-5 shadow-2xl">
+            <h2 className="text-base font-semibold text-textMain">앱 잠금</h2>
+            <p className="mt-1 text-[12px] leading-relaxed text-textMuted">
+              이 기기의 개인정보 보호를 위해 PIN을 입력해 잠금을 해제하세요.
+            </p>
+            <form
+              className="mt-4 space-y-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleUnlockApp();
+              }}
+            >
+              <input
+                value={unlockPin}
+                onChange={(e) => {
+                  setUnlockPin(e.target.value);
+                  if (unlockError) setUnlockError(null);
+                }}
+                disabled={unlockBusy || unlockBlockedSec > 0}
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={4}
+                placeholder="PIN 4자리"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+              />
+              {unlockError ? (
+                <p className="text-[12px] text-negative">{unlockError}</p>
+              ) : null}
+              {unlockBlockedSec > 0 ? (
+                <p className="text-[12px] text-warning">
+                  잠금 해제 시도 제한 중: {unlockBlockedSec}초 후 다시 시도
+                </p>
+              ) : null}
+              <button
+                type="submit"
+                disabled={unlockBusy || unlockBlockedSec > 0}
+                className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {unlockBusy ? '확인 중…' : '잠금 해제'}
+              </button>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

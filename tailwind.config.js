@@ -4,15 +4,15 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#0F1115',
-        surface: '#171A21',
-        border: '#262B36',
-        textMain: '#E8EAED',
-        textMuted: '#A0A3BD',
-        positive: '#14C784',
-        negative: '#FF4D4F',
-        accent: '#4C7DFF',
-        warning: '#FF9F1C',
+        background: 'rgb(var(--color-background) / <alpha-value>)',
+        surface: 'rgb(var(--color-surface) / <alpha-value>)',
+        border: 'rgb(var(--color-border) / <alpha-value>)',
+        textMain: 'rgb(var(--color-text-main) / <alpha-value>)',
+        textMuted: 'rgb(var(--color-text-muted) / <alpha-value>)',
+        positive: 'rgb(var(--color-positive) / <alpha-value>)',
+        negative: 'rgb(var(--color-negative) / <alpha-value>)',
+        accent: 'rgb(var(--color-accent) / <alpha-value>)',
+        warning: 'rgb(var(--color-warning) / <alpha-value>)',
       },
       fontFamily: {
         sans: ['Pretendard', 'Inter', 'system-ui', 'sans-serif'],
