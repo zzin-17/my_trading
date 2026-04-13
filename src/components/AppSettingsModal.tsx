@@ -24,6 +24,7 @@ interface AppSettingsModalProps {
   onCloudPushNow?: () => void | Promise<void>;
   onExportPortfolio?: () => void;
   onImportPortfolioPick?: () => void;
+  onOpenTutorial?: () => void;
   themeMode?: 'dark' | 'light';
   onThemeModeChange?: (mode: 'dark' | 'light') => void;
   appLockEnabled?: boolean;
@@ -51,6 +52,7 @@ export function AppSettingsModal({
   onCloudPushNow,
   onExportPortfolio,
   onImportPortfolioPick,
+  onOpenTutorial,
   themeMode = 'dark',
   onThemeModeChange,
   appLockEnabled = false,
@@ -195,6 +197,20 @@ export function AppSettingsModal({
             </div>
           </section>
         ) : null}
+
+        <section className="mt-5 border-t border-border/60 pt-4">
+          <h3 className="text-[12px] font-semibold text-textMain">도움말</h3>
+          <p className="mt-1 text-[12px] leading-relaxed text-textMuted">
+            처음 보는 사용자를 위한 빠른 사용법 안내를 다시 띄울 수 있습니다.
+          </p>
+          <button
+            type="button"
+            onClick={() => void onOpenTutorial?.()}
+            className="mt-3 w-full rounded-md border border-border bg-background px-3 py-2.5 text-left text-[13px] font-medium text-textMain hover:bg-white/5"
+          >
+            첫 화면 튜토리얼 다시 보기
+          </button>
+        </section>
 
         <section className="mt-5 border-t border-border/60 pt-4">
           <h3 className="text-[12px] font-semibold text-textMain">화면 테마</h3>

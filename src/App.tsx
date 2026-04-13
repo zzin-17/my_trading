@@ -75,6 +75,7 @@ const APP_AUTO_LOCK_MS = 5 * 60 * 1000;
 const APP_PIN_MAX_FAILS = 5;
 const APP_PIN_LOCKOUT_MS = 30 * 1000;
 const THEME_MODE_KEY = 'traderos-theme-mode-v1';
+const ONBOARDING_DONE_KEY = 'traderos-onboarding-done-v1';
 
 type ThemeMode = 'dark' | 'light';
 
@@ -102,6 +103,23 @@ function loadThemeMode(): ThemeMode {
     /* ignore */
   }
   return 'dark';
+}
+
+function isOnboardingDone(): boolean {
+  try {
+    return window.localStorage.getItem(ONBOARDING_DONE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markOnboardingDone(done: boolean): void {
+  try {
+    if (done) window.localStorage.setItem(ONBOARDING_DONE_KEY, '1');
+    else window.localStorage.removeItem(ONBOARDING_DONE_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 function applyThemeVariables(mode: ThemeMode): void {
@@ -226,6 +244,7 @@ export default function App() {
     null,
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(() => !isOnboardingDone());
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => loadThemeMode());
   const [appLockEnabled, setAppLockEnabled] = useState(
     () => !!loadAppPinHash(),
@@ -684,6 +703,11 @@ export default function App() {
       /* ignore */
     }
   }, [themeMode]);
+
+  const closeOnboarding = useCallback((remember: boolean) => {
+    if (remember) markOnboardingDone(true);
+    setOnboardingOpen(false);
+  }, []);
 
   const unlockBlockedSec = Math.max(
     0,
@@ -1580,6 +1604,11 @@ export default function App() {
         onCloudPushNow={handleCloudPushNow}
         onExportPortfolio={handleExportPortfolio}
         onImportPortfolioPick={() => importFileRef.current?.click()}
+        onOpenTutorial={() => {
+          markOnboardingDone(false);
+          setSettingsOpen(false);
+          setOnboardingOpen(true);
+        }}
         themeMode={themeMode}
         onThemeModeChange={setThemeMode}
         appLockEnabled={appLockEnabled}
@@ -1637,6 +1666,45 @@ export default function App() {
         }
         onMarkTradeFilled={handleMarkTradeFilled}
       />
+      {onboardingOpen && !appLocked ? (
+        <div className="fixed inset-0 z-[190] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-lg rounded-lg border border-border bg-surface p-5 shadow-2xl">
+            <h2 className="text-base font-semibold text-textMain">처음 사용 가이드</h2>
+            <p className="mt-1 text-[12px] leading-relaxed text-textMuted">
+              30초만 보면 바로 쓸 수 있어요.
+            </p>
+            <ol className="mt-4 space-y-2 text-[13px] text-textMain">
+              <li>1) 「+ 보유종목」으로 현재 보유를 먼저 입력하세요.</li>
+              <li>2) 「시세 갱신」으로 현재가/당일 시가를 동기화하세요.</li>
+              <li>3) 하단 To-do에서 매수/매도 계획을 기록하세요.</li>
+              <li>4) 설정의 「백업 파일 보내기」로 정기 백업하세요.</li>
+            </ol>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => closeOnboarding(false)}
+                className="rounded-md border border-border px-3 py-2 text-sm text-textMain hover:bg-white/5"
+              >
+                나중에
+              </button>
+              <button
+                type="button"
+                onClick={() => closeOnboarding(true)}
+                className="rounded-md border border-border px-3 py-2 text-sm text-textMain hover:bg-white/5"
+              >
+                다시 보지 않기
+              </button>
+              <button
+                type="button"
+                onClick={() => closeOnboarding(true)}
+                className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+              >
+                시작하기
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       </div>
       {appLocked ? (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4">
