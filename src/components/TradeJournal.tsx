@@ -1,5 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react';
 import { tradeAppliesToLedger, type LedgerRow } from '../lib/ledger';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { formatMoney, formatPercent } from '../lib/format';
 import {
   estimateNetUnrealizedPnl,
@@ -82,6 +90,21 @@ function computeFilledDaySummary(trades: Trade[]): FilledDaySummary {
   };
 }
 
+function normalizeJournalSearchQuery(q: string): string {
+  return q.trim().toLowerCase();
+}
+
+/** 종목코드·종목명 부분 일치(대소문자 무시) */
+function filterJournalTradesBySearch(trades: Trade[], rawQuery: string): Trade[] {
+  const q = normalizeJournalSearchQuery(rawQuery);
+  if (!q) return [];
+  return trades.filter(
+    (t) =>
+      t.ticker.toLowerCase().includes(q) ||
+      t.name.toLowerCase().includes(q),
+  );
+}
+
 function FilledSummaryLine({ summary }: { summary: FilledDaySummary }) {
   return (
     <div className="mt-2 overflow-x-auto">
@@ -138,7 +161,12 @@ export function TradeJournal({
   const [today, setToday] = useState(todayIsoLocal);
   const [mainTab, setMainTab] = useState<MainTab>('today');
   const [historyView, setHistoryView] = useState<HistoryView>('month');
-  const [tickerFilter, setTickerFilter] = useState<string>('');
+  const [journalSearchText, setJournalSearchText] = useState('');
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [searchModalQuery, setSearchModalQuery] = useState('');
+  const searchModalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(searchModalRef, searchModalOpen);
+
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const t = todayIsoLocal().split('-').map(Number);
     return { y: t[0]!, m: t[1]! };
@@ -156,27 +184,10 @@ export function TradeJournal({
     [trades],
   );
 
-  const tickerOptions = useMemo(() => {
-    const s = new Set(journalTrades.map((x) => x.ticker));
-    return [...s].sort((a, b) => a.localeCompare(b));
-  }, [journalTrades]);
-
-  useEffect(() => {
-    if (tickerFilter && !tickerOptions.includes(tickerFilter)) {
-      setTickerFilter('');
-    }
-  }, [tickerFilter, tickerOptions]);
-
-  const applyTicker = useCallback(
-    (list: Trade[]) =>
-      tickerFilter ? list.filter((x) => x.ticker === tickerFilter) : list,
-    [tickerFilter],
-  );
-
   const todayTrades = useMemo(() => {
     const list = journalTrades.filter((x) => x.date === today);
-    return applyTicker(list).sort((a, b) => b.id.localeCompare(a.id));
-  }, [journalTrades, today, applyTicker]);
+    return list.sort((a, b) => b.id.localeCompare(a.id));
+  }, [journalTrades, today]);
 
   const todayFilledSummary = useMemo(
     () => computeFilledDaySummary(todayTrades),
@@ -185,13 +196,13 @@ export function TradeJournal({
 
   const pastTrades = useMemo(() => {
     const list = journalTrades.filter((x) => x.date < today);
-    return applyTicker(list);
-  }, [journalTrades, today, applyTicker]);
+    return list;
+  }, [journalTrades, today]);
 
   const futureTrades = useMemo(() => {
     const list = journalTrades.filter((x) => x.date > today);
-    return applyTicker(list).sort((a, b) => a.date.localeCompare(b.date));
-  }, [journalTrades, today, applyTicker]);
+    return list.sort((a, b) => a.date.localeCompare(b.date));
+  }, [journalTrades, today]);
 
   const pastSortedDesc = useMemo(
     () =>
@@ -237,38 +248,60 @@ export function TradeJournal({
     return m;
   }, [pastTrades]);
 
-  const summaryRow = tickerFilter ? ledger.get(tickerFilter) : undefined;
-  const quote =
-    tickerFilter && quotes[tickerFilter] !== undefined
-      ? quotes[tickerFilter]
+  const matchingSearchTrades = useMemo(() => {
+    return filterJournalTradesBySearch(journalTrades, searchModalQuery).sort(
+      (a, b) => {
+        const d = b.date.localeCompare(a.date);
+        return d !== 0 ? d : b.id.localeCompare(a.id);
+      },
+    );
+  }, [journalTrades, searchModalQuery]);
+
+  const searchModalDetailTicker = useMemo(() => {
+    if (!searchModalOpen || matchingSearchTrades.length === 0) return null;
+    const u = new Set(matchingSearchTrades.map((x) => x.ticker));
+    return u.size === 1 ? [...u][0]! : null;
+  }, [searchModalOpen, matchingSearchTrades]);
+
+  const searchModalLedgerRow = searchModalDetailTicker
+    ? ledger.get(searchModalDetailTicker)
+    : undefined;
+  const searchModalQuote =
+    searchModalDetailTicker && quotes[searchModalDetailTicker] !== undefined
+      ? quotes[searchModalDetailTicker]
       : undefined;
 
-  const stats = useMemo(() => {
-    if (!tickerFilter || !summaryRow) return null;
-    const avg = summaryRow.avgCost;
+  const searchModalStats = useMemo(() => {
+    if (!searchModalDetailTicker || !searchModalLedgerRow) return null;
+    const avg = searchModalLedgerRow.avgCost;
     const cur =
-      quote !== undefined && Number.isFinite(quote) ? quote : avg;
-    const curRounded = roundMoney(cur, summaryRow.currency);
-    const qty = summaryRow.quantity;
-    const mv = qty > 0 ? roundMoney(curRounded * qty, summaryRow.currency) : 0;
-    const cost = qty > 0 ? roundMoney(avg * qty, summaryRow.currency) : 0;
+      searchModalQuote !== undefined && Number.isFinite(searchModalQuote)
+        ? searchModalQuote
+        : avg;
+    const curRounded = roundMoney(cur, searchModalLedgerRow.currency);
+    const qty = searchModalLedgerRow.quantity;
+    const mv = qty > 0 ? roundMoney(curRounded * qty, searchModalLedgerRow.currency) : 0;
+    const cost = qty > 0 ? roundMoney(avg * qty, searchModalLedgerRow.currency) : 0;
     const unreal =
       qty > 0
         ? estimateNetUnrealizedPnl(
-            summaryRow.market,
+            searchModalLedgerRow.market,
             avg,
             curRounded,
             qty,
-            summaryRow.currency,
+            searchModalLedgerRow.currency,
             krSellCommissionRate,
           )
         : 0;
-    const realized = roundMoney(summaryRow.realizedPnl, summaryRow.currency);
+    const realized = roundMoney(
+      searchModalLedgerRow.realizedPnl,
+      searchModalLedgerRow.currency,
+    );
     const retPct =
       cost > 0 && qty > 0 ? roundPercent((unreal / cost) * 100) : 0;
     return {
       qty,
-      avg: roundMoney(avg, summaryRow.currency),
+      avg: roundMoney(avg, searchModalLedgerRow.currency),
       curRounded,
       mv,
       cost,
@@ -276,7 +309,27 @@ export function TradeJournal({
       realized,
       retPct,
     };
-  }, [tickerFilter, summaryRow, quote, krSellCommissionRate]);
+  }, [
+    searchModalDetailTicker,
+    searchModalLedgerRow,
+    searchModalQuote,
+    krSellCommissionRate,
+  ]);
+
+  const searchModalFilledSummary = useMemo(
+    () => computeFilledDaySummary(matchingSearchTrades),
+    [matchingSearchTrades],
+  );
+
+  const runJournalSearch = useCallback(() => {
+    const raw = journalSearchText.trim();
+    if (!raw) {
+      window.alert('종목코드 또는 종목명을 입력해 주세요.');
+      return;
+    }
+    setSearchModalQuery(raw);
+    setSearchModalOpen(true);
+  }, [journalSearchText]);
 
   const calRows = useMemo(
     () => calendarCellsForMonth(calendarMonth.y, calendarMonth.m - 1),
@@ -311,27 +364,32 @@ export function TradeJournal({
           </h3>
           <JournalHelpTooltip />
         </div>
-        <div className="flex min-w-0 flex-row flex-wrap items-center gap-2 sm:justify-end">
-          <label
-            htmlFor="journal-ticker-filter"
-            className="shrink-0 whitespace-nowrap text-[12px] text-textMuted"
-          >
-            종목 필터
+        <form
+          className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end"
+          onSubmit={(e) => {
+            e.preventDefault();
+            runJournalSearch();
+          }}
+        >
+          <label htmlFor="journal-search" className="sr-only">
+            매매일지 종목 검색
           </label>
-          <select
-            id="journal-ticker-filter"
-            value={tickerFilter}
-            onChange={(e) => setTickerFilter(e.target.value)}
-            className="min-w-[10rem] max-w-full flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent sm:flex-initial sm:min-w-[11rem]"
+          <input
+            id="journal-search"
+            type="search"
+            enterKeyHint="search"
+            placeholder="코드·종목명 검색…"
+            value={journalSearchText}
+            onChange={(e) => setJournalSearchText(e.target.value)}
+            className="min-w-0 w-full flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent sm:min-w-[12rem] sm:max-w-md"
+          />
+          <button
+            type="submit"
+            className="shrink-0 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-textMain hover:bg-white/5"
           >
-            <option value="">전체 ({journalTrades.length}건)</option>
-            {tickerOptions.map((tk) => (
-              <option key={tk} value={tk}>
-                {tk}
-              </option>
-            ))}
-          </select>
-        </div>
+            검색
+          </button>
+        </form>
       </div>
 
       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
@@ -375,55 +433,6 @@ export function TradeJournal({
           거래 추가
         </button>
       </div>
-
-      {stats && summaryRow && (
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-          <Stat label="보유수량" value={String(stats.qty)} warn={stats.qty === 0} />
-          <Stat
-            label="평단(장부)"
-            value={formatMoney(stats.avg, summaryRow.currency)}
-          />
-          <Stat
-            label="현재가(시세)"
-            value={formatMoney(stats.curRounded, summaryRow.currency)}
-          />
-          <Stat
-            label="평가금액"
-            value={formatMoney(stats.mv, summaryRow.currency)}
-            muted={stats.qty === 0}
-          />
-          <Stat
-            label="예상손익"
-            value={formatMoney(stats.unreal, summaryRow.currency)}
-            positive={stats.unreal > 0}
-            negative={stats.unreal < 0}
-            muted={stats.qty === 0}
-          />
-          <Stat
-            label="누적실현"
-            value={formatMoney(stats.realized, summaryRow.currency)}
-            positive={stats.realized > 0}
-            negative={stats.realized < 0}
-          />
-        </div>
-      )}
-      {stats && summaryRow && stats.qty > 0 && (
-        <p className="mt-2 text-[12px] text-textMuted">
-          예상 수익률(잔여 물량 기준):{' '}
-          <span
-            className={
-              stats.retPct >= 0 ? 'text-positive' : 'text-negative'
-            }
-          >
-            {formatPercent(stats.retPct, true)}
-          </span>
-        </p>
-      )}
-      {tickerFilter && summaryRow && summaryRow.quantity <= 0 && (
-        <p className="mt-3 text-[12px] text-warning">
-          잔여 보유 없음(청산). 누적실현손익만 참고하세요.
-        </p>
-      )}
 
       {mainTab === 'today' ? (
         <>
@@ -613,7 +622,7 @@ export function TradeJournal({
                     </table>
                   </div>
                   <p className="text-[11px] text-textMuted">
-                    과거 일자만 선택할 수 있습니다. 건수는 종목 필터를 반영합니다.
+                    과거 일자만 선택할 수 있습니다. 캘린더 건수는 일지 전체 기준입니다.
                   </p>
                   {selectedDay ? (
                     <div>
@@ -660,6 +669,175 @@ export function TradeJournal({
           )}
         </>
       )}
+
+      {searchModalOpen ? (
+        <JournalSearchResultsModal
+          dialogRef={searchModalRef}
+          query={searchModalQuery}
+          trades={matchingSearchTrades}
+          filledSummary={searchModalFilledSummary}
+          stats={searchModalStats}
+          summaryRow={searchModalLedgerRow}
+          onClose={() => {
+            setSearchModalOpen(false);
+            setSearchModalQuery('');
+          }}
+          onEditTrade={(t) => {
+            onEditTrade(t);
+            setSearchModalOpen(false);
+            setSearchModalQuery('');
+          }}
+          onMarkTradeFilled={onMarkTradeFilled}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+type SearchModalStatsRow = {
+  qty: number;
+  avg: number;
+  curRounded: number;
+  mv: number;
+  cost: number;
+  unreal: number;
+  realized: number;
+  retPct: number;
+};
+
+function JournalSearchResultsModal({
+  dialogRef,
+  query,
+  trades,
+  filledSummary,
+  stats,
+  summaryRow,
+  onClose,
+  onEditTrade,
+  onMarkTradeFilled,
+}: {
+  dialogRef: RefObject<HTMLDivElement | null>;
+  query: string;
+  trades: Trade[];
+  filledSummary: FilledDaySummary;
+  stats: SearchModalStatsRow | null;
+  summaryRow: LedgerRow | undefined;
+  onClose: () => void;
+  onEditTrade: (trade: Trade) => void;
+  onMarkTradeFilled: (id: string) => void;
+}) {
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="journal-search-modal-title"
+        className="max-h-[min(90vh,40rem)] w-full max-w-4xl overflow-y-auto rounded-lg border border-border bg-surface p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="min-w-0">
+            <h2
+              id="journal-search-modal-title"
+              className="text-base font-semibold text-textMain"
+            >
+              매매 검색 결과
+            </h2>
+            <p className="mt-1 text-[12px] text-textMuted">
+              검색어{' '}
+              <span className="font-medium text-textMain">「{query}」</span> ·{' '}
+              <span className="tabular-nums">{trades.length}</span>건
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-md border border-border px-3 py-2 text-sm font-medium text-textMain hover:bg-white/5"
+          >
+            닫기
+          </button>
+        </div>
+
+        {trades.length > 0 ? (
+          <FilledSummaryLine summary={filledSummary} />
+        ) : null}
+
+        {stats && summaryRow ? (
+          <>
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+              <Stat label="보유수량" value={String(stats.qty)} warn={stats.qty === 0} />
+              <Stat
+                label="평단(장부)"
+                value={formatMoney(stats.avg, summaryRow.currency)}
+              />
+              <Stat
+                label="현재가(시세)"
+                value={formatMoney(stats.curRounded, summaryRow.currency)}
+              />
+              <Stat
+                label="평가금액"
+                value={formatMoney(stats.mv, summaryRow.currency)}
+                muted={stats.qty === 0}
+              />
+              <Stat
+                label="예상손익"
+                value={formatMoney(stats.unreal, summaryRow.currency)}
+                positive={stats.unreal > 0}
+                negative={stats.unreal < 0}
+                muted={stats.qty === 0}
+              />
+              <Stat
+                label="누적실현"
+                value={formatMoney(stats.realized, summaryRow.currency)}
+                positive={stats.realized > 0}
+                negative={stats.realized < 0}
+              />
+            </div>
+            {stats.qty > 0 ? (
+              <p className="mt-2 text-[12px] text-textMuted">
+                예상 수익률(잔여 물량 기준):{' '}
+                <span
+                  className={
+                    stats.retPct >= 0 ? 'text-positive' : 'text-negative'
+                  }
+                >
+                  {formatPercent(stats.retPct, true)}
+                </span>
+              </p>
+            ) : null}
+            {summaryRow.quantity <= 0 ? (
+              <p className="mt-2 text-[12px] text-warning">
+                잔여 보유 없음(청산). 누적실현손익만 참고하세요.
+              </p>
+            ) : null}
+          </>
+        ) : trades.length > 0 ? (
+          <p className="mt-3 text-[12px] text-textMuted">
+            여러 종목이 검색되었습니다. 장부 요약은 검색 결과가 한 종목일 때만
+            표시됩니다.
+          </p>
+        ) : null}
+
+        <JournalTradesTable
+          trades={trades}
+          onEditTrade={onEditTrade}
+          onMarkTradeFilled={onMarkTradeFilled}
+          emptyLabel="일치하는 매매가 없습니다."
+        />
+      </div>
     </div>
   );
 }
@@ -827,8 +1005,8 @@ function JournalHelpTooltip() {
               이전 일자를 월별·캘린더·목록으로 볼 수 있습니다.
             </p>
             <p>
-              종목 필터는 두 탭 모두에 적용됩니다. 캘린더의 일별 건수도 필터 반영
-              수입니다.
+              상단 검색으로 코드·종목명에 맞는 매매만 모달에서 모아 볼 수 있습니다.
+              오늘·과거 탭의 목록은 필터 없이 전체 일지 기준입니다.
             </p>
             <p>
               미체결 주문은 일지에만 표시되며 「체결」 후 장부·보유에 반영됩니다.
