@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "deploy:firestore-rules": "firebase deploy --only firestore:rules"
+    "deploy:firestore-rules": "firebase deploy --only firestore:rules",
+    "predeploy:functions": "rm -rf functions/api && cp -R api functions/api",
+    "deploy:hosting": "npm run build && npm run predeploy:functions && firebase deploy --only hosting,functions"
   },
   "dependencies": {
     "firebase": "^11.10.0",

@@ -47,3 +47,29 @@ npm run dev      # 로컬 개발 서버
 npm test         # Vitest
 npm run build    # 타입체크 + 프로덕션 빌드
 ```
+
+## 5. 링크로 공유 (Firebase Hosting + Functions)
+
+친구에게 **URL만** 주려면 정적 파일뿐 아니라 **시세·KRX 프록시**(`/api/kr-quote`, `/api/krx-kind`)도 같은 도메인에서 열려야 합니다. 이 레포는 Firebase Hosting이 위 경로를 Cloud Functions로 넘기도록 설정되어 있습니다.
+
+1. [Firebase 콘솔](https://console.firebase.google.com/)에서 프로젝트를 만들고, **프로젝트 ID**를 확인합니다.
+2. 로컬에서 한 번만 연결합니다.
+   ```bash
+   npm ci
+   cd functions && npm install && cd ..
+   firebase login
+   firebase use --add   # 방금 프로젝트 선택 → .firebaserc 생성
+   ```
+3. **과금(Blaze)**  
+   Cloud Functions가 네이버·KRX 등 **외부 URL로 나가는 요청**을 하므로, Firebase에서 **Blaze(종량제)** 로 올려야 할 수 있습니다. 무료 한도 내에서도 소규모 테스트는 가능한 경우가 많습니다.
+4. 배포합니다.
+   ```bash
+   npm run deploy:hosting
+   ```
+   - `dist`를 Hosting에 올리고, `api/`를 `functions/api`로 복사한 뒤 Functions `krQuote`, `krxKind`를 함께 배포합니다.
+5. Hosting 주소를 공유합니다. 예: `https://<프로젝트ID>.web.app`  
+   웹 앱은 기본값으로 **같은 출처**의 `/api/kr-quote`를 쓰므로, 별도 `VITE_KR_QUOTE_BASE` 없이 시세 갱신·KRX 동기화가 동작합니다.
+
+**Firebase(로그인·Firestore)** 를 쓰려면 빌드 전 `.env`에 `VITE_FIREBASE_*`를 넣고 배포합니다. 미설정이면 클라우드 블록만 숨겨지고, 나머지는 로컬 저장으로 동작합니다.
+
+**참고:** `firebaserc.example`은 예시입니다. 실제 `firebase use --add`로 만든 `.firebaserc`를 쓰면 됩니다.

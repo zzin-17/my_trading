@@ -7,3 +7,5 @@ dist
 .env
 .env.*
 !.env.example
+# `npm run predeploy:functions` 가 루트 api/ 를 복사해 넣음 (배포용 사본)
+functions/api
