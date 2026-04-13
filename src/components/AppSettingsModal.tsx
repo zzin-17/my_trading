@@ -17,6 +17,8 @@ interface AppSettingsModalProps {
   cloudBusy?: boolean;
   cloudSessionReady?: boolean;
   cloudError?: string | null;
+  /** false면 클라우드·원격 동기 불가(오프라인) 안내 */
+  networkOnline?: boolean;
   onCloudSignIn?: () => void | Promise<void>;
   onCloudSignOut?: () => void | Promise<void>;
   onCloudPushNow?: () => void | Promise<void>;
@@ -37,6 +39,7 @@ export function AppSettingsModal({
   cloudBusy = false,
   cloudSessionReady = true,
   cloudError = null,
+  networkOnline = true,
   onCloudSignIn,
   onCloudSignOut,
   onCloudPushNow,
@@ -107,6 +110,15 @@ export function AppSettingsModal({
               같은 계정으로 이어 쓸 수 있습니다. Firebase 콘솔에서 보안 규칙을
               본인만 읽고 쓰도록 설정해야 합니다.
             </p>
+            {!networkOnline ? (
+              <p
+                role="status"
+                className="mt-2 rounded border border-warning/40 bg-warning/10 px-2 py-1.5 text-[12px] text-warning"
+              >
+                오프라인입니다. Wi‑Fi·셀룰러 연결 후 클라우드 로그인·저장을 다시
+                시도해 주세요. 이 기기의 데이터는 로컬에만 반영됩니다.
+              </p>
+            ) : null}
             {!cloudAuthReady ? (
               <p className="mt-2 text-[12px] text-textMuted">인증 확인 중…</p>
             ) : cloudUserEmail ? (
@@ -115,12 +127,23 @@ export function AppSettingsModal({
               </p>
             ) : null}
             {cloudError ? (
-              <p
+              <div
                 role="alert"
                 className="mt-2 rounded border border-negative/40 bg-negative/10 px-2 py-1.5 text-[12px] text-negative"
               >
-                {cloudError}
-              </p>
+                <p>{cloudError}</p>
+                {!networkOnline ? (
+                  <p className="mt-1 text-[11px] text-textMuted">
+                    연결이 복구되면 「지금 클라우드에 저장」을 눌러 다시 올릴 수
+                    있습니다.
+                  </p>
+                ) : (
+                  <p className="mt-1 text-[11px] text-textMuted">
+                    문제가 계속되면 「백업 파일 보내기」로 보낸 뒤, 잠시 후 다시
+                    저장해 보세요.
+                  </p>
+                )}
+              </div>
             ) : null}
             <div className="mt-3 flex flex-col gap-2">
               {!cloudUserEmail ? (

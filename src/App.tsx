@@ -64,6 +64,7 @@ import {
   KR_SELL_TAX_RATE,
   normalizeKrSellCommissionRate,
 } from './lib/krTradingAssumptions';
+import { humanizeCloudError } from './lib/cloudMessages';
 
 function tickersEqual(a: string, b: string, market: Market): boolean {
   const na =
@@ -165,6 +166,9 @@ export default function App() {
   const [cloudSessionReady, setCloudSessionReady] = useState(true);
   const [cloudBusy, setCloudBusy] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
+  const [networkOnline, setNetworkOnline] = useState(
+    () => typeof navigator !== 'undefined' && navigator.onLine,
+  );
   const cloudMergeChoiceKey = useMemo(
     () => (user ? `traderos-cloud-merge-choice:${user.uid}` : null),
     [user],
@@ -299,9 +303,7 @@ export default function App() {
         }
       } catch (e) {
         if (!cancelled) {
-          setCloudError(
-            e instanceof Error ? e.message : '클라우드 동기화에 실패했습니다.',
-          );
+          setCloudError(humanizeCloudError(e));
         }
       } finally {
         if (!cancelled) {
@@ -326,15 +328,12 @@ export default function App() {
     const uid = user.uid;
     const tid = window.setTimeout(() => {
       void (async () => {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) return;
         try {
           await pushCloudPortfolio(uid, portfolioRef.current);
           setCloudError(null);
         } catch (e) {
-          setCloudError(
-            e instanceof Error
-              ? e.message
-              : '클라우드 자동 저장에 실패했습니다.',
-          );
+          setCloudError(humanizeCloudError(e));
         }
       })();
     }, 3000);
@@ -389,15 +388,19 @@ export default function App() {
 
   const handleCloudPushNow = useCallback(async () => {
     if (!user) return;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      window.alert(
+        '오프라인입니다. 네트워크 연결 후 「지금 클라우드에 저장」을 다시 눌러 주세요.',
+      );
+      return;
+    }
     setCloudBusy(true);
     setCloudError(null);
     try {
       await pushCloudPortfolio(user.uid, portfolioRef.current);
       window.alert('클라우드에 저장했습니다.');
     } catch (e) {
-      setCloudError(
-        e instanceof Error ? e.message : '클라우드에 저장하지 못했습니다.',
-      );
+      setCloudError(humanizeCloudError(e));
     } finally {
       setCloudBusy(false);
     }
@@ -405,12 +408,16 @@ export default function App() {
 
   const handleCloudSignIn = useCallback(async () => {
     setCloudError(null);
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setCloudError(
+        '오프라인이라 Google 로그인을 할 수 없습니다. 연결을 확인해 주세요.',
+      );
+      return;
+    }
     try {
       await signInWithGoogle();
     } catch (e) {
-      setCloudError(
-        e instanceof Error ? e.message : 'Google 로그인에 실패했습니다.',
-      );
+      setCloudError(humanizeCloudError(e));
     }
   }, [signInWithGoogle]);
 
@@ -419,15 +426,23 @@ export default function App() {
     setCloudBusy(true);
     try {
       if (user) {
-        await pushCloudPortfolio(user.uid, portfolioRef.current);
+        if (typeof navigator !== 'undefined' && navigator.onLine) {
+          await pushCloudPortfolio(user.uid, portfolioRef.current);
+        } else {
+          const ok = window.confirm(
+            '지금 오프라인이라 클라우드에 마지막 저장을 할 수 없습니다. 로그아웃하면 이 브라우저의 포트폴리오 데이터가 삭제됩니다. 계속할까요?\n\n(권장: 연결 복구 후 다시 시도하거나, 설정에서 「백업 파일 보내기」)',
+          );
+          if (!ok) {
+            setCloudBusy(false);
+            return;
+          }
+        }
       }
       await signOutUser();
       wipePrivatePortfolio();
     } catch (e) {
       setCloudError(
-        e instanceof Error
-          ? `로그아웃 전 클라우드 저장/로그아웃 실패: ${e.message}`
-          : '로그아웃 전 클라우드 저장 또는 로그아웃에 실패했습니다.',
+        `로그아웃 처리 중 오류: ${humanizeCloudError(e)}`,
       );
     } finally {
       setCloudBusy(false);
@@ -486,6 +501,17 @@ export default function App() {
     krSellCommissionRate,
     krPreferExtendedQuote,
   ]);
+
+  useEffect(() => {
+    const on = () => setNetworkOnline(true);
+    const off = () => setNetworkOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
+  }, []);
 
   const ledger = useMemo(() => computeLedger(trades), [trades]);
   const positions = useMemo(
@@ -760,6 +786,12 @@ export default function App() {
   }, [positions, krPreferExtendedQuote]);
 
   const handleSyncKrxSectors = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      window.alert(
+        '네트워크에 연결되어 있지 않습니다. 연결 후 KRX 동기화를 다시 시도해 주세요.',
+      );
+      return;
+    }
     setKrxSectorSyncing(true);
     try {
       const next = await applyKrxMetadataToKrTrades(trades);
@@ -977,8 +1009,8 @@ export default function App() {
   }, [marketTab, enabledTabs]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-surface/90 px-4 py-4 backdrop-blur sm:px-6">
+    <div className="min-h-screen min-h-[100dvh] bg-background">
+      <header className="border-b border-border bg-surface/90 px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top,0px))] backdrop-blur sm:px-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-lg font-semibold tracking-tight text-textMain">
@@ -997,14 +1029,23 @@ export default function App() {
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
-              className="rounded-md border border-border px-3 py-2 text-sm font-medium text-textMuted hover:bg-white/5 hover:text-textMain"
+              className="min-h-[44px] min-w-[44px] rounded-md border border-border px-3 py-2 text-sm font-medium text-textMuted hover:bg-white/5 hover:text-textMain sm:min-h-0 sm:min-w-0"
             >
               설정
             </button>
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
+      {!networkOnline ? (
+        <div
+          role="status"
+          className="border-b border-warning/45 bg-warning/15 px-4 py-2.5 text-center text-[12px] leading-snug text-warning sm:px-6"
+        >
+          오프라인입니다. 시세 갱신·KRX 동기화·클라우드 저장은 연결 후 다시 시도해
+          주세요. 이 기기의 편집은 로컬에만 반영됩니다.
+        </div>
+      ) : null}
+      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] sm:px-6">
         <MarketTabs
           value={marketTab}
           onChange={setMarketTab}
@@ -1172,6 +1213,7 @@ export default function App() {
         cloudBusy={cloudBusy}
         cloudSessionReady={cloudSessionReady}
         cloudError={cloudError}
+        networkOnline={networkOnline}
         onCloudSignIn={handleCloudSignIn}
         onCloudSignOut={handleCloudSignOut}
         onCloudPushNow={handleCloudPushNow}
