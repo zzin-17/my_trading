@@ -20,6 +20,24 @@ export interface PersistedPortfolioV1 {
   krSellCommissionRate?: number;
   /** true면 시세 갱신 시 모바일 API로 장외(Over/NXT) 호가 우선 */
   krPreferExtendedQuote?: boolean;
+  /** 한국장 시세 갱신으로 수집한 당일 시가(티커→원) — 새로고침 후에도 유지 */
+  krDayOpenByTicker?: Record<string, number>;
+}
+
+/** 로컬·가져오기·클라우드 공통: 양의 유한 숫자만 유지 */
+export function sanitizeKrDayOpenByTicker(
+  input: unknown,
+): Record<string, number> {
+  if (typeof input !== 'object' || input === null) return {};
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
+    const key = k.trim();
+    if (!key) continue;
+    if (typeof v === 'number' && Number.isFinite(v) && v > 0) {
+      out[key] = v;
+    }
+  }
+  return out;
 }
 
 /** JSON·가져오기·클라우드용 동일 검증 */
@@ -58,6 +76,7 @@ export function coercePersistedPortfolio(
   if (typeof data.krPreferExtendedQuote !== 'boolean') {
     delete data.krPreferExtendedQuote;
   }
+  data.krDayOpenByTicker = sanitizeKrDayOpenByTicker(data.krDayOpenByTicker);
   return data;
 }
 

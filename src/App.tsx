@@ -27,7 +27,11 @@ import {
   getUnifiedPortfolioCurrency,
   roundMoney,
 } from './lib/portfolioMath';
-import { defaultCurrencyForMarket, filterByMarket } from './lib/market';
+import {
+  defaultCurrencyForMarket,
+  filterByMarket,
+  tickersEqual,
+} from './lib/market';
 import { computeLedger, ledgerToPositions } from './lib/ledger';
 import {
   savePersisted,
@@ -65,14 +69,6 @@ import {
   normalizeKrSellCommissionRate,
 } from './lib/krTradingAssumptions';
 import { humanizeCloudError } from './lib/cloudMessages';
-
-function tickersEqual(a: string, b: string, market: Market): boolean {
-  const na =
-    market === 'KR' ? a.replace(/\s/g, '').trim() : a.trim().toUpperCase();
-  const nb =
-    market === 'KR' ? b.replace(/\s/g, '').trim() : b.trim().toUpperCase();
-  return na === nb;
-}
 
 const StockBarChart = lazy(() =>
   import('./components/StockBarChart').then((m) => ({
@@ -130,7 +126,7 @@ export default function App() {
   /** 한국장 시세 갱신 시 수집한 당일 시가(시초가) — 시가 대비 ±7% 이상이면 보유표 강조 */
   const [krDayOpenByTicker, setKrDayOpenByTicker] = useState<
     Record<string, number>
-  >({});
+  >(() => getInitialAppState().krDayOpenByTicker ?? {});
 
   const [marketTab, setMarketTab] = useState<MarketTab>('KR');
   const [filterText, setFilterText] = useState('');
@@ -164,6 +160,7 @@ export default function App() {
     lastKrQuoteBulkAt: initialPortfolio.lastKrQuoteBulkAt,
     krSellCommissionRate: initialPortfolio.krSellCommissionRate,
     krPreferExtendedQuote: initialPortfolio.krPreferExtendedQuote,
+    krDayOpenByTicker: initialPortfolio.krDayOpenByTicker ?? {},
   });
   const importFileRef = useRef<HTMLInputElement>(null);
   const hadUserRef = useRef(false);
@@ -189,6 +186,7 @@ export default function App() {
       lastKrQuoteBulkAt,
       krSellCommissionRate,
       krPreferExtendedQuote,
+      krDayOpenByTicker,
     };
   }, [
     trades,
@@ -200,6 +198,7 @@ export default function App() {
     lastKrQuoteBulkAt,
     krSellCommissionRate,
     krPreferExtendedQuote,
+    krDayOpenByTicker,
   ]);
 
   useEffect(() => {
@@ -229,6 +228,7 @@ export default function App() {
     setLastKrQuoteBulkAt(h.lastKrQuoteBulkAt);
     setKrSellCommissionRate(normalizeKrSellCommissionRate(h.krSellCommissionRate));
     setKrPreferExtendedQuote(h.krPreferExtendedQuote === true);
+    setKrDayOpenByTicker(h.krDayOpenByTicker ?? {});
   }, []);
 
   /** 로그아웃 시 개인정보(보유·일지·계획·메모 등) 로컬 흔적 제거 */
@@ -356,6 +356,7 @@ export default function App() {
     lastKrQuoteBulkAt,
     krSellCommissionRate,
     krPreferExtendedQuote,
+    krDayOpenByTicker,
   ]);
 
   const handleExportPortfolio = useCallback(() => {
@@ -489,6 +490,7 @@ export default function App() {
       lastKrQuoteBulkAt,
       krSellCommissionRate,
       krPreferExtendedQuote,
+      krDayOpenByTicker,
     });
     setPersistenceWarning(
       ok
@@ -505,6 +507,7 @@ export default function App() {
     lastKrQuoteBulkAt,
     krSellCommissionRate,
     krPreferExtendedQuote,
+    krDayOpenByTicker,
   ]);
 
   useEffect(() => {
@@ -522,6 +525,40 @@ export default function App() {
   const positions = useMemo(
     () => ledgerToPositions(ledger, quotes, positionIds),
     [ledger, quotes, positionIds],
+  );
+
+  const pendingTodoCountByPositionId = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const p of positions) {
+      if (p.quantity <= 0) continue;
+      let c = 0;
+      for (const t of todos) {
+        if (t.done) continue;
+        if (t.market !== p.market) continue;
+        if (tickersEqual(t.ticker, p.ticker, p.market)) c += 1;
+      }
+      if (c > 0) map[p.id] = c;
+    }
+    return map;
+  }, [positions, todos]);
+
+  const handleOpenHoldingFromTodo = useCallback(
+    (ticker: string, market: Market) => {
+      const pos = positions.find(
+        (p) =>
+          p.market === market &&
+          tickersEqual(p.ticker, ticker, market) &&
+          p.quantity > 0,
+      );
+      if (!pos) {
+        window.alert(
+          '해당 종목의 보유 내역이 없습니다. 보유종목을 먼저 추가해 주세요.',
+        );
+        return;
+      }
+      setDetailId(pos.id);
+    },
+    [positions],
   );
 
   const getAvailableQuantity = useCallback(
@@ -1136,6 +1173,7 @@ export default function App() {
               onRefreshKrQuotes={() => void refreshKrQuotes()}
               lastKrQuoteBulkAt={lastKrQuoteBulkAt}
               krDayOpenByTicker={krDayOpenByTicker}
+              pendingTodoCountByPositionId={pendingTodoCountByPositionId}
             />
           </>
         )}
@@ -1205,6 +1243,7 @@ export default function App() {
             onDelete={(id) =>
               setTodos((prev) => prev.filter((x) => x.id !== id))
             }
+            onOpenHoldingDetail={handleOpenHoldingFromTodo}
           />
         </div>
       )}

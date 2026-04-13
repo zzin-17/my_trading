@@ -32,3 +32,12 @@ export function filterByMarket(
   if (tab === 'all') return positions;
   return positions.filter((p) => p.market === tab);
 }
+
+/** 할 일·보유 행 등에서 동일 종목인지 비교 (KR 공백 무시, US 대문자) */
+export function tickersEqual(a: string, b: string, market: Market): boolean {
+  const na =
+    market === 'KR' ? a.replace(/\s/g, '').trim() : a.trim().toUpperCase();
+  const nb =
+    market === 'KR' ? b.replace(/\s/g, '').trim() : b.trim().toUpperCase();
+  return na === nb;
+}

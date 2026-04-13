@@ -3,6 +3,7 @@ import {
   filterByMarket,
   inferMarketFromTicker,
   normalizePosition,
+  tickersEqual,
 } from './market';
 
 describe('inferMarketFromTicker', () => {
@@ -45,6 +46,18 @@ describe('normalizePosition', () => {
       market: 'KR',
     });
     expect(p.market).toBe('KR');
+  });
+});
+
+describe('tickersEqual', () => {
+  it('KR은 공백 무시', () => {
+    expect(tickersEqual('005930', '00 59 30', 'KR')).toBe(true);
+    expect(tickersEqual('005930', '005931', 'KR')).toBe(false);
+  });
+
+  it('US는 대문자 기준', () => {
+    expect(tickersEqual('aapl', 'AAPL', 'US')).toBe(true);
+    expect(tickersEqual('MSFT', 'AAPL', 'US')).toBe(false);
   });
 });
 

@@ -12,6 +12,8 @@ interface MarketTodoListProps {
   onAdd: (todo: Omit<TradePlanTodo, 'id' | 'done' | 'createdAt'>) => void;
   onToggleDone: (id: string) => void;
   onDelete: (id: string) => void;
+  /** 보유 중인 동일 종목이 있으면 상세 모달로 이동 */
+  onOpenHoldingDetail?: (ticker: string, market: Market) => void;
 }
 
 export function MarketTodoList({
@@ -21,6 +23,7 @@ export function MarketTodoList({
   onAdd,
   onToggleDone,
   onDelete,
+  onOpenHoldingDetail,
 }: MarketTodoListProps) {
   const [ticker, setTicker] = useState('');
   const [action, setAction] = useState<PlanAction>('buy');
@@ -161,7 +164,16 @@ export function MarketTodoList({
                 )}
                 {x.note && <p className="truncate text-[12px] text-textMuted">{x.note}</p>}
               </div>
-              <div className="flex shrink-0 gap-1.5">
+              <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                {onOpenHoldingDetail ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenHoldingDetail(x.ticker, market)}
+                    className="rounded border border-accent/40 px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent/10"
+                  >
+                    보유 상세
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => onToggleDone(x.id)}

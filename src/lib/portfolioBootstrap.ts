@@ -1,6 +1,10 @@
 import type { Trade } from '../types/trade';
 import { tradeSeed } from '../data/tradeSeed';
-import { loadPersisted, type PersistedPortfolioV1 } from './persistence';
+import {
+  loadPersisted,
+  sanitizeKrDayOpenByTicker,
+  type PersistedPortfolioV1,
+} from './persistence';
 import { normalizeKrSellCommissionRate } from './krTradingAssumptions';
 
 /** 티커별 positionId가 없으면 자동 발급 */
@@ -53,6 +57,7 @@ export function normalizeLoadedPortfolio(
       typeof raw.krPreferExtendedQuote === 'boolean'
         ? raw.krPreferExtendedQuote
         : false,
+    krDayOpenByTicker: sanitizeKrDayOpenByTicker(raw.krDayOpenByTicker),
   };
 }
 
@@ -71,6 +76,7 @@ export function buildInitialAppState(): PersistedPortfolioV1 {
     lastKrQuoteBulkAt: null,
     krSellCommissionRate: normalizeKrSellCommissionRate(undefined),
     krPreferExtendedQuote: false,
+    krDayOpenByTicker: {},
   };
 }
 

@@ -58,6 +58,17 @@ describe('persistence', () => {
     expect(loaded!.trades[0]!.ticker).toBe('000000');
   });
 
+  it('krDayOpenByTicker가 저장·복원된다', () => {
+    expect(
+      savePersisted({
+        ...minimalPayload,
+        krDayOpenByTicker: { '005930': 70000, bad: NaN as unknown as number },
+      }),
+    ).toBe(true);
+    const loaded = loadPersisted();
+    expect(loaded?.krDayOpenByTicker).toEqual({ '005930': 70000 });
+  });
+
   it('setItem 실패 시 false를 반환한다', () => {
     vi.stubGlobal('localStorage', {
       getItem: vi.fn(() => null),

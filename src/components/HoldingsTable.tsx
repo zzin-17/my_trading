@@ -89,6 +89,8 @@ interface HoldingsTableProps {
   lastKrQuoteBulkAt: string | null;
   /** 시세 갱신 시 받은 당일 시가(티커→원). 없으면 시가 대비 강조 없음 */
   krDayOpenByTicker?: Record<string, number>;
+  /** 포지션별 미완료 To-do 개수(보유와 티커·시장이 일치하는 항목) */
+  pendingTodoCountByPositionId?: Record<string, number>;
 }
 
 export function HoldingsTable({
@@ -104,6 +106,7 @@ export function HoldingsTable({
   onRefreshKrQuotes,
   lastKrQuoteBulkAt,
   krDayOpenByTicker = {},
+  pendingTodoCountByPositionId = {},
 }: HoldingsTableProps) {
   const [sortKey, setSortKey] = useState<HoldingSortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -408,7 +411,19 @@ export function HoldingsTable({
                       )}
                     </span>
                   </td>
-                  <td className="py-2 pr-3 font-medium text-textMain">{p.ticker}</td>
+                  <td className="py-2 pr-3 font-medium text-textMain">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span>{p.ticker}</span>
+                      {(pendingTodoCountByPositionId[p.id] ?? 0) > 0 ? (
+                        <span
+                          className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent/25 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-accent"
+                          title="미완료 To-do"
+                        >
+                          {pendingTodoCountByPositionId[p.id]}
+                        </span>
+                      ) : null}
+                    </span>
+                  </td>
                   <td className="max-w-[180px] py-2 pr-3">
                     <button
                       type="button"
