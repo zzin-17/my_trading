@@ -127,6 +127,10 @@ export default function App() {
   const [krPreferExtendedQuote, setKrPreferExtendedQuote] = useState(
     () => getInitialAppState().krPreferExtendedQuote === true,
   );
+  /** 한국장 시세 갱신 시 수집한 당일 시가(시초가) — 시가 대비 ±7% 이상이면 보유표 강조 */
+  const [krDayOpenByTicker, setKrDayOpenByTicker] = useState<
+    Record<string, number>
+  >({});
 
   const [marketTab, setMarketTab] = useState<MarketTab>('KR');
   const [filterText, setFilterText] = useState('');
@@ -241,6 +245,7 @@ export default function App() {
     setDetailId(null);
     setKrSellCommissionRate(normalizeKrSellCommissionRate(undefined));
     setKrPreferExtendedQuote(false);
+    setKrDayOpenByTicker({});
   }, []);
 
   useEffect(() => {
@@ -714,6 +719,7 @@ export default function App() {
     setLastKrQuoteBulkAt(null);
     setKrSellCommissionRate(normalizeKrSellCommissionRate(undefined));
     setKrPreferExtendedQuote(false);
+    setKrDayOpenByTicker({});
   }, []);
 
   /** 매매·보유·시세 등 전부 비움 (샘플 아님) */
@@ -726,6 +732,7 @@ export default function App() {
     setNotes({});
     setQuoteUpdatedAt({});
     setLastKrQuoteBulkAt(null);
+    setKrDayOpenByTicker({});
   }, []);
 
   const refreshKrQuotes = useCallback(async () => {
@@ -751,6 +758,7 @@ export default function App() {
     let fail = 0;
     const nextQuotes: Record<string, number> = {};
     const nextAt: Record<string, string> = {};
+    const nextOpen: Record<string, number> = {};
     const chunk = 5;
     for (let i = 0; i < tickers.length; i += chunk) {
       const part = tickers.slice(i, i + chunk);
@@ -762,6 +770,13 @@ export default function App() {
             });
             nextQuotes[t] = roundMoney(r.price, 'KRW');
             nextAt[t] = r.fetchedAt;
+            if (
+              r.openPrice !== undefined &&
+              Number.isFinite(r.openPrice) &&
+              r.openPrice > 0
+            ) {
+              nextOpen[t] = roundMoney(r.openPrice, 'KRW');
+            }
             ok += 1;
           } catch {
             fail += 1;
@@ -770,6 +785,9 @@ export default function App() {
       );
     }
     setQuotes((prev) => ({ ...prev, ...nextQuotes }));
+    if (Object.keys(nextOpen).length > 0) {
+      setKrDayOpenByTicker((prev) => ({ ...prev, ...nextOpen }));
+    }
     setQuoteUpdatedAt((prev) => ({ ...prev, ...nextAt }));
     if (ok > 0) {
       setLastKrQuoteBulkAt(new Date().toISOString());
@@ -1117,6 +1135,7 @@ export default function App() {
               krQuoteRefreshing={krQuoteRefreshing}
               onRefreshKrQuotes={() => void refreshKrQuotes()}
               lastKrQuoteBulkAt={lastKrQuoteBulkAt}
+              krDayOpenByTicker={krDayOpenByTicker}
             />
           </>
         )}

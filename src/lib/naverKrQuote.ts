@@ -3,6 +3,8 @@ export interface KrNaverQuoteResponse {
   fetchedAt: string;
   /** naver_finance_delayed | naver_mobile_over_market | naver_mobile_krx */
   source?: string;
+  /** 당일 시가(시초가). 시세 갱신 직후에만 내려오며, 시가 대비 ±7% 이상이면 보유표에서 강조에 사용 */
+  openPrice?: number;
 }
 
 function quoteBaseUrl(): string {
@@ -43,9 +45,15 @@ export async function fetchKrNaverDelayedQuote(
   if (typeof data.price !== 'number' || !Number.isFinite(data.price)) {
     throw new Error('시세 응답이 올바르지 않습니다.');
   }
+  const openRaw = (data as { openPrice?: unknown }).openPrice;
+  const openPrice =
+    typeof openRaw === 'number' && Number.isFinite(openRaw) && openRaw > 0
+      ? openRaw
+      : undefined;
   return {
     price: data.price,
     fetchedAt: data.fetchedAt ?? new Date().toISOString(),
     source: data.source,
+    ...(openPrice !== undefined ? { openPrice } : {}),
   };
 }

@@ -4,6 +4,11 @@ import { formatMoney, formatPercent, formatQuoteUpdatedLabel } from '../lib/form
 import { isConcentrationRisk, roundPercent } from '../lib/portfolioMath';
 import { fetchKrBoardByTicker } from '../lib/krxLookup';
 import { krBoardBadgeClass, krBoardDisplayLabel } from '../lib/krBoardUi';
+import {
+  isKrOpenAttention,
+  krOpenDeviationPct,
+  KR_OPEN_ATTENTION_ABS_PCT,
+} from '../lib/krOpenDeviation';
 
 /** 한국 장 관례: 플러스 빨강, 마이너스 파랑 */
 function krPnLClass(value: number): string {
@@ -82,6 +87,8 @@ interface HoldingsTableProps {
   onRefreshKrQuotes: () => void;
   /** 마지막 시세 갱신 버튼으로 일괄 반영한 시각 */
   lastKrQuoteBulkAt: string | null;
+  /** 시세 갱신 시 받은 당일 시가(티커→원). 없으면 시가 대비 강조 없음 */
+  krDayOpenByTicker?: Record<string, number>;
 }
 
 export function HoldingsTable({
@@ -96,6 +103,7 @@ export function HoldingsTable({
   krQuoteRefreshing,
   onRefreshKrQuotes,
   lastKrQuoteBulkAt,
+  krDayOpenByTicker = {},
 }: HoldingsTableProps) {
   const [sortKey, setSortKey] = useState<HoldingSortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -205,7 +213,8 @@ export function HoldingsTable({
             <h3 className="text-sm font-medium text-textMain">보유 종목</h3>
             <p className="mt-0.5 text-[12px] leading-relaxed text-textMuted">
               코드·이름으로 검색 · 헤더 클릭 시 정렬(↑오름 · ↓내림) · 업종은 종목 클릭 시
-              표시 · 합계는 현재 탭 기준
+              표시 · 합계는 현재 탭 기준 · 시세 갱신 후 당일 시가 대비 ±
+              {KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 현재가가 주황색(주목)
             </p>
           </div>
           {lastKrQuoteBulkAt ? (
@@ -366,6 +375,20 @@ export function HoldingsTable({
                   ? roundPercent((m.pnl / m.cost_basis) * 100)
                   : 0;
               const rowWarn = isConcentrationRisk(m.weight_pct);
+              const dayOpen = krDayOpenByTicker[p.ticker];
+              const openAttention = isKrOpenAttention(
+                p.market,
+                p.ticker,
+                p.current_price,
+                dayOpen,
+              );
+              const openTip =
+                dayOpen !== undefined &&
+                dayOpen > 0 &&
+                p.market === 'KR' &&
+                /^\d{6}$/.test(p.ticker.replace(/\s/g, ''))
+                  ? `당일 시가 ${formatMoney(dayOpen, p.currency)} · 시가 대비 ${krOpenDeviationPct(p.current_price, dayOpen).toFixed(2)}% (±${KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 주목 표시)`
+                  : undefined;
               return (
                 <tr
                   key={p.id}
@@ -395,7 +418,12 @@ export function HoldingsTable({
                       {p.name}
                     </button>
                   </td>
-                  <td className="py-2 pr-3 text-right tabular-nums text-textMain">
+                  <td
+                    className={`py-2 pr-3 text-right tabular-nums ${
+                      openAttention ? 'font-semibold text-warning' : 'text-textMain'
+                    }`}
+                    title={openTip}
+                  >
                     {formatMoney(p.current_price, p.currency)}
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums text-textMain">

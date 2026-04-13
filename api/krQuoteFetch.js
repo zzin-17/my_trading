@@ -71,14 +71,35 @@ export async function fetchNaverMobileQuotePreferOver(code) {
   throw new Error('mobile_parse_fail');
 }
 
-/** extended=1: 모바일(장외 우선) → 실패 시 PC */
+/** 당일 시가(시초가) — 모바일 integration totalInfos */
+export async function fetchKrDayOpenPrice(code) {
+  const c = String(code).trim();
+  if (!/^\d{6}$/.test(c)) return null;
+  const url = `https://m.stock.naver.com/api/stock/${c}/integration`;
+  const r = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },
+  });
+  if (!r.ok) return null;
+  const data = await r.json();
+  const infos = data?.totalInfos;
+  if (!Array.isArray(infos)) return null;
+  const row = infos.find((x) => x?.code === 'openPrice');
+  return parseCommaInt(row?.value ?? '');
+}
+
+/** extended=1: 모바일(장외 우선) → 실패 시 PC. 시가는 integration 병렬 조회 */
 export async function fetchKrQuote(code, { extended }) {
-  if (extended) {
-    try {
-      return await fetchNaverMobileQuotePreferOver(code);
-    } catch {
-      /* fall through */
-    }
-  }
-  return fetchNaverPcDelayedQuote(code);
+  const mainPromise = extended
+    ? fetchNaverMobileQuotePreferOver(code).catch(() =>
+        fetchNaverPcDelayedQuote(code),
+      )
+    : fetchNaverPcDelayedQuote(code);
+  const [main, openPrice] = await Promise.all([
+    mainPromise,
+    fetchKrDayOpenPrice(code).catch(() => null),
+  ]);
+  return {
+    ...main,
+    openPrice: openPrice != null ? openPrice : undefined,
+  };
 }
