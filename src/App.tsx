@@ -131,6 +131,7 @@ export default function App() {
   const [filterText, setFilterText] = useState('');
   const [detailId, setDetailId] = useState<string | null>(null);
   const [addTradeOpen, setAddTradeOpen] = useState(false);
+  const [tradeToEdit, setTradeToEdit] = useState<Trade | null>(null);
   const [addHoldingOpen, setAddHoldingOpen] = useState(false);
   const [krQuoteRefreshing, setKrQuoteRefreshing] = useState(false);
   const [krxSectorSyncing, setKrxSectorSyncing] = useState(false);
@@ -493,9 +494,13 @@ export default function App() {
   );
 
   const getAvailableQuantity = useCallback(
-    (ticker: string) => {
-      const q = ledger.get(ticker)?.quantity ?? 0;
-      const pendingSell = trades
+    (ticker: string, excludeTradeId?: string) => {
+      const trs = excludeTradeId
+        ? trades.filter((t) => t.id !== excludeTradeId)
+        : trades;
+      const led = computeLedger(trs);
+      const q = led.get(ticker)?.quantity ?? 0;
+      const pendingSell = trs
         .filter(
           (tr) =>
             tr.ticker === ticker &&
@@ -505,7 +510,7 @@ export default function App() {
         .reduce((sum, tr) => sum + tr.quantity, 0);
       return Math.max(0, q - pendingSell);
     },
-    [ledger, trades],
+    [trades],
   );
 
   const handleMarkTradeFilled = useCallback((id: string) => {
@@ -542,6 +547,37 @@ export default function App() {
     setQuotes((prev) =>
       prev[t.ticker] !== undefined ? prev : { ...prev, [t.ticker]: t.price },
     );
+  }, []);
+
+  const handleUpdateTrade = useCallback((updated: Trade) => {
+    setTrades((prev) =>
+      prev.map((tr) => (tr.id === updated.id ? updated : tr)),
+    );
+    setQuotes((prev) =>
+      prev[updated.ticker] !== undefined
+        ? prev
+        : { ...prev, [updated.ticker]: updated.price },
+    );
+    setPositionIds((prev) =>
+      prev[updated.ticker]
+        ? prev
+        : { ...prev, [updated.ticker]: `p-${Date.now()}` },
+    );
+  }, []);
+
+  const handleOpenAddTrade = useCallback(() => {
+    setTradeToEdit(null);
+    setAddTradeOpen(true);
+  }, []);
+
+  const handleOpenEditTrade = useCallback((trade: Trade) => {
+    setTradeToEdit(trade);
+    setAddTradeOpen(true);
+  }, []);
+
+  const handleCloseAddTradeModal = useCallback(() => {
+    setAddTradeOpen(false);
+    setTradeToEdit(null);
   }, []);
 
   const handleAddHolding = useCallback(
@@ -1052,7 +1088,8 @@ export default function App() {
           trades={visibleTrades}
           ledger={ledger}
           quotes={quotes}
-          onOpenAddTrade={() => setAddTradeOpen(true)}
+          onOpenAddTrade={handleOpenAddTrade}
+          onEditTrade={handleOpenEditTrade}
           onMarkTradeFilled={handleMarkTradeFilled}
           krSellCommissionRate={krSellCommissionRate}
         />
@@ -1143,8 +1180,11 @@ export default function App() {
       />
       <AddTradeModal
         open={addTradeOpen}
-        onClose={() => setAddTradeOpen(false)}
+        contextMarket={marketTab === 'KR' ? 'KR' : undefined}
+        initialTrade={tradeToEdit}
+        onClose={handleCloseAddTradeModal}
         onAdd={handleAddTrade}
+        onUpdate={handleUpdateTrade}
         getAvailableQuantity={getAvailableQuantity}
       />
       <AddHoldingModal

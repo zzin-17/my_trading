@@ -14,6 +14,7 @@ interface TradeJournalProps {
   ledger: Map<string, LedgerRow>;
   quotes: Record<string, number>;
   onOpenAddTrade: () => void;
+  onEditTrade: (trade: Trade) => void;
   onMarkTradeFilled: (id: string) => void;
   krSellCommissionRate: number;
 }
@@ -31,6 +32,15 @@ function formatMonthTitle(key: string): string {
   const [y, m] = key.split('-');
   if (!y || !m) return key;
   return `${y}년 ${parseInt(m, 10)}월`;
+}
+
+/** 체결 건만: 통화별 거래액(수량×단가)을 한 줄용 문자열로 */
+function turnoverParts(krw: number, usd: number): string {
+  if (krw <= 0 && usd <= 0) return '—';
+  const bits: string[] = [];
+  if (krw > 0) bits.push(formatMoney(krw, 'KRW'));
+  if (usd > 0) bits.push(formatMoney(usd, 'USD'));
+  return bits.join(' + ');
 }
 
 /** 해당 월의 날짜 셀(1..lastDay), 앞뒤 null 패딩 */
@@ -53,6 +63,7 @@ export function TradeJournal({
   ledger,
   quotes,
   onOpenAddTrade,
+  onEditTrade,
   onMarkTradeFilled,
   krSellCommissionRate,
 }: TradeJournalProps) {
@@ -98,6 +109,37 @@ export function TradeJournal({
     const list = journalTrades.filter((x) => x.date === today);
     return applyTicker(list).sort((a, b) => b.id.localeCompare(a.id));
   }, [journalTrades, today, applyTicker]);
+
+  /** 오늘 탭·체결완료만: 종목 수(고유 티커)·거래액(통화별 합) */
+  const todayFilledSummary = useMemo(() => {
+    const list = todayTrades.filter(tradeAppliesToLedger);
+    const buyTk = new Set<string>();
+    const sellTk = new Set<string>();
+    let buyKrw = 0;
+    let buyUsd = 0;
+    let sellKrw = 0;
+    let sellUsd = 0;
+    for (const t of list) {
+      const gross = t.quantity * t.price;
+      if (t.side === 'buy') {
+        buyTk.add(t.ticker);
+        if (t.currency === 'KRW') buyKrw += gross;
+        else buyUsd += gross;
+      } else {
+        sellTk.add(t.ticker);
+        if (t.currency === 'KRW') sellKrw += gross;
+        else sellUsd += gross;
+      }
+    }
+    return {
+      buyKinds: buyTk.size,
+      sellKinds: sellTk.size,
+      buyKrw,
+      buyUsd,
+      sellKrw,
+      sellUsd,
+    };
+  }, [todayTrades]);
 
   const pastTrades = useMemo(() => {
     const list = journalTrades.filter((x) => x.date < today);
@@ -337,8 +379,36 @@ export function TradeJournal({
             기준일 <span className="tabular-nums text-textMain">{today}</span>
             의 매매만 표시합니다.
           </p>
+          <div className="mt-2 overflow-x-auto">
+            <p
+              className="min-w-0 whitespace-nowrap text-[12px] text-textMain"
+              title="미체결은 제외한 집계입니다."
+            >
+              <span className="text-textMuted">체결만</span>
+              {' · 매수 '}
+              <span className="tabular-nums font-medium text-textMain">
+                {todayFilledSummary.buyKinds}
+              </span>
+              종 <span className="text-textMuted">거래액</span>{' '}
+              <span className="tabular-nums">
+                {turnoverParts(todayFilledSummary.buyKrw, todayFilledSummary.buyUsd)}
+              </span>
+              {' · 매도 '}
+              <span className="tabular-nums font-medium text-textMain">
+                {todayFilledSummary.sellKinds}
+              </span>
+              종 <span className="text-textMuted">거래액</span>{' '}
+              <span className="tabular-nums">
+                {turnoverParts(
+                  todayFilledSummary.sellKrw,
+                  todayFilledSummary.sellUsd,
+                )}
+              </span>
+            </p>
+          </div>
           <JournalTradesTable
             trades={todayTrades}
+            onEditTrade={onEditTrade}
             onMarkTradeFilled={onMarkTradeFilled}
             emptyLabel="오늘 등록된 매매가 없습니다."
           />
@@ -386,6 +456,7 @@ export function TradeJournal({
               {historyView === 'list' && (
                 <JournalTradesTable
                   trades={pastSortedDesc}
+                  onEditTrade={onEditTrade}
                   onMarkTradeFilled={onMarkTradeFilled}
                   emptyLabel="표시할 과거 매매가 없습니다."
                 />
@@ -408,6 +479,7 @@ export function TradeJournal({
                         </h4>
                         <JournalTradesTable
                           trades={group}
+                          onEditTrade={onEditTrade}
                           onMarkTradeFilled={onMarkTradeFilled}
                           emptyLabel=""
                         />
@@ -511,6 +583,7 @@ export function TradeJournal({
                       </h4>
                       <JournalTradesTable
                         trades={tradesOnSelectedCalendarDay}
+                        onEditTrade={onEditTrade}
                         onMarkTradeFilled={onMarkTradeFilled}
                         emptyLabel="이 날짜에 표시할 매매가 없습니다."
                       />
@@ -534,6 +607,7 @@ export function TradeJournal({
                   <div className="mt-3">
                     <JournalTradesTable
                       trades={futureTrades}
+                      onEditTrade={onEditTrade}
                       onMarkTradeFilled={onMarkTradeFilled}
                       emptyLabel=""
                     />
@@ -550,10 +624,12 @@ export function TradeJournal({
 
 function JournalTradesTable({
   trades,
+  onEditTrade,
   onMarkTradeFilled,
   emptyLabel,
 }: {
   trades: Trade[];
+  onEditTrade: (trade: Trade) => void;
   onMarkTradeFilled: (id: string) => void;
   emptyLabel: string;
 }) {
@@ -571,12 +647,13 @@ function JournalTradesTable({
             <th className="py-2 pr-3 text-right font-medium tabular-nums">단가</th>
             <th className="py-2 pr-3 text-right font-medium tabular-nums">거래금액</th>
             <th className="py-2 pr-3 font-medium">비고</th>
+            <th className="py-2 pr-2 text-right font-medium">수정</th>
           </tr>
         </thead>
         <tbody>
           {trades.length === 0 ? (
             <tr>
-              <td colSpan={9} className="py-8 text-center text-textMuted">
+              <td colSpan={10} className="py-8 text-center text-textMuted">
                 {emptyLabel}
               </td>
             </tr>
@@ -635,6 +712,15 @@ function JournalTradesTable({
                   </td>
                   <td className="max-w-[200px] truncate py-2 pr-2 text-textMuted">
                     {tr.note ?? '—'}
+                  </td>
+                  <td className="py-2 pr-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => onEditTrade(tr)}
+                      className="rounded border border-border px-2 py-0.5 text-[11px] font-medium text-textMain hover:bg-white/5"
+                    >
+                      수정
+                    </button>
                   </td>
                 </tr>
               );
@@ -707,6 +793,7 @@ function JournalHelpTooltip() {
               일지에 적은 날(로컬)이 지나도 미체결이면 자동 삭제됩니다.
             </p>
             <p>보유종목·CSV로 넣은 분은 매매일지에 포함되지 않습니다.</p>
+            <p>오등록은 각 행의 「수정」에서 날짜·수량·단가 등을 고칠 수 있습니다.</p>
             <p className="text-[11px] leading-normal text-textMuted">
               매매·시세는 이 브라우저 localStorage에 저장됩니다. KRX 섹터 동기화·
               보유 초기화·샘플 복구는 상단 헤더의 설정에서 할 수 있습니다.

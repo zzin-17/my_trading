@@ -17,16 +17,24 @@ import { lookupKrStockName, searchKrStocksByName } from '../lib/krxLookup';
 
 interface AddTradeModalProps {
   open: boolean;
+  /** 한국장 탭에서 열었을 때: 티커·종목명이 영문이어도 항상 KR/KRW로 저장·조회 */
+  contextMarket?: Market;
+  /** null이면 신규, 값이 있으면 해당 매매 수정 */
+  initialTrade?: Trade | null;
   onClose: () => void;
   onAdd: (trade: Trade) => void;
-  /** 매도 시 보유 가능 수량 (해당 티커) */
-  getAvailableQuantity: (ticker: string) => number;
+  onUpdate?: (trade: Trade) => void;
+  /** 매도 시 보유 가능 수량 (해당 티커). 수정 시 두 번째 인자로 편집 중인 거래 id 제외 */
+  getAvailableQuantity: (ticker: string, excludeTradeId?: string) => number;
 }
 
 export function AddTradeModal({
   open,
+  contextMarket,
+  initialTrade = null,
   onClose,
   onAdd,
+  onUpdate,
   getAvailableQuantity,
 }: AddTradeModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -50,7 +58,11 @@ export function AddTradeModal({
   >([]);
   const [nameSuggestLoading, setNameSuggestLoading] = useState(false);
 
+  const krMarketMode = contextMarket === 'KR';
+
+  /** KRX 자동완성·6자리 onBlur 등 ‘한국장 전용’ UI */
   const krLookupActive = useMemo(() => {
+    if (krMarketMode) return true;
     if (marketManual === 'US') return false;
     if (marketManual === 'KR') return true;
     const t = ticker.trim();
@@ -59,7 +71,10 @@ export function AddTradeModal({
     if (/[가-힣]/.test(t)) return true;
     if (/[가-힣]/.test(name.trim())) return true;
     return false;
-  }, [marketManual, ticker, name]);
+  }, [krMarketMode, marketManual, ticker, name]);
+
+  /** 시장을 ‘미국’으로 고정하지 않았으면 조회 버튼 표시 (영문 티커만 있어도 KRX 이름 검색 시도 가능) */
+  const showKrLookupButton = krMarketMode || marketManual !== 'US';
 
   useEffect(() => {
     if (!open) return;
@@ -76,13 +91,34 @@ export function AddTradeModal({
   }, [open, onClose]);
 
   useEffect(() => {
-    if (open) {
-      setError(null);
+    if (!open) return;
+    setError(null);
+    setLookupMessage(null);
+    setNameSuggestions([]);
+    if (initialTrade) {
+      setDate(initialTrade.date);
+      setTicker(initialTrade.ticker);
+      setName(initialTrade.name);
+      setSector(initialTrade.sector || '기타');
+      setSide(initialTrade.side);
+      setQuantity(String(initialTrade.quantity));
+      setPrice(String(initialTrade.price));
+      setMarketManual(contextMarket === 'KR' ? 'KR' : initialTrade.market);
+      setNote(initialTrade.note ?? '');
+      setOrderPending(initialTrade.executionStatus === 'pending');
+    } else {
+      setDate(todayIso());
+      setTicker('');
+      setName('');
+      setSector('기타');
+      setSide('buy');
+      setQuantity('');
+      setPrice('');
+      setMarketManual(contextMarket === 'KR' ? 'KR' : '');
+      setNote('');
       setOrderPending(false);
-      setLookupMessage(null);
-      setNameSuggestions([]);
     }
-  }, [open]);
+  }, [open, initialTrade, contextMarket]);
 
   useEffect(() => {
     if (!open || !krLookupActive) {
@@ -113,7 +149,9 @@ export function AddTradeModal({
     };
   }, [open, krLookupActive, name]);
 
-  const market: Market = marketManual || inferMarketFromTicker(ticker.trim());
+  const market: Market = krMarketMode
+    ? 'KR'
+    : marketManual || inferMarketFromTicker(ticker.trim());
   const currency = defaultCurrencyForMarket(market);
 
   if (!open) return null;
@@ -140,48 +178,69 @@ export function AddTradeModal({
     }
 
     if (side === 'sell' && !orderPending) {
-      const avail = getAvailableQuantity(tk);
+      const avail = getAvailableQuantity(
+        tk,
+        initialTrade ? initialTrade.id : undefined,
+      );
       if (q > avail) {
         setError(`매도 수량이 보유(${avail})를 초과합니다.`);
         return;
       }
     }
 
-    const trade: Trade = {
-      id: `tr-user-${Date.now()}`,
-      date,
-      ticker: tk,
-      name: nm,
-      sector: sector.trim() || '기타',
-      market,
-      side,
-      quantity: q,
-      price: roundMoney(p, currency),
-      currency,
-      ...(orderPending ? { executionStatus: 'pending' as const } : {}),
-      ...(note.trim() ? { note: note.trim() } : {}),
-    };
-
-    onAdd(trade);
+    const priceRounded = roundMoney(p, currency);
+    if (initialTrade) {
+      if (!onUpdate) {
+        setError('수정 저장 경로가 없습니다.');
+        return;
+      }
+      const next: Trade = {
+        id: initialTrade.id,
+        date,
+        ticker: tk,
+        name: nm,
+        sector: sector.trim() || '기타',
+        market,
+        side,
+        quantity: q,
+        price: priceRounded,
+        currency,
+        ...(initialTrade.excludeFromJournal
+          ? { excludeFromJournal: true as const }
+          : {}),
+        ...(orderPending ? { executionStatus: 'pending' as const } : {}),
+      };
+      if (note.trim()) next.note = note.trim();
+      onUpdate(next);
+    } else {
+      const trade: Trade = {
+        id: `tr-user-${Date.now()}`,
+        date,
+        ticker: tk,
+        name: nm,
+        sector: sector.trim() || '기타',
+        market,
+        side,
+        quantity: q,
+        price: priceRounded,
+        currency,
+        ...(orderPending ? { executionStatus: 'pending' as const } : {}),
+        ...(note.trim() ? { note: note.trim() } : {}),
+      };
+      onAdd(trade);
+    }
     onClose();
-    setTicker('');
-    setName('');
-    setSector('기타');
-    setSide('buy');
-    setQuantity('');
-    setPrice('');
-    setMarketManual('');
-    setNote('');
-    setOrderPending(false);
-    setDate(todayIso());
   };
 
-  const inferredLabel =
-    inferMarketFromTicker(ticker.trim()) === 'KR' ? '한국(6자리 숫자)' : '미국';
+  const inferredLabel = krMarketMode
+    ? '한국장 탭(고정)'
+    : inferMarketFromTicker(ticker.trim()) === 'KR'
+      ? '한국(6자리 숫자)'
+      : '미국';
 
   /** @param primaryOverride 첫 번째 입력칸 값 (onBlur 시 최신 DOM 값 반영용) */
   const handleLookup = async (primaryOverride?: string) => {
-    if (!krLookupActive) return;
+    if (!showKrLookupButton) return;
     const fromTicker = (primaryOverride ?? ticker).trim();
     const fromName = name.trim();
     const codeFromPrimary = fromTicker.replace(/\s/g, '');
@@ -262,11 +321,13 @@ export function AddTradeModal({
         onClick={(ev) => ev.stopPropagation()}
       >
         <h2 id="add-trade-title" className="text-base font-semibold text-textMain">
-          매매 추가
+          {initialTrade ? '매매 수정' : '매매 추가'}
         </h2>
         <p className="mt-1 text-[12px] text-textMuted">
           추론 시장: {inferredLabel}
-          {marketManual ? ` · 수동: ${marketManual}` : ''} · 통화 {currency}
+          {!krMarketMode && marketManual ? ` · 수동: ${marketManual}` : ''} · 통화{' '}
+          {currency}
+          {initialTrade ? ' · 등록 후에도 내용을 고칠 수 있습니다.' : ''}
         </p>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">
@@ -318,7 +379,7 @@ export function AddTradeModal({
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
                 required
               />
-              {krLookupActive ? (
+              {showKrLookupButton ? (
                 <button
                   type="button"
                   onClick={() => void handleLookup()}
@@ -404,19 +465,26 @@ export function AddTradeModal({
 
           <div>
             <label htmlFor="at-market" className="text-[12px] text-textMuted">
-              시장 (비우면 티커 규칙)
+              {krMarketMode ? '시장 (한국장 탭)' : '시장 (비우면 티커 규칙)'}
             </label>
             <select
               id="at-market"
-              value={marketManual}
+              value={krMarketMode ? 'KR' : marketManual}
               onChange={(e) =>
                 setMarketManual((e.target.value || '') as Market | '')
               }
-              className="mt-1 w-full rounded-md border border-border bg-background px-2 py-2 text-sm text-textMain outline-none focus:border-accent"
+              disabled={krMarketMode}
+              className="mt-1 w-full rounded-md border border-border bg-background px-2 py-2 text-sm text-textMain outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-70"
             >
-              <option value="">자동</option>
-              <option value="KR">한국 (KRW)</option>
-              <option value="US">미국 (USD)</option>
+              {krMarketMode ? (
+                <option value="KR">한국 (KRW) — 탭 기준 고정</option>
+              ) : (
+                <>
+                  <option value="">자동</option>
+                  <option value="KR">한국 (KRW)</option>
+                  <option value="US">미국 (USD)</option>
+                </>
+              )}
             </select>
           </div>
 
@@ -497,7 +565,7 @@ export function AddTradeModal({
               type="submit"
               className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90"
             >
-              추가
+              {initialTrade ? '저장' : '추가'}
             </button>
           </div>
         </form>
