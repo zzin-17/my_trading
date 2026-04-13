@@ -64,6 +64,45 @@ describe('computeLedger', () => {
     const row = ledger.get('AAA');
     expect(row?.quantity).toBe(10);
   });
+
+  it('매도 수량이 보유를 넘으면 보유 수량만큼만 실현·차감된다', () => {
+    const ledger = computeLedger([
+      t({ id: 'a', quantity: 5, price: 100 }),
+      t({
+        id: 'b',
+        date: '2025-01-02',
+        side: 'sell',
+        quantity: 100,
+        price: 120,
+      }),
+    ]);
+    const row = ledger.get('AAA');
+    expect(row?.quantity).toBe(0);
+    expect(row?.realizedPnl).toBe((120 - 100) * 5);
+  });
+
+  it('한국 장 매도도 장부 realizedPnl은 세전 gross만(세금·수수료 미반영)', () => {
+    const ledger = computeLedger([
+      t({
+        id: 'b1',
+        market: 'KR',
+        currency: 'KRW',
+        quantity: 10,
+        price: 10_000,
+      }),
+      t({
+        id: 's1',
+        date: '2025-01-02',
+        side: 'sell',
+        market: 'KR',
+        currency: 'KRW',
+        quantity: 10,
+        price: 11_000,
+      }),
+    ]);
+    const row = ledger.get('AAA');
+    expect(row?.realizedPnl).toBe(10_000);
+  });
 });
 
 describe('tradeAppliesToLedger', () => {
