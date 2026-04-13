@@ -43,6 +43,74 @@ function turnoverParts(krw: number, usd: number): string {
   return bits.join(' + ');
 }
 
+type FilledDaySummary = {
+  buyKinds: number;
+  sellKinds: number;
+  buyKrw: number;
+  buyUsd: number;
+  sellKrw: number;
+  sellUsd: number;
+};
+
+function computeFilledDaySummary(trades: Trade[]): FilledDaySummary {
+  const list = trades.filter(tradeAppliesToLedger);
+  const buyTk = new Set<string>();
+  const sellTk = new Set<string>();
+  let buyKrw = 0;
+  let buyUsd = 0;
+  let sellKrw = 0;
+  let sellUsd = 0;
+  for (const t of list) {
+    const gross = t.quantity * t.price;
+    if (t.side === 'buy') {
+      buyTk.add(t.ticker);
+      if (t.currency === 'KRW') buyKrw += gross;
+      else buyUsd += gross;
+    } else {
+      sellTk.add(t.ticker);
+      if (t.currency === 'KRW') sellKrw += gross;
+      else sellUsd += gross;
+    }
+  }
+  return {
+    buyKinds: buyTk.size,
+    sellKinds: sellTk.size,
+    buyKrw,
+    buyUsd,
+    sellKrw,
+    sellUsd,
+  };
+}
+
+function FilledSummaryLine({ summary }: { summary: FilledDaySummary }) {
+  return (
+    <div className="mt-2 overflow-x-auto">
+      <p
+        className="min-w-0 whitespace-nowrap text-[12px] text-textMain"
+        title="미체결은 제외한 집계입니다."
+      >
+        <span className="text-textMuted">체결만</span>
+        {' · 매수 '}
+        <span className="tabular-nums font-medium text-textMain">
+          {summary.buyKinds}
+        </span>
+        종 <span className="text-textMuted">거래액</span>{' '}
+        <span className="tabular-nums">
+          {turnoverParts(summary.buyKrw, summary.buyUsd)}
+        </span>
+        {' · 매도 '}
+        <span className="tabular-nums font-medium text-textMain">
+          {summary.sellKinds}
+        </span>
+        종 <span className="text-textMuted">거래액</span>{' '}
+        <span className="tabular-nums">
+          {turnoverParts(summary.sellKrw, summary.sellUsd)}
+        </span>
+      </p>
+    </div>
+  );
+}
+
 /** 해당 월의 날짜 셀(1..lastDay), 앞뒤 null 패딩 */
 function calendarCellsForMonth(year: number, monthIndex0: number): (number | null)[][] {
   const firstDow = new Date(year, monthIndex0, 1).getDay();
@@ -110,36 +178,10 @@ export function TradeJournal({
     return applyTicker(list).sort((a, b) => b.id.localeCompare(a.id));
   }, [journalTrades, today, applyTicker]);
 
-  /** 오늘 탭·체결완료만: 종목 수(고유 티커)·거래액(통화별 합) */
-  const todayFilledSummary = useMemo(() => {
-    const list = todayTrades.filter(tradeAppliesToLedger);
-    const buyTk = new Set<string>();
-    const sellTk = new Set<string>();
-    let buyKrw = 0;
-    let buyUsd = 0;
-    let sellKrw = 0;
-    let sellUsd = 0;
-    for (const t of list) {
-      const gross = t.quantity * t.price;
-      if (t.side === 'buy') {
-        buyTk.add(t.ticker);
-        if (t.currency === 'KRW') buyKrw += gross;
-        else buyUsd += gross;
-      } else {
-        sellTk.add(t.ticker);
-        if (t.currency === 'KRW') sellKrw += gross;
-        else sellUsd += gross;
-      }
-    }
-    return {
-      buyKinds: buyTk.size,
-      sellKinds: sellTk.size,
-      buyKrw,
-      buyUsd,
-      sellKrw,
-      sellUsd,
-    };
-  }, [todayTrades]);
+  const todayFilledSummary = useMemo(
+    () => computeFilledDaySummary(todayTrades),
+    [todayTrades],
+  );
 
   const pastTrades = useMemo(() => {
     const list = journalTrades.filter((x) => x.date < today);
@@ -176,6 +218,16 @@ export function TradeJournal({
     if (!selectedDay) return [];
     return pastSortedDesc.filter((t) => t.date === selectedDay);
   }, [pastSortedDesc, selectedDay]);
+
+  const pastListFilledSummary = useMemo(
+    () => computeFilledDaySummary(pastSortedDesc),
+    [pastSortedDesc],
+  );
+
+  const calendarDayFilledSummary = useMemo(
+    () => computeFilledDaySummary(tradesOnSelectedCalendarDay),
+    [tradesOnSelectedCalendarDay],
+  );
 
   const countByDate = useMemo(() => {
     const m = new Map<string, number>();
@@ -379,33 +431,7 @@ export function TradeJournal({
             기준일 <span className="tabular-nums text-textMain">{today}</span>
             의 매매만 표시합니다.
           </p>
-          <div className="mt-2 overflow-x-auto">
-            <p
-              className="min-w-0 whitespace-nowrap text-[12px] text-textMain"
-              title="미체결은 제외한 집계입니다."
-            >
-              <span className="text-textMuted">체결만</span>
-              {' · 매수 '}
-              <span className="tabular-nums font-medium text-textMain">
-                {todayFilledSummary.buyKinds}
-              </span>
-              종 <span className="text-textMuted">거래액</span>{' '}
-              <span className="tabular-nums">
-                {turnoverParts(todayFilledSummary.buyKrw, todayFilledSummary.buyUsd)}
-              </span>
-              {' · 매도 '}
-              <span className="tabular-nums font-medium text-textMain">
-                {todayFilledSummary.sellKinds}
-              </span>
-              종 <span className="text-textMuted">거래액</span>{' '}
-              <span className="tabular-nums">
-                {turnoverParts(
-                  todayFilledSummary.sellKrw,
-                  todayFilledSummary.sellUsd,
-                )}
-              </span>
-            </p>
-          </div>
+          <FilledSummaryLine summary={todayFilledSummary} />
           <JournalTradesTable
             trades={todayTrades}
             onEditTrade={onEditTrade}
@@ -454,12 +480,22 @@ export function TradeJournal({
           ) : (
             <>
               {historyView === 'list' && (
-                <JournalTradesTable
-                  trades={pastSortedDesc}
-                  onEditTrade={onEditTrade}
-                  onMarkTradeFilled={onMarkTradeFilled}
-                  emptyLabel="표시할 과거 매매가 없습니다."
-                />
+                <>
+                  {pastSortedDesc.length > 0 ? (
+                    <div className="mt-4">
+                      <p className="text-[12px] text-textMuted">
+                        과거 전체(오늘 제외) · 체결만 집계
+                      </p>
+                      <FilledSummaryLine summary={pastListFilledSummary} />
+                    </div>
+                  ) : null}
+                  <JournalTradesTable
+                    trades={pastSortedDesc}
+                    onEditTrade={onEditTrade}
+                    onMarkTradeFilled={onMarkTradeFilled}
+                    emptyLabel="표시할 과거 매매가 없습니다."
+                  />
+                </>
               )}
 
               {historyView === 'month' && (
@@ -477,6 +513,9 @@ export function TradeJournal({
                             ({group.length}건)
                           </span>
                         </h4>
+                        <FilledSummaryLine
+                          summary={computeFilledDaySummary(group)}
+                        />
                         <JournalTradesTable
                           trades={group}
                           onEditTrade={onEditTrade}
@@ -581,6 +620,9 @@ export function TradeJournal({
                       <h4 className="mb-2 text-[12px] font-medium text-textMain">
                         {selectedDay} ({tradesOnSelectedCalendarDay.length}건)
                       </h4>
+                      {tradesOnSelectedCalendarDay.length > 0 ? (
+                        <FilledSummaryLine summary={calendarDayFilledSummary} />
+                      ) : null}
                       <JournalTradesTable
                         trades={tradesOnSelectedCalendarDay}
                         onEditTrade={onEditTrade}
