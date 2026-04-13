@@ -48,6 +48,18 @@ npm test         # Vitest
 npm run build    # 타입체크 + 프로덕션 빌드
 ```
 
+### Mac에서 `Cannot find module @rollup/rollup-darwin-x64` (또는 arm64)
+
+npm이 Rollup **플랫폼용 선택 의존성**을 빠뜨릴 때 나는 오류입니다. 레포 루트 `package.json`에 Mac용 `@rollup/rollup-darwin-*`를 **optionalDependencies**로 명시해 두었으므로, 아래로 한 번 정리한 뒤 다시 설치하면 됩니다.
+
+```bash
+rm -rf node_modules
+npm ci
+npm run build
+```
+
+그래도 동일하면 `npm install` 한 번 더 실행해 보세요.
+
 ## 5. 링크로 공유 (Firebase Hosting + Functions)
 
 친구에게 **URL만** 주려면 정적 파일뿐 아니라 **시세·KRX 프록시**(`/api/kr-quote`, `/api/krx-kind`)도 같은 도메인에서 열려야 합니다. 이 레포는 Firebase Hosting이 위 경로를 Cloud Functions로 넘기도록 설정되어 있습니다.

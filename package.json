@@ -19,6 +19,10 @@
     "react-dom": "^19.0.0",
     "recharts": "^2.15.0"
   },
+  "optionalDependencies": {
+    "@rollup/rollup-darwin-arm64": "4.60.1",
+    "@rollup/rollup-darwin-x64": "4.60.1"
+  },
   "devDependencies": {
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
