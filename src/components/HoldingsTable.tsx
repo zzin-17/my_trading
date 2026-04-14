@@ -91,6 +91,8 @@ interface HoldingsTableProps {
   krDayOpenByTicker?: Record<string, number>;
   /** 포지션별 미완료 To-do 개수(보유와 티커·시장이 일치하는 항목) */
   pendingTodoCountByPositionId?: Record<string, number>;
+  /** 포지션별 거래 가능 수량 = 보유수량 - 미체결 매도 수량 */
+  availableQuantityByPositionId?: Record<string, number>;
 }
 
 export function HoldingsTable({
@@ -107,6 +109,7 @@ export function HoldingsTable({
   lastKrQuoteBulkAt,
   krDayOpenByTicker = {},
   pendingTodoCountByPositionId = {},
+  availableQuantityByPositionId = {},
 }: HoldingsTableProps) {
   const [sortKey, setSortKey] = useState<HoldingSortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -300,6 +303,7 @@ export function HoldingsTable({
             p.market === 'KR' ? krBoardByTicker.get(p.ticker) : undefined,
           );
           const pendingTodoCount = pendingTodoCountByPositionId[p.id] ?? 0;
+          const availableQty = availableQuantityByPositionId[p.id] ?? p.quantity;
 
           return (
             <section
@@ -308,11 +312,21 @@ export function HoldingsTable({
                 rowWarn ? 'ring-1 ring-warning/35' : ''
               }`}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-1.5">
+              <div className="grid grid-cols-[1.45fr_repeat(4,minmax(0,1fr))] gap-x-2 gap-y-1.5">
+                <button
+                  type="button"
+                  onClick={() => onOpenDetail(p.id)}
+                  className="row-span-2 min-w-0 rounded-md border border-border/60 bg-surface px-2.5 py-2 text-left"
+                >
+                  <span className="block truncate text-[14px] font-semibold text-textMain underline-offset-2 hover:underline">
+                    {p.name}
+                  </span>
+                  <span className="mt-1 block truncate text-[11px] tabular-nums text-textMuted">
+                    {p.ticker}
+                  </span>
+                  <span className="mt-1 flex flex-wrap items-center gap-1">
                     <span
-                      className={`inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-semibold ${krBoardBadgeClass(
+                      className={`inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-[9px] font-semibold ${krBoardBadgeClass(
                         p.market === 'KR' ? krBoardByTicker.get(p.ticker) : undefined,
                       )}`}
                     >
@@ -320,45 +334,17 @@ export function HoldingsTable({
                     </span>
                     {pendingTodoCount > 0 ? (
                       <span
-                        className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent/25 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-accent"
+                        className="inline-flex min-w-[1.15rem] items-center justify-center rounded-full bg-accent/25 px-1 py-0.5 text-[9px] font-semibold tabular-nums text-accent"
                         title="미완료 To-do"
                       >
                         {pendingTodoCount}
                       </span>
                     ) : null}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onOpenDetail(p.id)}
-                    className="mt-2 block text-left"
-                  >
-                    <span className="block text-[15px] font-semibold text-textMain underline-offset-2 hover:underline">
-                      {p.name}
-                    </span>
-                    <span className="mt-0.5 block text-[12px] tabular-nums text-textMuted">
-                      {p.ticker}
-                    </span>
-                  </button>
-                </div>
-                <div className="text-right">
-                  <p className={`text-[18px] font-semibold tabular-nums ${krPnLClass(m.pnl)}`}>
-                    {formatMoney(m.pnl, p.currency)}
-                  </p>
-                  <p className={`mt-0.5 text-[13px] tabular-nums ${krPnLClass(ret)}`}>
-                    {formatPercent(ret, true)}
-                  </p>
-                </div>
-              </div>
+                  </span>
+                </button>
 
-              <div className="mt-3 grid grid-cols-2 gap-2">
                 <MobileMetricCell
-                  label="현재가"
-                  value={formatMoney(p.current_price, p.currency)}
-                  emph={openAttention ? 'warn' : undefined}
-                  title={openTip}
-                />
-                <MobileMetricCell
-                  label="평단"
+                  label="매입가"
                   value={formatMoney(p.avg_price, p.currency)}
                 />
                 <MobileMetricCell
@@ -366,17 +352,33 @@ export function HoldingsTable({
                   value={`${p.quantity}`}
                 />
                 <MobileMetricCell
+                  label="평가손익"
+                  value={formatMoney(m.pnl, p.currency)}
+                  emph={m.pnl >= 0 ? 'pos' : 'neg'}
+                />
+                <MobileMetricCell
+                  label="매입금액"
+                  value={formatMoney(m.cost_basis, p.currency)}
+                />
+
+                <MobileMetricCell
+                  label="현재가"
+                  value={formatMoney(p.current_price, p.currency)}
+                  emph={openAttention ? 'warn' : undefined}
+                  title={openTip}
+                />
+                <MobileMetricCell
+                  label="가능수량"
+                  value={`${availableQty}`}
+                />
+                <MobileMetricCell
+                  label="수익률"
+                  value={formatPercent(ret, true)}
+                  emph={ret >= 0 ? 'pos' : 'neg'}
+                />
+                <MobileMetricCell
                   label="평가금액"
                   value={formatMoney(m.market_value, p.currency)}
-                />
-                <MobileMetricCell
-                  label="비중"
-                  value={`${m.weight_pct.toFixed(2)}%`}
-                  emph={rowWarn ? 'warn' : undefined}
-                />
-                <MobileMetricCell
-                  label="통화"
-                  value={p.currency}
                 />
               </div>
             </section>

@@ -862,6 +862,24 @@ export default function App() {
     return map;
   }, [positions, todos]);
 
+  const availableQuantityByPositionId = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const p of positions) {
+      if (p.quantity <= 0) continue;
+      const pendingSellQty = trades
+        .filter(
+          (tr) =>
+            tr.market === p.market &&
+            tickersEqual(tr.ticker, p.ticker, p.market) &&
+            tr.side === 'sell' &&
+            tr.executionStatus === 'pending',
+        )
+        .reduce((sum, tr) => sum + tr.quantity, 0);
+      map[p.id] = Math.max(0, p.quantity - pendingSellQty);
+    }
+    return map;
+  }, [positions, trades]);
+
   const handleOpenHoldingFromTodo = useCallback(
     (ticker: string, market: Market) => {
       const pos = positions.find(
@@ -1513,6 +1531,7 @@ export default function App() {
               lastKrQuoteBulkAt={lastKrQuoteBulkAt}
               krDayOpenByTicker={krDayOpenByTicker}
               pendingTodoCountByPositionId={pendingTodoCountByPositionId}
+              availableQuantityByPositionId={availableQuantityByPositionId}
             />
           </>
         )}
