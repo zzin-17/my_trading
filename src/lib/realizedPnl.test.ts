@@ -104,6 +104,8 @@ describe('summarizeRealizedByPeriod', () => {
     const rows = summarizeRealizedByPeriod(events, 'month');
     expect(rows).toHaveLength(1);
     expect(rows[0]!.period).toBe('2025-01');
+    expect(rows[0]!.positiveTotal).toBe(events.reduce((s, x) => s + Math.max(x.netPnl, 0), 0));
+    expect(rows[0]!.negativeTotal).toBe(events.reduce((s, x) => s + Math.min(x.netPnl, 0), 0));
     expect(rows[0]!.netTotal).toBe(events.reduce((s, x) => s + x.netPnl, 0));
   });
 });

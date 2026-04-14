@@ -134,6 +134,8 @@ export function periodKeyForGranularity(
 export interface PeriodRealizedSummaryRow {
   period: string;
   currency: CurrencyCode;
+  positiveTotal: number;
+  negativeTotal: number;
   netTotal: number;
 }
 
@@ -142,13 +144,24 @@ export function summarizeRealizedByPeriod(
   events: RealizedSellEvent[],
   g: RealizedPeriodGranularity,
 ): PeriodRealizedSummaryRow[] {
-  const acc = new Map<string, number>();
+  const acc = new Map<
+    string,
+    { positiveTotal: number; negativeTotal: number; netTotal: number }
+  >();
   const currencyByKey = new Map<string, CurrencyCode>();
 
   for (const e of events) {
     const p = periodKeyForGranularity(e.date, g);
     const key = `${p}\t${e.currency}`;
-    acc.set(key, (acc.get(key) ?? 0) + e.netPnl);
+    const cur = acc.get(key) ?? {
+      positiveTotal: 0,
+      negativeTotal: 0,
+      netTotal: 0,
+    };
+    cur.netTotal += e.netPnl;
+    if (e.netPnl > 0) cur.positiveTotal += e.netPnl;
+    else if (e.netPnl < 0) cur.negativeTotal += e.netPnl;
+    acc.set(key, cur);
     currencyByKey.set(key, e.currency);
   }
 
@@ -159,7 +172,9 @@ export function summarizeRealizedByPeriod(
     rows.push({
       period,
       currency,
-      netTotal: roundMoney(sum, currency),
+      positiveTotal: roundMoney(sum.positiveTotal, currency),
+      negativeTotal: roundMoney(sum.negativeTotal, currency),
+      netTotal: roundMoney(sum.netTotal, currency),
     });
   }
   rows.sort((a, b) => b.period.localeCompare(a.period));

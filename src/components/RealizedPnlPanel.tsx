@@ -27,6 +27,12 @@ function pnlToneClass(value: number, currency: CurrencyCode): string {
   return 'text-textMain';
 }
 
+function formatSignedMoney(value: number, currency: CurrencyCode): string {
+  if (value === 0) return formatMoney(0, currency);
+  const sign = value > 0 ? '+' : '-';
+  return `${sign}${formatMoney(Math.abs(value), currency)}`;
+}
+
 const GRANULARITIES: { id: RealizedPeriodGranularity; label: string }[] = [
   { id: 'day', label: '일' },
   { id: 'month', label: '월' },
@@ -205,7 +211,7 @@ export function RealizedPnlPanel({
 
       {!drill ? (
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[420px] border-collapse text-left text-[12px]">
+          <table className="w-full min-w-[760px] border-collapse text-left text-[12px]">
             <thead>
               <tr className="border-b border-border text-textMuted">
                 <th className="py-2 pr-3 font-medium">
@@ -216,7 +222,13 @@ export function RealizedPnlPanel({
                 </th>
                 <th className="py-2 pr-3 font-medium">통화</th>
                 <th className="py-2 pr-3 text-right font-medium tabular-nums">
-                  실현손익(세후)
+                  + 실현손익
+                </th>
+                <th className="py-2 pr-3 text-right font-medium tabular-nums">
+                  - 실현손익
+                </th>
+                <th className="py-2 pr-3 text-right font-medium tabular-nums">
+                  총 실현손익(세후)
                 </th>
               </tr>
             </thead>
@@ -224,7 +236,7 @@ export function RealizedPnlPanel({
               {periodRows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={3}
+                    colSpan={5}
                     className="py-8 text-center text-textMuted"
                   >
                     해당 기간에 실현된 매도가 없습니다.
@@ -247,11 +259,27 @@ export function RealizedPnlPanel({
                     </td>
                     <td
                       className={`py-2 pr-3 text-right tabular-nums font-medium ${pnlToneClass(
+                        row.positiveTotal,
+                        row.currency,
+                      )}`}
+                    >
+                      {formatSignedMoney(row.positiveTotal, row.currency)}
+                    </td>
+                    <td
+                      className={`py-2 pr-3 text-right tabular-nums font-medium ${pnlToneClass(
+                        row.negativeTotal,
+                        row.currency,
+                      )}`}
+                    >
+                      {formatSignedMoney(row.negativeTotal, row.currency)}
+                    </td>
+                    <td
+                      className={`py-2 pr-3 text-right tabular-nums font-medium ${pnlToneClass(
                         row.netTotal,
                         row.currency,
                       )}`}
                     >
-                      {formatMoney(row.netTotal, row.currency)}
+                      {formatSignedMoney(row.netTotal, row.currency)}
                     </td>
                   </tr>
                 ))
