@@ -78,6 +78,7 @@ const THEME_MODE_KEY = 'traderos-theme-mode-v1';
 const ONBOARDING_DONE_KEY = 'traderos-onboarding-done-v1';
 
 type ThemeMode = 'dark' | 'light';
+type MobileHomeTab = 'portfolio' | 'journal' | 'settings';
 
 async function sha256Hex(input: string): Promise<string> {
   const bytes = new TextEncoder().encode(input);
@@ -198,6 +199,31 @@ function ChartSkeleton({ label }: { label: string }) {
   );
 }
 
+function MobileBottomTabButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex min-h-[44px] flex-1 items-center justify-center rounded-xl px-3 py-2 text-sm font-medium transition ${
+        active
+          ? 'bg-accent text-white shadow-[0_6px_18px_rgba(76,125,255,0.28)]'
+          : 'text-textMuted hover:bg-white/5 hover:text-textMain'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
 export default function App() {
   const enabledTabs: MarketTab[] = ['KR'];
   const [trades, setTrades] = useState<Trade[]>(
@@ -233,6 +259,7 @@ export default function App() {
   >(() => getInitialAppState().krDayOpenByTicker ?? {});
 
   const [marketTab, setMarketTab] = useState<MarketTab>('KR');
+  const [mobileHomeTab, setMobileHomeTab] = useState<MobileHomeTab>('portfolio');
   const [filterText, setFilterText] = useState('');
   const [detailId, setDetailId] = useState<string | null>(null);
   const [addTradeOpen, setAddTradeOpen] = useState(false);
@@ -1441,7 +1468,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
-              className="min-h-[44px] min-w-[44px] rounded-md border border-border px-3 py-2 text-sm font-medium text-textMuted hover:bg-white/5 hover:text-textMain sm:min-h-0 sm:min-w-0"
+              className="hidden min-h-[44px] min-w-[44px] rounded-md border border-border px-3 py-2 text-sm font-medium text-textMuted hover:bg-white/5 hover:text-textMain md:inline-flex md:min-h-0 md:min-w-0"
             >
               설정
             </button>
@@ -1457,7 +1484,7 @@ export default function App() {
           주세요. 이 기기의 편집은 로컬에만 반영됩니다.
         </div>
       ) : null}
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] sm:px-6">
+      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 pb-28 md:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] sm:px-6">
         <MarketTabs
           value={marketTab}
           onChange={setMarketTab}
@@ -1475,144 +1502,197 @@ export default function App() {
         ) : null}
 
         {marketTab === 'KR' ? (
-          <KrPnlAssumptionsCard
-            krSellCommissionRate={krSellCommissionRate}
-            onKrSellCommissionRateChange={setKrSellCommissionRate}
-            krPreferExtendedQuote={krPreferExtendedQuote}
-            onKrPreferExtendedQuoteChange={setKrPreferExtendedQuote}
-          />
+          <>
+            <div className={mobileHomeTab === 'settings' ? 'md:hidden' : 'hidden'}>
+              <KrPnlAssumptionsCard
+                krSellCommissionRate={krSellCommissionRate}
+                onKrSellCommissionRateChange={setKrSellCommissionRate}
+                krPreferExtendedQuote={krPreferExtendedQuote}
+                onKrPreferExtendedQuoteChange={setKrPreferExtendedQuote}
+              />
+            </div>
+            <div className="hidden md:block">
+              <KrPnlAssumptionsCard
+                krSellCommissionRate={krSellCommissionRate}
+                onKrSellCommissionRateChange={setKrSellCommissionRate}
+                krPreferExtendedQuote={krPreferExtendedQuote}
+                onKrPreferExtendedQuoteChange={setKrPreferExtendedQuote}
+              />
+            </div>
+          </>
         ) : null}
 
-        {visiblePositions.length === 0 ? (
-          <div className="rounded-lg border border-border bg-surface px-4 py-14 text-center">
-            <p className="text-sm text-textMuted">
-              {marketTab === 'all'
-                ? '보유 종목이 없습니다. 매매일지에서 거래를 추가하세요.'
-                : marketTab === 'KR'
-                  ? '한국장에 해당하는 종목이 없습니다.'
-                  : '미국장에 해당하는 종목이 없습니다.'}
-            </p>
-            <div className="mt-4">
-              <button
-                type="button"
-                onClick={() => setAddHoldingOpen(true)}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-              >
-                + 보유종목 추가
-              </button>
+        <div className={mobileHomeTab === 'portfolio' ? 'md:block' : 'hidden md:block'}>
+          {visiblePositions.length === 0 ? (
+            <div className="rounded-lg border border-border bg-surface px-4 py-14 text-center">
+              <p className="text-sm text-textMuted">
+                {marketTab === 'all'
+                  ? '보유 종목이 없습니다. 매매일지에서 거래를 추가하세요.'
+                  : marketTab === 'KR'
+                    ? '한국장에 해당하는 종목이 없습니다.'
+                    : '미국장에 해당하는 종목이 없습니다.'}
+              </p>
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => setAddHoldingOpen(true)}
+                  className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+                >
+                  + 보유종목 추가
+                </button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <>
-            {showMixedBanner && <MixedCurrencyBanner />}
-            {showSplitSummary ? (
-              <MarketPairSummaryCards
-                krSummary={krSummaryAll}
-                usSummary={usSummaryAll}
-                krFootnote={krPnlCostFootnote}
-              />
-            ) : (
-              <SummaryCards
+          ) : (
+            <div className="space-y-6">
+              {showMixedBanner && <MixedCurrencyBanner />}
+              {showSplitSummary ? (
+                <MarketPairSummaryCards
+                  krSummary={krSummaryAll}
+                  usSummary={usSummaryAll}
+                  krFootnote={krPnlCostFootnote}
+                />
+              ) : (
+                <SummaryCards
+                  summary={summary}
+                  quoteDisclaimer={krQuoteDisclaimer}
+                />
+              )}
+              <HoldingsTable
+                positions={visiblePositions}
+                metrics={metrics}
                 summary={summary}
-                quoteDisclaimer={krQuoteDisclaimer}
+                filterText={filterText}
+                onFilterChange={setFilterText}
+                onOpenDetail={setDetailId}
+                onOpenAddHolding={() => setAddHoldingOpen(true)}
+                onUploadCsv={handleUploadCsv}
+                krQuoteRefreshing={krQuoteRefreshing}
+                onRefreshKrQuotes={() => void refreshKrQuotes()}
+                lastKrQuoteBulkAt={lastKrQuoteBulkAt}
+                krDayOpenByTicker={krDayOpenByTicker}
+                pendingTodoCountByPositionId={pendingTodoCountByPositionId}
+                availableQuantityByPositionId={availableQuantityByPositionId}
               />
-            )}
-            <HoldingsTable
-              positions={visiblePositions}
-              metrics={metrics}
-              summary={summary}
-              filterText={filterText}
-              onFilterChange={setFilterText}
-              onOpenDetail={setDetailId}
-              onOpenAddHolding={() => setAddHoldingOpen(true)}
-              onUploadCsv={handleUploadCsv}
-              krQuoteRefreshing={krQuoteRefreshing}
-              onRefreshKrQuotes={() => void refreshKrQuotes()}
-              lastKrQuoteBulkAt={lastKrQuoteBulkAt}
-              krDayOpenByTicker={krDayOpenByTicker}
-              pendingTodoCountByPositionId={pendingTodoCountByPositionId}
-              availableQuantityByPositionId={availableQuantityByPositionId}
+            </div>
+          )}
+        </div>
+
+        <div className={mobileHomeTab === 'journal' ? 'space-y-6 md:block' : 'hidden space-y-6 md:block'}>
+          {marketTab !== 'all' ? (
+            <MarketTodoList
+              market={marketTab}
+              items={visibleTodos}
+              quotes={quotes}
+              ledger={ledger}
+              trades={trades}
+              onAdd={(payload) =>
+                setTodos((prev) => [
+                  ...prev,
+                  {
+                    id: `todo-${Date.now()}`,
+                    done: false,
+                    createdAt: new Date().toISOString(),
+                    ...payload,
+                  },
+                ])
+              }
+              onToggleDone={(id) =>
+                setTodos((prev) =>
+                  prev.map((x) => (x.id === id ? { ...x, done: !x.done } : x)),
+                )
+              }
+              onDelete={(id) =>
+                setTodos((prev) => prev.filter((x) => x.id !== id))
+              }
+              onUpdate={(id, updates) =>
+                setTodos((prev) =>
+                  prev.map((x) => (x.id === id ? { ...x, ...updates } : x)),
+                )
+              }
+              onOpenHoldingDetail={handleOpenHoldingFromTodo}
             />
-          </>
-        )}
-
-        <RealizedPnlPanel
-          trades={visibleTrades}
-          krSellCommissionRate={krSellCommissionRate}
-        />
-        <TradeJournal
-          trades={visibleTrades}
-          ledger={ledger}
-          quotes={quotes}
-          onOpenAddTrade={handleOpenAddTrade}
-          onEditTrade={handleOpenEditTrade}
-          onDeleteTrade={handleDeleteTrade}
-          onMarkTradeFilled={handleMarkTradeFilled}
-          krSellCommissionRate={krSellCommissionRate}
-        />
-
-        <Suspense
-          fallback={
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-              <ChartSkeleton label="종목 비중 차트 불러오는 중…" />
-              <ChartSkeleton label="실현손익 차트 불러오는 중…" />
-            </div>
-          }
-        >
-          <div className="space-y-6">
-            {marketTab === 'all' ? (
-              <MarketSplitCard weights={marketSplitWeights} />
-            ) : null}
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-              <StockBarChart
-                data={topStocks}
-                currency={summary.currency}
-              />
-              <RealizedDailyBarChart
-                trades={visibleTrades}
-                krSellCommissionRate={krSellCommissionRate}
-                marketTab={marketTab}
-              />
-            </div>
-          </div>
-        </Suspense>
-      </main>
-      {marketTab !== 'all' && (
-        <div className="mx-auto mb-6 max-w-7xl px-4 sm:px-6">
-          <MarketTodoList
-            market={marketTab}
-            items={visibleTodos}
-            quotes={quotes}
+          ) : null}
+          <RealizedPnlPanel
+            trades={visibleTrades}
+            krSellCommissionRate={krSellCommissionRate}
+          />
+          <TradeJournal
+            trades={visibleTrades}
             ledger={ledger}
-            trades={trades}
-            onAdd={(payload) =>
-              setTodos((prev) => [
-                ...prev,
-                {
-                  id: `todo-${Date.now()}`,
-                  done: false,
-                  createdAt: new Date().toISOString(),
-                  ...payload,
-                },
-              ])
+            quotes={quotes}
+            onOpenAddTrade={handleOpenAddTrade}
+            onEditTrade={handleOpenEditTrade}
+            onDeleteTrade={handleDeleteTrade}
+            onMarkTradeFilled={handleMarkTradeFilled}
+            krSellCommissionRate={krSellCommissionRate}
+          />
+
+          <Suspense
+            fallback={
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                <ChartSkeleton label="종목 비중 차트 불러오는 중…" />
+                <ChartSkeleton label="실현손익 차트 불러오는 중…" />
+              </div>
             }
-            onToggleDone={(id) =>
-              setTodos((prev) =>
-                prev.map((x) => (x.id === id ? { ...x, done: !x.done } : x)),
-              )
-            }
-            onDelete={(id) =>
-              setTodos((prev) => prev.filter((x) => x.id !== id))
-            }
-            onUpdate={(id, updates) =>
-              setTodos((prev) =>
-                prev.map((x) => (x.id === id ? { ...x, ...updates } : x)),
-              )
-            }
-            onOpenHoldingDetail={handleOpenHoldingFromTodo}
+          >
+            <div className="space-y-6">
+              {marketTab === 'all' ? (
+                <MarketSplitCard weights={marketSplitWeights} />
+              ) : null}
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                <StockBarChart
+                  data={topStocks}
+                  currency={summary.currency}
+                />
+                <RealizedDailyBarChart
+                  trades={visibleTrades}
+                  krSellCommissionRate={krSellCommissionRate}
+                  marketTab={marketTab}
+                />
+              </div>
+            </div>
+          </Suspense>
+        </div>
+
+        <div className={mobileHomeTab === 'settings' ? 'space-y-6 md:hidden' : 'hidden'}>
+          <section className="rounded-lg border border-border bg-surface p-4">
+            <h2 className="text-sm font-semibold text-textMain">앱 설정</h2>
+            <p className="mt-1 text-[12px] leading-relaxed text-textMuted">
+              테마, 앱 잠금, 클라우드 동기화, 데이터 가져오기/내보내기, 튜토리얼을
+              여기서 관리할 수 있습니다.
+            </p>
+            <div className="mt-3 rounded-md border border-border/60 bg-background/50 px-3 py-2 text-[12px] text-textMuted">
+              계정: {user?.email ?? user?.displayName ?? '로그인 안 됨'}
+            </div>
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              className="mt-3 w-full rounded-md bg-accent px-4 py-3 text-sm font-medium text-white hover:opacity-90"
+            >
+              상세 설정 열기
+            </button>
+          </section>
+        </div>
+      </main>
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-surface/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-3 backdrop-blur md:hidden">
+        <div className="mx-auto flex max-w-7xl items-center gap-2">
+          <MobileBottomTabButton
+            label="자산"
+            active={mobileHomeTab === 'portfolio'}
+            onClick={() => setMobileHomeTab('portfolio')}
+          />
+          <MobileBottomTabButton
+            label="기록"
+            active={mobileHomeTab === 'journal'}
+            onClick={() => setMobileHomeTab('journal')}
+          />
+          <MobileBottomTabButton
+            label="설정"
+            active={mobileHomeTab === 'settings'}
+            onClick={() => setMobileHomeTab('settings')}
           />
         </div>
-      )}
+      </nav>
       <input
         ref={importFileRef}
         type="file"
