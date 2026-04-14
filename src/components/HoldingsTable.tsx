@@ -296,6 +296,7 @@ export function HoldingsTable({
                   sortDir={sortDir}
                   onSort={handleSortHeader}
                   rowSpanTwo
+                  stickyLeft
                 />
                 <HoldingHeaderCell
                   label="매입가"
@@ -396,7 +397,9 @@ export function HoldingsTable({
                     <button
                       type="button"
                       onClick={() => onOpenDetail(p.id)}
-                      className="row-span-2 min-w-0 px-2 py-2 text-left"
+                      className={`sticky left-0 z-[1] row-span-2 min-w-0 border-r border-border/50 px-2 py-2 text-left ${
+                        rowWarn ? 'bg-warning/5' : 'bg-background/10'
+                      }`}
                     >
                       <span className="block truncate text-[14px] font-semibold text-textMain underline-offset-2 hover:underline">
                         {p.name}
@@ -713,6 +716,7 @@ function HoldingHeaderCell({
   rowSpanTwo = false,
   borderLeft = false,
   borderTop = false,
+  stickyLeft = false,
 }: {
   label: string;
   columnKey?: HoldingSortKey;
@@ -722,12 +726,14 @@ function HoldingHeaderCell({
   rowSpanTwo?: boolean;
   borderLeft?: boolean;
   borderTop?: boolean;
+  stickyLeft?: boolean;
 }) {
   const active = !!columnKey && sortKey === columnKey;
   const baseClass = `px-2 py-2 text-[11px] font-medium text-textMuted ${
     rowSpanTwo ? 'row-span-2' : ''
   } ${borderLeft ? 'border-l border-border/50' : ''} ${
     borderTop ? 'border-t border-border/50' : ''
+  } ${stickyLeft ? 'sticky left-0 z-20 border-r border-border/60 bg-surface/95 shadow-[6px_0_12px_-10px_rgba(0,0,0,0.55)]' : ''
   }`;
 
   if (!columnKey || !onSort || !sortKey || !sortDir) {
