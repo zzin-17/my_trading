@@ -201,10 +201,12 @@ function ChartSkeleton({ label }: { label: string }) {
 
 function MobileBottomTabButton({
   label,
+  hint,
   active,
   onClick,
 }: {
   label: string;
+  hint: string;
   active: boolean;
   onClick: () => void;
 }) {
@@ -213,13 +215,26 @@ function MobileBottomTabButton({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`flex min-h-[44px] flex-1 items-center justify-center rounded-xl px-3 py-2 text-sm font-medium transition ${
+      className={`relative flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-2 text-center transition ${
         active
-          ? 'bg-accent text-white shadow-[0_6px_18px_rgba(76,125,255,0.28)]'
-          : 'text-textMuted hover:bg-white/5 hover:text-textMain'
+          ? 'bg-white/6 text-textMain'
+          : 'text-textMuted hover:text-textMain'
       }`}
     >
-      {label}
+      <span className="text-[13px] font-semibold leading-none">{label}</span>
+      <span
+        className={`text-[10px] leading-none ${
+          active ? 'text-textMuted/90' : 'text-textMuted/75'
+        }`}
+      >
+        {hint}
+      </span>
+      <span
+        className={`absolute inset-x-3 bottom-0 h-[2px] rounded-full transition ${
+          active ? 'bg-textMain/80' : 'bg-transparent'
+        }`}
+        aria-hidden
+      />
     </button>
   );
 }
@@ -1484,7 +1499,7 @@ export default function App() {
           주세요. 이 기기의 편집은 로컬에만 반영됩니다.
         </div>
       ) : null}
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 pb-28 md:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] sm:px-6">
+      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 pb-32 md:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] sm:px-6">
         <MarketTabs
           value={marketTab}
           onChange={setMarketTab}
@@ -1674,20 +1689,23 @@ export default function App() {
           </section>
         </div>
       </main>
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-surface/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-3 backdrop-blur md:hidden">
-        <div className="mx-auto flex max-w-7xl items-center gap-2">
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/96 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-2 backdrop-blur md:hidden">
+        <div className="mx-auto flex max-w-7xl items-center gap-1 rounded-2xl border border-border/70 bg-surface/72 p-1.5 shadow-[0_-8px_24px_rgba(0,0,0,0.18)]">
           <MobileBottomTabButton
             label="자산"
+            hint="요약·보유"
             active={mobileHomeTab === 'portfolio'}
             onClick={() => setMobileHomeTab('portfolio')}
           />
           <MobileBottomTabButton
             label="기록"
+            hint="To-do·일지"
             active={mobileHomeTab === 'journal'}
             onClick={() => setMobileHomeTab('journal')}
           />
           <MobileBottomTabButton
             label="설정"
+            hint="동기화·테마"
             active={mobileHomeTab === 'settings'}
             onClick={() => setMobileHomeTab('settings')}
           />

@@ -468,36 +468,6 @@ export function HoldingsTable({
           </div>
         ) : null}
 
-        {sortedRows.length > 0 ? (
-          <section className="mt-3 rounded-lg border border-border bg-surface p-3">
-            <p className="text-[12px] font-medium text-textMain">전체 합계</p>
-            <p className="mt-0.5 text-[11px] text-textMuted">
-              전체 {sortedRows.length}개 종목
-            </p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <MobileMetricCell
-                label="평가금액"
-                value={formatMoney(summary.total_market_value, summary.currency)}
-              />
-              <MobileMetricCell
-                label="예상손익"
-                value={formatMoney(summary.total_pnl, summary.currency)}
-                emph={summary.total_pnl >= 0 ? 'pos' : 'neg'}
-              />
-              <MobileMetricCell
-                label="예상수익률"
-                value={formatPercent(summary.total_return_pct, true)}
-                emph={summary.total_return_pct >= 0 ? 'pos' : 'neg'}
-              />
-              <MobileMetricCell
-                label="비중 합"
-                value={`${roundPercent(
-                  metrics.reduce((s, m) => s + m.weight_pct, 0),
-                ).toFixed(2)}%`}
-              />
-            </div>
-          </section>
-        ) : null}
       </div>
 
       <div className="mt-4 hidden max-h-[min(65vh,720px)] overflow-auto rounded-md border border-border/60 md:block">
@@ -730,40 +700,6 @@ export function HoldingsTable({
           </tfoot>
         </table>
       </div>
-    </div>
-  );
-}
-
-function MobileMetricCell({
-  label,
-  value,
-  emph,
-  title,
-}: {
-  label: string;
-  value: string;
-  emph?: 'pos' | 'neg' | 'warn';
-  title?: string;
-}) {
-  return (
-    <div
-      className="rounded-md bg-surface px-1.5 py-1"
-      title={title}
-    >
-      <p className="text-[11px] text-textMuted">{label}</p>
-      <p
-        className={`mt-0.5 whitespace-nowrap text-[13px] font-semibold tabular-nums ${
-          emph === 'pos'
-            ? 'text-positive'
-            : emph === 'neg'
-              ? 'text-negative'
-              : emph === 'warn'
-                ? 'text-warning'
-                : 'text-textMain'
-        }`}
-      >
-        {value}
-      </p>
     </div>
   );
 }
