@@ -953,6 +953,18 @@ export default function App() {
     );
   }, []);
 
+  const handleDeleteTrade = useCallback((trade: Trade): boolean => {
+    const sideLabel = trade.side === 'buy' ? '매수' : '매도';
+    const ok = window.confirm(
+      `${trade.date} ${trade.ticker} ${trade.name} ${sideLabel} ${trade.quantity}주 거래를 삭제할까요?`,
+    );
+    if (!ok) return false;
+    setTrades((prev) => prev.filter((tr) => tr.id !== trade.id));
+    setTradeToEdit((prev) => (prev?.id === trade.id ? null : prev));
+    setAddTradeOpen((prev) => (tradeToEdit?.id === trade.id ? false : prev));
+    return true;
+  }, [tradeToEdit?.id]);
+
   const handleOpenAddTrade = useCallback(() => {
     setTradeToEdit(null);
     setAddTradeOpen(true);
@@ -1515,6 +1527,7 @@ export default function App() {
           quotes={quotes}
           onOpenAddTrade={handleOpenAddTrade}
           onEditTrade={handleOpenEditTrade}
+          onDeleteTrade={handleDeleteTrade}
           onMarkTradeFilled={handleMarkTradeFilled}
           krSellCommissionRate={krSellCommissionRate}
         />
@@ -1571,6 +1584,11 @@ export default function App() {
             }
             onDelete={(id) =>
               setTodos((prev) => prev.filter((x) => x.id !== id))
+            }
+            onUpdate={(id, updates) =>
+              setTodos((prev) =>
+                prev.map((x) => (x.id === id ? { ...x, ...updates } : x)),
+              )
             }
             onOpenHoldingDetail={handleOpenHoldingFromTodo}
           />

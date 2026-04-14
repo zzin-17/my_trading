@@ -15,6 +15,10 @@ interface MarketTodoListProps {
   ledger: Map<string, LedgerRow>;
   trades: Trade[];
   onAdd: (todo: Omit<TradePlanTodo, 'id' | 'done' | 'createdAt'>) => void;
+  onUpdate: (
+    id: string,
+    updates: Pick<TradePlanTodo, 'action' | 'targetPrice' | 'quantity' | 'note'>,
+  ) => void;
   onToggleDone: (id: string) => void;
   onDelete: (id: string) => void;
   /** 보유 중인 동일 종목이 있으면 상세 모달로 이동 */
@@ -68,6 +72,7 @@ export function MarketTodoList({
   ledger,
   trades,
   onAdd,
+  onUpdate,
   onToggleDone,
   onDelete,
   onOpenHoldingDetail,
@@ -84,6 +89,11 @@ export function MarketTodoList({
   >([]);
   const [krSuggestLoading, setKrSuggestLoading] = useState(false);
   const [addSubmitting, setAddSubmitting] = useState(false);
+  const [editingTodo, setEditingTodo] = useState<TradePlanTodo | null>(null);
+  const [editAction, setEditAction] = useState<PlanAction>('buy');
+  const [editTargetPrice, setEditTargetPrice] = useState('');
+  const [editQuantity, setEditQuantity] = useState('');
+  const [editNote, setEditNote] = useState('');
 
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** 목록에서 고른 코드·이름 쌍(같은 6자리 유지 시 이름 유지, 코드 바꾸면 초기화) */
@@ -119,6 +129,14 @@ export function MarketTodoList({
     }
     return { reached, near, waiting };
   }, [sorted, quotes]);
+
+  const editingDisplayName = useMemo(
+    () =>
+      editingTodo
+        ? resolveTodoDisplayName(editingTodo, market, ledger, trades)
+        : '—',
+    [editingTodo, market, ledger, trades],
+  );
 
   const trimmedSymbol = symbolField.trim();
   const krDigitsOnly = market === 'KR' && /^\d+$/.test(trimmedSymbol.replace(/\s/g, ''));
@@ -222,6 +240,51 @@ export function MarketTodoList({
       setAddSubmitting(false);
     }
   };
+
+  const openEditModal = useCallback((todo: TradePlanTodo) => {
+    setEditingTodo(todo);
+    setEditAction(todo.action);
+    setEditTargetPrice(String(todo.targetPrice));
+    setEditQuantity(String(todo.quantity));
+    setEditNote(todo.note ?? '');
+  }, []);
+
+  const closeEditModal = useCallback(() => {
+    setEditingTodo(null);
+    setEditAction('buy');
+    setEditTargetPrice('');
+    setEditQuantity('');
+    setEditNote('');
+  }, []);
+
+  const handleEditSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!editingTodo) return;
+      const p = Number(editTargetPrice);
+      const q = Number(editQuantity);
+      if (!Number.isFinite(p) || p <= 0 || !Number.isFinite(q) || q <= 0) {
+        return;
+      }
+      onUpdate(editingTodo.id, {
+        action: editAction,
+        targetPrice: roundMoney(p, currency),
+        quantity: Math.floor(q),
+        note: editNote.trim() || undefined,
+      });
+      closeEditModal();
+    },
+    [
+      editingTodo,
+      editTargetPrice,
+      editQuantity,
+      editAction,
+      editNote,
+      onUpdate,
+      currency,
+      closeEditModal,
+    ],
+  );
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
@@ -384,8 +447,15 @@ export function MarketTodoList({
                       {todoListDateLabel(x.createdAt)}
                     </td>
                     <td className="py-2 pr-3 font-medium text-textMain">{x.ticker}</td>
-                    <td className="max-w-[180px] truncate py-2 pr-3 text-textMain" title={displayName}>
-                      {displayName}
+                    <td className="max-w-[180px] truncate py-2 pr-3 text-textMain">
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(x)}
+                        className="max-w-full truncate text-left text-textMain underline-offset-2 hover:underline"
+                        title={`${displayName} 수정`}
+                      >
+                        {displayName}
+                      </button>
                     </td>
                     <td className="py-2 pr-3">
                       <span
@@ -444,6 +514,98 @@ export function MarketTodoList({
           </tbody>
         </table>
       </div>
+      {editingTodo ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4"
+          role="presentation"
+          onClick={closeEditModal}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="todo-edit-modal-title"
+            className="w-full max-w-md rounded-lg border border-border bg-surface p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h4
+                  id="todo-edit-modal-title"
+                  className="text-base font-semibold text-textMain"
+                >
+                  To-do 수정
+                </h4>
+                <p className="mt-1 text-[12px] text-textMuted">
+                  <span className="font-medium text-textMain">
+                    {editingTodo.ticker}
+                  </span>
+                  {' · '}
+                  {editingDisplayName}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeEditModal}
+                className="rounded border border-border px-2 py-1 text-[12px] text-textMain hover:bg-white/5"
+              >
+                닫기
+              </button>
+            </div>
+
+            <form className="mt-4 space-y-3" onSubmit={handleEditSubmit}>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <select
+                  value={editAction}
+                  onChange={(e) => setEditAction(e.target.value as PlanAction)}
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+                >
+                  <option value="buy">매수</option>
+                  <option value="sell">매도</option>
+                </select>
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={editTargetPrice}
+                  onChange={(e) => setEditTargetPrice(e.target.value)}
+                  placeholder={`목표가 (${currency})`}
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={editQuantity}
+                  onChange={(e) => setEditQuantity(e.target.value)}
+                  placeholder="수량"
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+                />
+              </div>
+              <input
+                value={editNote}
+                onChange={(e) => setEditNote(e.target.value)}
+                placeholder="메모(선택)"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  className="rounded-md border border-border px-3 py-2 text-sm font-medium text-textMain hover:bg-white/5"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+                >
+                  저장
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

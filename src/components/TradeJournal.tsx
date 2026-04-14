@@ -23,6 +23,7 @@ interface TradeJournalProps {
   quotes: Record<string, number>;
   onOpenAddTrade: () => void;
   onEditTrade: (trade: Trade) => void;
+  onDeleteTrade: (trade: Trade) => boolean;
   onMarkTradeFilled: (id: string) => void;
   krSellCommissionRate: number;
 }
@@ -155,6 +156,7 @@ export function TradeJournal({
   quotes,
   onOpenAddTrade,
   onEditTrade,
+  onDeleteTrade,
   onMarkTradeFilled,
   krSellCommissionRate,
 }: TradeJournalProps) {
@@ -444,6 +446,7 @@ export function TradeJournal({
           <JournalTradesTable
             trades={todayTrades}
             onEditTrade={onEditTrade}
+            onDeleteTrade={onDeleteTrade}
             onMarkTradeFilled={onMarkTradeFilled}
             emptyLabel="오늘 등록된 매매가 없습니다."
           />
@@ -501,6 +504,7 @@ export function TradeJournal({
                   <JournalTradesTable
                     trades={pastSortedDesc}
                     onEditTrade={onEditTrade}
+                    onDeleteTrade={onDeleteTrade}
                     onMarkTradeFilled={onMarkTradeFilled}
                     emptyLabel="표시할 과거 매매가 없습니다."
                   />
@@ -528,6 +532,7 @@ export function TradeJournal({
                         <JournalTradesTable
                           trades={group}
                           onEditTrade={onEditTrade}
+                          onDeleteTrade={onDeleteTrade}
                           onMarkTradeFilled={onMarkTradeFilled}
                           emptyLabel=""
                         />
@@ -635,6 +640,7 @@ export function TradeJournal({
                       <JournalTradesTable
                         trades={tradesOnSelectedCalendarDay}
                         onEditTrade={onEditTrade}
+                        onDeleteTrade={onDeleteTrade}
                         onMarkTradeFilled={onMarkTradeFilled}
                         emptyLabel="이 날짜에 표시할 매매가 없습니다."
                       />
@@ -659,6 +665,7 @@ export function TradeJournal({
                     <JournalTradesTable
                       trades={futureTrades}
                       onEditTrade={onEditTrade}
+                      onDeleteTrade={onDeleteTrade}
                       onMarkTradeFilled={onMarkTradeFilled}
                       emptyLabel=""
                     />
@@ -684,6 +691,12 @@ export function TradeJournal({
           }}
           onEditTrade={(t) => {
             onEditTrade(t);
+            setSearchModalOpen(false);
+            setSearchModalQuery('');
+          }}
+          onDeleteTrade={(t) => {
+            const deleted = onDeleteTrade(t);
+            if (!deleted) return;
             setSearchModalOpen(false);
             setSearchModalQuery('');
           }}
@@ -714,6 +727,7 @@ function JournalSearchResultsModal({
   summaryRow,
   onClose,
   onEditTrade,
+  onDeleteTrade,
   onMarkTradeFilled,
 }: {
   dialogRef: RefObject<HTMLDivElement | null>;
@@ -724,6 +738,7 @@ function JournalSearchResultsModal({
   summaryRow: LedgerRow | undefined;
   onClose: () => void;
   onEditTrade: (trade: Trade) => void;
+  onDeleteTrade: (trade: Trade) => boolean;
   onMarkTradeFilled: (id: string) => void;
 }) {
   useEffect(() => {
@@ -834,6 +849,7 @@ function JournalSearchResultsModal({
         <JournalTradesTable
           trades={trades}
           onEditTrade={onEditTrade}
+          onDeleteTrade={onDeleteTrade}
           onMarkTradeFilled={onMarkTradeFilled}
           emptyLabel="일치하는 매매가 없습니다."
         />
@@ -845,11 +861,13 @@ function JournalSearchResultsModal({
 function JournalTradesTable({
   trades,
   onEditTrade,
+  onDeleteTrade,
   onMarkTradeFilled,
   emptyLabel,
 }: {
   trades: Trade[];
   onEditTrade: (trade: Trade) => void;
+  onDeleteTrade: (trade: Trade) => boolean;
   onMarkTradeFilled: (id: string) => void;
   emptyLabel: string;
 }) {
@@ -867,7 +885,7 @@ function JournalTradesTable({
             <th className="py-2 pr-3 text-right font-medium tabular-nums">단가</th>
             <th className="py-2 pr-3 text-right font-medium tabular-nums">거래금액</th>
             <th className="py-2 pr-3 font-medium">비고</th>
-            <th className="py-2 pr-2 text-right font-medium">수정</th>
+            <th className="py-2 pr-2 text-right font-medium">동작</th>
           </tr>
         </thead>
         <tbody>
@@ -934,13 +952,22 @@ function JournalTradesTable({
                     {tr.note ?? '—'}
                   </td>
                   <td className="py-2 pr-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => onEditTrade(tr)}
-                      className="rounded border border-border px-2 py-0.5 text-[11px] font-medium text-textMain hover:bg-white/5"
-                    >
-                      수정
-                    </button>
+                    <div className="flex flex-wrap justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => onEditTrade(tr)}
+                        className="rounded border border-border px-2 py-0.5 text-[11px] font-medium text-textMain hover:bg-white/5"
+                      >
+                        수정
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteTrade(tr)}
+                        className="rounded border border-negative/40 px-2 py-0.5 text-[11px] font-medium text-negative hover:bg-negative/10"
+                      >
+                        삭제
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -1013,7 +1040,7 @@ function JournalHelpTooltip() {
               일지에 적은 날(로컬)이 지나도 미체결이면 자동 삭제됩니다.
             </p>
             <p>보유종목·CSV로 넣은 분은 매매일지에 포함되지 않습니다.</p>
-            <p>오등록은 각 행의 「수정」에서 날짜·수량·단가 등을 고칠 수 있습니다.</p>
+            <p>오등록은 각 행의 「수정」으로 고치거나 「삭제」로 제거할 수 있습니다.</p>
             <p className="text-[11px] leading-normal text-textMuted">
               매매·시세는 이 브라우저 localStorage에 저장됩니다. KRX 섹터 동기화·
               보유 초기화·샘플 복구는 상단 헤더의 설정에서 할 수 있습니다.
