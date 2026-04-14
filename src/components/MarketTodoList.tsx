@@ -138,6 +138,18 @@ export function MarketTodoList({
     [editingTodo, market, ledger, trades],
   );
 
+  const editingTodoNotes = useMemo(() => {
+    if (!editingTodo) return [];
+    return items
+      .filter(
+        (x) =>
+          x.market === editingTodo.market &&
+          x.ticker === editingTodo.ticker &&
+          !!x.note?.trim(),
+      )
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [editingTodo, items]);
+
   const trimmedSymbol = symbolField.trim();
   const krDigitsOnly = market === 'KR' && /^\d+$/.test(trimmedSymbol.replace(/\s/g, ''));
   const krSixDigit =
@@ -587,6 +599,38 @@ export function MarketTodoList({
                 placeholder="메모(선택)"
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
               />
+              <div className="rounded-md border border-border bg-background/50 p-3">
+                <p className="text-[12px] font-medium text-textMain">
+                  같은 종목 메모
+                </p>
+                {editingTodoNotes.length === 0 ? (
+                  <p className="mt-2 text-[12px] text-textMuted">
+                    등록된 메모가 없습니다.
+                  </p>
+                ) : (
+                  <ul className="mt-2 max-h-44 space-y-2 overflow-auto">
+                    {editingTodoNotes.map((entry) => (
+                      <li
+                        key={entry.id}
+                        className="rounded border border-border/70 bg-surface px-3 py-2"
+                      >
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-textMuted">
+                          <span className="tabular-nums">
+                            {todoListDateLabel(entry.createdAt)}
+                          </span>
+                          <span>
+                            {entry.action === 'buy' ? '매수' : '매도'} · {entry.quantity}
+                            주
+                          </span>
+                        </div>
+                        <p className="mt-1 whitespace-pre-wrap text-[13px] text-textMain">
+                          {entry.note}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
