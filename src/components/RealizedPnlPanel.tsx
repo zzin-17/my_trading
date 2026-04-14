@@ -222,10 +222,10 @@ export function RealizedPnlPanel({
                 </th>
                 <th className="py-2 pr-3 font-medium">통화</th>
                 <th className="py-2 pr-3 text-right font-medium tabular-nums">
-                  + 실현손익
+                  실현수익
                 </th>
                 <th className="py-2 pr-3 text-right font-medium tabular-nums">
-                  - 실현손익
+                  실현손실
                 </th>
                 <th className="py-2 pr-3 text-right font-medium tabular-nums">
                   총 실현손익(세후)
