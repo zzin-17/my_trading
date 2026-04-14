@@ -1,5 +1,6 @@
 import type { PortfolioSummary } from '../types/portfolio';
 import { formatMoney, formatPercent } from '../lib/format';
+import { ExpandableText } from './ExpandableText';
 
 interface MarketPairSummaryCardsProps {
   krSummary: PortfolioSummary | null;
@@ -80,7 +81,29 @@ function MarketBlock({
           {badge}
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4 sm:gap-x-5">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1 md:hidden">
+        <Mini
+          label="평가액"
+          value={formatMoney(summary.total_market_value, summary.currency)}
+        />
+        <Mini
+          label="투자금"
+          value={formatMoney(summary.total_cost_basis, summary.currency)}
+        />
+        <Mini
+          label="손익"
+          value={formatMoney(summary.total_pnl, summary.currency)}
+          positive={pnlOk}
+          negative={!pnlOk}
+        />
+        <Mini
+          label="수익률"
+          value={formatPercent(summary.total_return_pct, true)}
+          positive={pnlOk}
+          negative={!pnlOk}
+        />
+      </div>
+      <div className="hidden grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4 sm:gap-x-5 md:grid">
         <Mini
           label="총 투자금"
           value={formatMoney(summary.total_cost_basis, summary.currency)}
@@ -103,7 +126,17 @@ function MarketBlock({
         />
       </div>
       {footnote ? (
-        <p className="mt-2 text-[11px] leading-relaxed text-textMuted">{footnote}</p>
+        <>
+          <p className="mt-2 hidden text-[11px] leading-relaxed text-textMuted md:block">
+            {footnote}
+          </p>
+          <ExpandableText
+            text={footnote}
+            maxChars={30}
+            className="mt-2 md:hidden"
+            textClassName="text-[11px] leading-relaxed text-textMuted"
+          />
+        </>
       ) : null}
     </div>
   );

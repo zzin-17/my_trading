@@ -4,6 +4,7 @@ import { formatMoney, formatPercent, formatQuoteUpdatedLabel } from '../lib/form
 import { isConcentrationRisk, roundPercent } from '../lib/portfolioMath';
 import { fetchKrBoardByTicker } from '../lib/krxLookup';
 import { krBoardBadgeClass, krBoardDisplayLabel } from '../lib/krBoardUi';
+import { ExpandableText } from './ExpandableText';
 import {
   isKrOpenAttention,
   krOpenDeviationPct,
@@ -217,11 +218,17 @@ export function HoldingsTable({
         <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div className="min-w-0">
             <h3 className="text-sm font-medium text-textMain">보유 종목</h3>
-            <p className="mt-0.5 text-[12px] leading-relaxed text-textMuted">
+            <p className="mt-0.5 hidden text-[12px] leading-relaxed text-textMuted md:block">
               코드·이름으로 검색 · 헤더 클릭 시 정렬(↑오름 · ↓내림) · 업종은 종목 클릭 시
               표시 · 합계는 현재 탭 기준 · 시세 갱신 후 당일 시가 대비 ±
               {KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 현재가가 주황색(주목)
             </p>
+            <ExpandableText
+              text={`코드·이름으로 검색 · 헤더 클릭 시 정렬(↑오름 · ↓내림) · 업종은 종목 클릭 시 표시 · 합계는 현재 탭 기준 · 시세 갱신 후 당일 시가 대비 ±${KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 현재가가 주황색(주목)`}
+              maxChars={30}
+              className="mt-0.5 md:hidden"
+              textClassName="text-[12px] leading-relaxed text-textMuted"
+            />
           </div>
           {lastKrQuoteBulkAt ? (
             <p className="shrink-0 text-[11px] tabular-nums text-textMuted/90 sm:pt-0.5 sm:text-right">
@@ -308,20 +315,20 @@ export function HoldingsTable({
           return (
             <section
               key={p.id}
-              className={`overflow-x-auto rounded-lg border border-border/70 bg-background/40 px-0 py-2 ${
-                rowWarn ? 'ring-1 ring-warning/35' : ''
+              className={`overflow-x-auto rounded-lg bg-background/20 px-0 py-1 ${
+                rowWarn ? 'ring-1 ring-warning/25' : ''
               }`}
             >
-              <div className="grid min-w-[34rem] grid-cols-[1.35fr_repeat(4,minmax(4.6rem,1fr))] gap-x-1.5 gap-y-1.5 px-2">
+              <div className="grid min-w-[42rem] grid-cols-[9rem_repeat(4,minmax(7rem,1fr))] gap-x-1 gap-y-1 px-0.5">
                 <button
                   type="button"
                   onClick={() => onOpenDetail(p.id)}
-                  className="row-span-2 min-w-0 rounded-md border border-border/60 bg-surface px-2 py-1.5 text-left"
+                  className="row-span-2 min-w-0 rounded-md bg-surface px-1.5 py-1 text-left"
                 >
-                  <span className="block truncate text-[14px] font-semibold text-textMain underline-offset-2 hover:underline">
+                  <span className="block truncate text-[15px] font-semibold text-textMain underline-offset-2 hover:underline">
                     {p.name}
                   </span>
-                  <span className="mt-1 block truncate text-[11px] tabular-nums text-textMuted">
+                  <span className="mt-1 block truncate text-[12px] tabular-nums text-textMuted">
                     {p.ticker}
                   </span>
                   <span className="mt-1 flex flex-wrap items-center gap-1">
@@ -664,12 +671,12 @@ function MobileMetricCell({
 }) {
   return (
     <div
-      className="rounded-md border border-border/70 bg-surface px-2 py-1.5"
+      className="rounded-md bg-surface px-1.5 py-1"
       title={title}
     >
       <p className="text-[11px] text-textMuted">{label}</p>
       <p
-        className={`mt-0.5 text-[13px] font-semibold tabular-nums ${
+        className={`mt-0.5 whitespace-nowrap text-[13px] font-semibold tabular-nums ${
           emph === 'pos'
             ? 'text-positive'
             : emph === 'neg'

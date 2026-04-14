@@ -7,6 +7,7 @@ import { defaultCurrencyForMarket } from '../lib/market';
 import { formatMoney } from '../lib/format';
 import { roundMoney } from '../lib/portfolioMath';
 import { lookupKrStockName, searchKrStocksByName } from '../lib/krxLookup';
+import { ExpandableText } from './ExpandableText';
 
 interface MarketTodoListProps {
   market: Market;
@@ -761,11 +762,14 @@ function TodoMobileCell({
   return (
     <div className="rounded-md border border-border/70 bg-surface px-3 py-2">
       <p className="text-[11px] text-textMuted">{label}</p>
-      <p
-        className={`mt-1 text-[13px] ${preserveWhitespace ? 'whitespace-pre-wrap' : 'truncate'} text-textMain`}
-      >
-        {value}
-      </p>
+      <ExpandableText
+        text={value}
+        maxChars={30}
+        preserveWhitespace={preserveWhitespace}
+        className="mt-1"
+        textClassName={`text-[13px] ${preserveWhitespace ? 'whitespace-pre-wrap' : 'truncate'} text-textMain`}
+        buttonClassName="text-[10px]"
+      />
     </div>
   );
 }

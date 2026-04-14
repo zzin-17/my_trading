@@ -16,6 +16,7 @@ import {
 } from '../lib/portfolioMath';
 import { todayIsoLocal } from '../lib/tradePendingExpiry';
 import type { Trade } from '../types/trade';
+import { ExpandableText } from './ExpandableText';
 
 interface TradeJournalProps {
   trades: Trade[];
@@ -1082,11 +1083,14 @@ function JournalMobileCell({
   return (
     <div className="rounded-md border border-border/70 bg-surface px-3 py-2">
       <p className="text-[11px] text-textMuted">{label}</p>
-      <p
-        className={`mt-1 text-[13px] ${preserveWhitespace ? 'whitespace-pre-wrap' : 'truncate'} text-textMain`}
-      >
-        {value}
-      </p>
+      <ExpandableText
+        text={value}
+        maxChars={30}
+        preserveWhitespace={preserveWhitespace}
+        className="mt-1"
+        textClassName={`text-[13px] ${preserveWhitespace ? 'whitespace-pre-wrap' : 'truncate'} text-textMain`}
+        buttonClassName="text-[10px]"
+      />
     </div>
   );
 }
