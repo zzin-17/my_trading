@@ -64,6 +64,26 @@ export function PositionDetailModal({
     setEditAvg(String(position.avg_price));
   }, [position?.id, position?.quantity, position?.avg_price]);
 
+  useEffect(() => {
+    if (!position) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.body.style.overflow = prev;
+      document.removeEventListener('keydown', esc);
+    };
+  }, [position, onClose]);
+
+  const sortedTodos = useMemo(
+    () =>
+      [...todos].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [todos],
+  );
+
   if (!position || !metric) return null;
 
   const krBoard =
@@ -71,11 +91,6 @@ export function PositionDetailModal({
 
   const journalTrades = trades.filter((t) => !t.excludeFromJournal);
   const ledgerJournalTrades = journalTrades.filter(tradeAppliesToLedger);
-  const sortedTodos = useMemo(
-    () =>
-      [...todos].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [todos],
-  );
 
   const retPct =
     metric.cost_basis > 0 ? (metric.pnl / metric.cost_basis) * 100 : 0;
