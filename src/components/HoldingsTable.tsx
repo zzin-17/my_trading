@@ -278,122 +278,198 @@ export function HoldingsTable({
         </div>
       </div>
 
-      <div className="mt-4 space-y-3 md:hidden">
+      <div className="mt-4 md:hidden">
         {sortedRows.length === 0 && q ? (
           <div className="rounded-md border border-border/60 px-4 py-10 text-center text-[13px] text-textMuted">
             조건에 맞는 종목이 없습니다. 필터를 바꿔 보세요.
           </div>
         ) : null}
 
-        {sortedRows.map(({ p, m }) => {
-          const ret =
-            m.cost_basis > 0
-              ? roundPercent((m.pnl / m.cost_basis) * 100)
-              : 0;
-          const rowWarn = isConcentrationRisk(m.weight_pct);
-          const dayOpen = krDayOpenByTicker[p.ticker];
-          const openAttention = isKrOpenAttention(
-            p.market,
-            p.ticker,
-            p.current_price,
-            dayOpen,
-          );
-          const openTip =
-            dayOpen !== undefined &&
-            dayOpen > 0 &&
-            p.market === 'KR' &&
-            /^\d{6}$/.test(p.ticker.replace(/\s/g, ''))
-              ? `당일 시가 ${formatMoney(dayOpen, p.currency)} · 시가 대비 ${krOpenDeviationPct(p.current_price, dayOpen).toFixed(2)}% (±${KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 주목 표시)`
-              : undefined;
-          const board = krBoardDisplayLabel(
-            p.market,
-            p.market === 'KR' ? krBoardByTicker.get(p.ticker) : undefined,
-          );
-          const pendingTodoCount = pendingTodoCountByPositionId[p.id] ?? 0;
-          const availableQty = availableQuantityByPositionId[p.id] ?? p.quantity;
-
-          return (
-            <section
-              key={p.id}
-              className={`overflow-x-auto rounded-lg bg-background/20 px-0 py-1 ${
-                rowWarn ? 'ring-1 ring-warning/25' : ''
-              }`}
-            >
-              <div className="grid min-w-[42rem] grid-cols-[9rem_repeat(4,minmax(7rem,1fr))] gap-x-1 gap-y-1 px-0.5">
-                <button
-                  type="button"
-                  onClick={() => onOpenDetail(p.id)}
-                  className="row-span-2 min-w-0 rounded-md bg-surface px-1.5 py-1 text-left"
-                >
-                  <span className="block truncate text-[15px] font-semibold text-textMain underline-offset-2 hover:underline">
-                    {p.name}
-                  </span>
-                  <span className="mt-1 block truncate text-[12px] tabular-nums text-textMuted">
-                    {p.ticker}
-                  </span>
-                  <span className="mt-1 flex flex-wrap items-center gap-1">
-                    <span
-                      className={`inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-[9px] font-semibold ${krBoardBadgeClass(
-                        p.market === 'KR' ? krBoardByTicker.get(p.ticker) : undefined,
-                      )}`}
-                    >
-                      {board}
-                    </span>
-                    {pendingTodoCount > 0 ? (
-                      <span
-                        className="inline-flex min-w-[1.15rem] items-center justify-center rounded-full bg-accent/25 px-1 py-0.5 text-[9px] font-semibold tabular-nums text-accent"
-                        title="미완료 To-do"
-                      >
-                        {pendingTodoCount}
-                      </span>
-                    ) : null}
-                  </span>
-                </button>
-
-                <MobileMetricCell
+        {sortedRows.length > 0 ? (
+          <div className="max-h-[min(58vh,34rem)] overflow-auto rounded-lg border border-border/50 bg-background/10">
+            <div className="min-w-[42rem]">
+              <div className="sticky top-0 z-10 grid grid-cols-[9rem_repeat(4,minmax(7rem,1fr))] bg-surface/95 shadow-sm backdrop-blur">
+                <HoldingHeaderCell
+                  label="종목"
+                  columnKey="name"
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSort={handleSortHeader}
+                  rowSpanTwo
+                />
+                <HoldingHeaderCell
                   label="매입가"
-                  value={formatMoney(p.avg_price, p.currency)}
+                  columnKey="avg_price"
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSort={handleSortHeader}
+                  borderLeft
                 />
-                <MobileMetricCell
+                <HoldingHeaderCell
                   label="보유수량"
-                  value={`${p.quantity}`}
+                  columnKey="quantity"
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSort={handleSortHeader}
+                  borderLeft
                 />
-                <MobileMetricCell
+                <HoldingHeaderCell
                   label="평가손익"
-                  value={formatMoney(m.pnl, p.currency)}
-                  emph={m.pnl >= 0 ? 'pos' : 'neg'}
+                  columnKey="pnl"
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSort={handleSortHeader}
+                  borderLeft
                 />
-                <MobileMetricCell
+                <HoldingHeaderCell
                   label="매입금액"
-                  value={formatMoney(m.cost_basis, p.currency)}
+                  borderLeft
                 />
-
-                <MobileMetricCell
+                <HoldingHeaderCell
                   label="현재가"
-                  value={formatMoney(p.current_price, p.currency)}
-                  emph={openAttention ? 'warn' : undefined}
-                  title={openTip}
+                  columnKey="current_price"
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSort={handleSortHeader}
+                  borderTop
+                  borderLeft
                 />
-                <MobileMetricCell
+                <HoldingHeaderCell
                   label="가능수량"
-                  value={`${availableQty}`}
+                  borderTop
+                  borderLeft
                 />
-                <MobileMetricCell
+                <HoldingHeaderCell
                   label="수익률"
-                  value={formatPercent(ret, true)}
-                  emph={ret >= 0 ? 'pos' : 'neg'}
+                  columnKey="return_pct"
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSort={handleSortHeader}
+                  borderTop
+                  borderLeft
                 />
-                <MobileMetricCell
+                <HoldingHeaderCell
                   label="평가금액"
-                  value={formatMoney(m.market_value, p.currency)}
+                  columnKey="market_value"
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSort={handleSortHeader}
+                  borderTop
+                  borderLeft
                 />
               </div>
-            </section>
-          );
-        })}
+
+              {sortedRows.map(({ p, m }) => {
+                const ret =
+                  m.cost_basis > 0
+                    ? roundPercent((m.pnl / m.cost_basis) * 100)
+                    : 0;
+                const rowWarn = isConcentrationRisk(m.weight_pct);
+                const dayOpen = krDayOpenByTicker[p.ticker];
+                const openAttention = isKrOpenAttention(
+                  p.market,
+                  p.ticker,
+                  p.current_price,
+                  dayOpen,
+                );
+                const openTip =
+                  dayOpen !== undefined &&
+                  dayOpen > 0 &&
+                  p.market === 'KR' &&
+                  /^\d{6}$/.test(p.ticker.replace(/\s/g, ''))
+                    ? `당일 시가 ${formatMoney(dayOpen, p.currency)} · 시가 대비 ${krOpenDeviationPct(p.current_price, dayOpen).toFixed(2)}% (±${KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 주목 표시)`
+                    : undefined;
+                const board = krBoardDisplayLabel(
+                  p.market,
+                  p.market === 'KR' ? krBoardByTicker.get(p.ticker) : undefined,
+                );
+                const pendingTodoCount = pendingTodoCountByPositionId[p.id] ?? 0;
+                const availableQty = availableQuantityByPositionId[p.id] ?? p.quantity;
+
+                return (
+                  <section
+                    key={p.id}
+                    className={`grid grid-cols-[9rem_repeat(4,minmax(7rem,1fr))] border-t border-border/40 ${
+                      rowWarn ? 'bg-warning/5' : ''
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onOpenDetail(p.id)}
+                      className="row-span-2 min-w-0 px-2 py-2 text-left"
+                    >
+                      <span className="block truncate text-[14px] font-semibold text-textMain underline-offset-2 hover:underline">
+                        {p.name}
+                      </span>
+                      <span className="mt-1 block truncate text-[12px] tabular-nums text-textMuted">
+                        {p.ticker}
+                      </span>
+                      <span className="mt-1 flex flex-wrap items-center gap-1">
+                        <span
+                          className={`inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-[9px] font-semibold ${krBoardBadgeClass(
+                            p.market === 'KR' ? krBoardByTicker.get(p.ticker) : undefined,
+                          )}`}
+                        >
+                          {board}
+                        </span>
+                        {pendingTodoCount > 0 ? (
+                          <span
+                            className="inline-flex min-w-[1.15rem] items-center justify-center rounded-full bg-accent/25 px-1 py-0.5 text-[9px] font-semibold tabular-nums text-accent"
+                            title="미완료 To-do"
+                          >
+                            {pendingTodoCount}
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
+
+                    <HoldingValueCell
+                      value={formatMoney(p.avg_price, p.currency)}
+                      borderLeft
+                    />
+                    <HoldingValueCell value={`${p.quantity}`} borderLeft />
+                    <HoldingValueCell
+                      value={formatMoney(m.pnl, p.currency)}
+                      emph={m.pnl >= 0 ? 'pos' : 'neg'}
+                      borderLeft
+                    />
+                    <HoldingValueCell
+                      value={formatMoney(m.cost_basis, p.currency)}
+                      borderLeft
+                    />
+
+                    <HoldingValueCell
+                      value={formatMoney(p.current_price, p.currency)}
+                      emph={openAttention ? 'warn' : undefined}
+                      title={openTip}
+                      borderTop
+                      borderLeft
+                    />
+                    <HoldingValueCell
+                      value={`${availableQty}`}
+                      borderTop
+                      borderLeft
+                    />
+                    <HoldingValueCell
+                      value={formatPercent(ret, true)}
+                      emph={ret >= 0 ? 'pos' : 'neg'}
+                      borderTop
+                      borderLeft
+                    />
+                    <HoldingValueCell
+                      value={formatMoney(m.market_value, p.currency)}
+                      borderTop
+                      borderLeft
+                    />
+                  </section>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
 
         {sortedRows.length > 0 ? (
-          <section className="rounded-lg border border-border bg-surface p-3">
+          <section className="mt-3 rounded-lg border border-border bg-surface p-3">
             <p className="text-[12px] font-medium text-textMain">전체 합계</p>
             <p className="mt-0.5 text-[11px] text-textMuted">
               전체 {sortedRows.length}개 종목
@@ -677,6 +753,99 @@ function MobileMetricCell({
       <p className="text-[11px] text-textMuted">{label}</p>
       <p
         className={`mt-0.5 whitespace-nowrap text-[13px] font-semibold tabular-nums ${
+          emph === 'pos'
+            ? 'text-positive'
+            : emph === 'neg'
+              ? 'text-negative'
+              : emph === 'warn'
+                ? 'text-warning'
+                : 'text-textMain'
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function HoldingHeaderCell({
+  label,
+  columnKey,
+  sortKey,
+  sortDir,
+  onSort,
+  rowSpanTwo = false,
+  borderLeft = false,
+  borderTop = false,
+}: {
+  label: string;
+  columnKey?: HoldingSortKey;
+  sortKey?: HoldingSortKey;
+  sortDir?: SortDir;
+  onSort?: (k: HoldingSortKey) => void;
+  rowSpanTwo?: boolean;
+  borderLeft?: boolean;
+  borderTop?: boolean;
+}) {
+  const active = !!columnKey && sortKey === columnKey;
+  const baseClass = `px-2 py-2 text-[11px] font-medium text-textMuted ${
+    rowSpanTwo ? 'row-span-2' : ''
+  } ${borderLeft ? 'border-l border-border/50' : ''} ${
+    borderTop ? 'border-t border-border/50' : ''
+  }`;
+
+  if (!columnKey || !onSort || !sortKey || !sortDir) {
+    return <div className={baseClass}>{label}</div>;
+  }
+
+  const sortTitle = active
+    ? sortDir === 'asc'
+      ? '오름차순 · 다시 클릭하면 내림차순'
+      : '내림차순 · 다시 클릭하면 오름차순'
+    : '클릭하여 오름차순 정렬';
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(columnKey)}
+      title={sortTitle}
+      className={`${baseClass} inline-flex min-w-0 items-center gap-1 text-left transition hover:bg-white/5 hover:text-textMain`}
+    >
+      <span className="truncate">{label}</span>
+      <span
+        className={`shrink-0 text-[10px] tabular-nums ${
+          active ? 'text-accent' : 'text-textMuted/35'
+        }`}
+        aria-hidden
+      >
+        {active ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+      </span>
+    </button>
+  );
+}
+
+function HoldingValueCell({
+  value,
+  emph,
+  title,
+  borderLeft = false,
+  borderTop = false,
+}: {
+  value: string;
+  emph?: 'pos' | 'neg' | 'warn';
+  title?: string;
+  borderLeft?: boolean;
+  borderTop?: boolean;
+}) {
+  return (
+    <div
+      className={`px-2 py-2 ${borderLeft ? 'border-l border-border/50' : ''} ${
+        borderTop ? 'border-t border-border/50' : ''
+      }`}
+      title={title}
+    >
+      <p
+        className={`whitespace-nowrap text-[13px] font-semibold tabular-nums ${
           emph === 'pos'
             ? 'text-positive'
             : emph === 'neg'
