@@ -873,7 +873,96 @@ function JournalTradesTable({
   emptyLabel: string;
 }) {
   return (
-    <div className="mt-4 overflow-x-auto">
+    <div className="mt-4">
+      <div className="space-y-3 md:hidden">
+        {trades.length === 0 ? (
+          <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
+            {emptyLabel}
+          </div>
+        ) : (
+          trades.map((tr) => {
+            const amt = roundMoney(tr.quantity * tr.price, tr.currency);
+            const sell = tr.side === 'sell';
+            const pending = !tradeAppliesToLedger(tr);
+            return (
+              <div
+                key={tr.id}
+                className={`rounded-lg border border-border/70 p-3 ${
+                  pending ? 'opacity-90' : ''
+                } ${sell ? 'bg-negative/5' : 'bg-positive/5'}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-textMain">
+                      {tr.name}
+                    </p>
+                    <p className="mt-0.5 text-[12px] text-textMuted">
+                      {tr.ticker} · {tr.date}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p
+                      className={`text-[13px] font-semibold ${
+                        sell ? 'text-negative' : 'text-positive'
+                      }`}
+                    >
+                      {sell ? '매도' : '매수'}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-textMuted">
+                      {pending ? '미체결' : '체결'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <JournalMobileCell label="수량" value={`${tr.quantity}`} />
+                  <JournalMobileCell
+                    label="단가"
+                    value={formatMoney(tr.price, tr.currency)}
+                  />
+                  <JournalMobileCell
+                    label="거래금액"
+                    value={formatMoney(amt, tr.currency)}
+                  />
+                  <JournalMobileCell
+                    label="비고"
+                    value={tr.note ?? '—'}
+                    preserveWhitespace={false}
+                  />
+                </div>
+
+                <div className="mt-3 flex flex-wrap justify-end gap-1.5">
+                  {pending ? (
+                    <button
+                      type="button"
+                      onClick={() => onMarkTradeFilled(tr.id)}
+                      className="rounded border border-border px-2 py-1 text-[11px] font-medium text-textMain hover:bg-white/5"
+                    >
+                      체결 처리
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => onEditTrade(tr)}
+                    className="rounded border border-border px-2 py-1 text-[11px] font-medium text-textMain hover:bg-white/5"
+                  >
+                    수정
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteTrade(tr)}
+                    className="rounded border border-negative/40 px-2 py-1 text-[11px] font-medium text-negative hover:bg-negative/10"
+                  >
+                    삭제
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
       <table className="w-full min-w-[960px] border-collapse text-left text-[12px]">
         <thead>
           <tr className="border-b border-border text-textMuted">
@@ -976,6 +1065,28 @@ function JournalTradesTable({
           )}
         </tbody>
       </table>
+      </div>
+    </div>
+  );
+}
+
+function JournalMobileCell({
+  label,
+  value,
+  preserveWhitespace = false,
+}: {
+  label: string;
+  value: string;
+  preserveWhitespace?: boolean;
+}) {
+  return (
+    <div className="rounded-md border border-border/70 bg-surface px-3 py-2">
+      <p className="text-[11px] text-textMuted">{label}</p>
+      <p
+        className={`mt-1 text-[13px] ${preserveWhitespace ? 'whitespace-pre-wrap' : 'truncate'} text-textMain`}
+      >
+        {value}
+      </p>
     </div>
   );
 }

@@ -268,7 +268,154 @@ export function HoldingsTable({
         </div>
       </div>
 
-      <div className="mt-4 max-h-[min(65vh,720px)] overflow-auto rounded-md border border-border/60">
+      <div className="mt-4 space-y-3 md:hidden">
+        {sortedRows.length === 0 && q ? (
+          <div className="rounded-md border border-border/60 px-4 py-10 text-center text-[13px] text-textMuted">
+            조건에 맞는 종목이 없습니다. 필터를 바꿔 보세요.
+          </div>
+        ) : null}
+
+        {sortedRows.map(({ p, m }) => {
+          const ret =
+            m.cost_basis > 0
+              ? roundPercent((m.pnl / m.cost_basis) * 100)
+              : 0;
+          const rowWarn = isConcentrationRisk(m.weight_pct);
+          const dayOpen = krDayOpenByTicker[p.ticker];
+          const openAttention = isKrOpenAttention(
+            p.market,
+            p.ticker,
+            p.current_price,
+            dayOpen,
+          );
+          const openTip =
+            dayOpen !== undefined &&
+            dayOpen > 0 &&
+            p.market === 'KR' &&
+            /^\d{6}$/.test(p.ticker.replace(/\s/g, ''))
+              ? `당일 시가 ${formatMoney(dayOpen, p.currency)} · 시가 대비 ${krOpenDeviationPct(p.current_price, dayOpen).toFixed(2)}% (±${KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 주목 표시)`
+              : undefined;
+          const board = krBoardDisplayLabel(
+            p.market,
+            p.market === 'KR' ? krBoardByTicker.get(p.ticker) : undefined,
+          );
+          const pendingTodoCount = pendingTodoCountByPositionId[p.id] ?? 0;
+
+          return (
+            <section
+              key={p.id}
+              className={`rounded-lg border border-border/70 bg-background/40 p-3 ${
+                rowWarn ? 'ring-1 ring-warning/35' : ''
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span
+                      className={`inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-semibold ${krBoardBadgeClass(
+                        p.market === 'KR' ? krBoardByTicker.get(p.ticker) : undefined,
+                      )}`}
+                    >
+                      {board}
+                    </span>
+                    {pendingTodoCount > 0 ? (
+                      <span
+                        className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent/25 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-accent"
+                        title="미완료 To-do"
+                      >
+                        {pendingTodoCount}
+                      </span>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onOpenDetail(p.id)}
+                    className="mt-2 block text-left"
+                  >
+                    <span className="block text-[15px] font-semibold text-textMain underline-offset-2 hover:underline">
+                      {p.name}
+                    </span>
+                    <span className="mt-0.5 block text-[12px] tabular-nums text-textMuted">
+                      {p.ticker}
+                    </span>
+                  </button>
+                </div>
+                <div className="text-right">
+                  <p className={`text-[18px] font-semibold tabular-nums ${krPnLClass(m.pnl)}`}>
+                    {formatMoney(m.pnl, p.currency)}
+                  </p>
+                  <p className={`mt-0.5 text-[13px] tabular-nums ${krPnLClass(ret)}`}>
+                    {formatPercent(ret, true)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <MobileMetricCell
+                  label="현재가"
+                  value={formatMoney(p.current_price, p.currency)}
+                  emph={openAttention ? 'warn' : undefined}
+                  title={openTip}
+                />
+                <MobileMetricCell
+                  label="평단"
+                  value={formatMoney(p.avg_price, p.currency)}
+                />
+                <MobileMetricCell
+                  label="보유수량"
+                  value={`${p.quantity}`}
+                />
+                <MobileMetricCell
+                  label="평가금액"
+                  value={formatMoney(m.market_value, p.currency)}
+                />
+                <MobileMetricCell
+                  label="비중"
+                  value={`${m.weight_pct.toFixed(2)}%`}
+                  emph={rowWarn ? 'warn' : undefined}
+                />
+                <MobileMetricCell
+                  label="통화"
+                  value={p.currency}
+                />
+              </div>
+            </section>
+          );
+        })}
+
+        {sortedRows.length > 0 ? (
+          <section className="rounded-lg border border-border bg-surface p-3">
+            <p className="text-[12px] font-medium text-textMain">전체 합계</p>
+            <p className="mt-0.5 text-[11px] text-textMuted">
+              전체 {sortedRows.length}개 종목
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <MobileMetricCell
+                label="평가금액"
+                value={formatMoney(summary.total_market_value, summary.currency)}
+              />
+              <MobileMetricCell
+                label="예상손익"
+                value={formatMoney(summary.total_pnl, summary.currency)}
+                emph={summary.total_pnl >= 0 ? 'pos' : 'neg'}
+              />
+              <MobileMetricCell
+                label="예상수익률"
+                value={formatPercent(summary.total_return_pct, true)}
+                emph={summary.total_return_pct >= 0 ? 'pos' : 'neg'}
+              />
+              <MobileMetricCell
+                label="비중 합"
+                value={`${roundPercent(
+                  metrics.reduce((s, m) => s + m.weight_pct, 0),
+                ).toFixed(2)}%`}
+              />
+            </div>
+          </section>
+        ) : null}
+      </div>
+
+      <div className="mt-4 hidden max-h-[min(65vh,720px)] overflow-auto rounded-md border border-border/60 md:block">
         <table className="w-full min-w-[880px] border-collapse text-left text-[12px]">
           <thead className="sticky top-0 z-10 border-b border-border bg-surface shadow-sm">
             <tr>
@@ -498,6 +645,40 @@ export function HoldingsTable({
           </tfoot>
         </table>
       </div>
+    </div>
+  );
+}
+
+function MobileMetricCell({
+  label,
+  value,
+  emph,
+  title,
+}: {
+  label: string;
+  value: string;
+  emph?: 'pos' | 'neg' | 'warn';
+  title?: string;
+}) {
+  return (
+    <div
+      className="rounded-md border border-border/70 bg-surface px-3 py-2"
+      title={title}
+    >
+      <p className="text-[11px] text-textMuted">{label}</p>
+      <p
+        className={`mt-1 text-[14px] font-semibold tabular-nums ${
+          emph === 'pos'
+            ? 'text-positive'
+            : emph === 'neg'
+              ? 'text-negative'
+              : emph === 'warn'
+                ? 'text-warning'
+                : 'text-textMain'
+        }`}
+      >
+        {value}
+      </p>
     </div>
   );
 }

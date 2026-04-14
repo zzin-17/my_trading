@@ -210,7 +210,63 @@ export function RealizedPnlPanel({
       </div>
 
       {!drill ? (
-        <div className="mt-4 overflow-x-auto">
+        <>
+        <div className="mt-4 space-y-3 md:hidden">
+          {periodRows.length === 0 ? (
+            <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
+              해당 기간에 실현된 매도가 없습니다.
+            </div>
+          ) : (
+            periodRows.map((row) => (
+              <button
+                key={`${row.period}\t${row.currency}`}
+                type="button"
+                onClick={() =>
+                  setDrill({ period: row.period, currency: row.currency })
+                }
+                className="w-full rounded-lg border border-border bg-background/40 p-3 text-left"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-textMain">
+                      {formatPeriodLabel(row.period, granularity)}
+                    </p>
+                    <p className="mt-0.5 text-[12px] tabular-nums text-textMuted">
+                      {row.currency}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p
+                      className={`text-base font-semibold tabular-nums ${pnlToneClass(
+                        row.netTotal,
+                        row.currency,
+                      )}`}
+                    >
+                      {formatSignedMoney(row.netTotal, row.currency)}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-textMuted">
+                      총 실현손익
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <RealizedMobileCell
+                    label="실현수익"
+                    value={formatSignedMoney(row.positiveTotal, row.currency)}
+                    tone={pnlToneClass(row.positiveTotal, row.currency)}
+                  />
+                  <RealizedMobileCell
+                    label="실현손실"
+                    value={formatSignedMoney(row.negativeTotal, row.currency)}
+                    tone={pnlToneClass(row.negativeTotal, row.currency)}
+                  />
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+
+        <div className="mt-4 hidden overflow-x-auto md:block">
           <table className="w-full min-w-[760px] border-collapse text-left text-[12px]">
             <thead>
               <tr className="border-b border-border text-textMuted">
@@ -287,6 +343,7 @@ export function RealizedPnlPanel({
             </tbody>
           </table>
         </div>
+        </>
       ) : (
         <div className="mt-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -301,7 +358,65 @@ export function RealizedPnlPanel({
               {formatPeriodLabel(drill.period, granularity)} · {drill.currency}
             </span>
           </div>
-          <div className="mt-3 overflow-x-auto">
+          <div className="mt-3 space-y-3 md:hidden">
+            {tickerRows.length === 0 ? (
+              <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
+                내역이 없습니다.
+              </div>
+            ) : (
+              tickerRows.map((r) => (
+                <div
+                  key={r.ticker}
+                  className="rounded-lg border border-border bg-background/40 p-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-textMain">
+                        {r.name}
+                      </p>
+                      <p className="mt-0.5 text-[12px] text-textMuted">{r.ticker}</p>
+                    </div>
+                    <div className="text-right">
+                      <p
+                        className={`text-base font-semibold tabular-nums ${pnlToneClass(
+                          r.netPnl,
+                          r.currency,
+                        )}`}
+                      >
+                        {formatMoney(r.netPnl, r.currency)}
+                      </p>
+                      <p
+                        className={`mt-0.5 text-[12px] tabular-nums ${pnlToneClass(
+                          r.returnPct,
+                          r.currency,
+                        )}`}
+                      >
+                        {formatPercent(r.returnPct, true)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <RealizedMobileCell label="매도수량" value={`${r.quantitySold}`} />
+                    <RealizedMobileCell
+                      label="매입가(평단)"
+                      value={formatMoney(r.avgBuyPrice, r.currency)}
+                    />
+                    <RealizedMobileCell
+                      label="매도체결가"
+                      value={formatMoney(r.avgSellPrice, r.currency)}
+                    />
+                    <RealizedMobileCell
+                      label="수익률"
+                      value={formatPercent(r.returnPct, true)}
+                      tone={pnlToneClass(r.returnPct, r.currency)}
+                    />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="mt-3 hidden overflow-x-auto md:block">
             <table className="w-full min-w-[880px] border-collapse text-left text-[12px]">
               <thead>
                 <tr className="border-b border-border text-textMuted">
@@ -380,6 +495,25 @@ export function RealizedPnlPanel({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function RealizedMobileCell({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+}) {
+  return (
+    <div className="rounded-md border border-border/70 bg-surface px-3 py-2">
+      <p className="text-[11px] text-textMuted">{label}</p>
+      <p className={`mt-1 text-[13px] font-semibold tabular-nums ${tone ?? 'text-textMain'}`}>
+        {value}
+      </p>
     </div>
   );
 }

@@ -420,7 +420,102 @@ export function MarketTodoList({
         />
       </div>
 
-      <div className="mt-4 overflow-x-auto">
+      <div className="mt-4 space-y-3 md:hidden">
+        {filteredSorted.length === 0 ? (
+          <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
+            {sorted.length === 0
+              ? '등록된 계획이 없습니다.'
+              : '검색 조건에 맞는 계획이 없습니다.'}
+          </div>
+        ) : (
+          filteredSorted.map((x) => {
+            const displayName = resolveTodoDisplayName(x, market, ledger, trades);
+            const sell = x.action === 'sell';
+            return (
+              <section
+                key={x.id}
+                className={`rounded-lg border border-border/70 p-3 ${
+                  x.done ? 'opacity-60' : ''
+                } ${sell ? 'bg-negative/5' : 'bg-positive/5'}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(x)}
+                      className="block max-w-full text-left"
+                    >
+                      <span className="block truncate text-sm font-medium text-textMain underline-offset-2 hover:underline">
+                        {displayName}
+                      </span>
+                      <span className="mt-0.5 block text-[12px] text-textMuted">
+                        {x.ticker} · {todoListDateLabel(x.createdAt)}
+                      </span>
+                    </button>
+                  </div>
+                  <div className="text-right">
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                        sell ? 'text-negative' : 'text-positive'
+                      }`}
+                    >
+                      {sell ? '매도' : '매수'}
+                    </span>
+                    <div className="mt-1">
+                      {x.done ? (
+                        <span className="text-[11px] text-textMuted">완료</span>
+                      ) : (
+                        <StatusBadge status={getTodoStatus(x, quotes)} />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <TodoMobileCell
+                    label="목표가"
+                    value={formatMoney(x.targetPrice, currency)}
+                  />
+                  <TodoMobileCell label="수량" value={`${x.quantity}주`} />
+                  <TodoMobileCell
+                    label="비고"
+                    value={x.note ?? '—'}
+                    preserveWhitespace={false}
+                  />
+                </div>
+
+                <div className="mt-3 flex flex-wrap justify-end gap-1.5">
+                  {onOpenHoldingDetail ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpenHoldingDetail(x.ticker, market)}
+                      className="rounded border border-accent/40 px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent/10"
+                    >
+                      보유 상세
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => onToggleDone(x.id)}
+                    className="rounded border border-border px-2 py-1 text-[11px] text-textMain hover:bg-white/5"
+                  >
+                    {x.done ? '미완료' : '완료'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDelete(x.id)}
+                    className="rounded border border-negative/40 px-2 py-1 text-[11px] text-negative hover:bg-negative/10"
+                  >
+                    삭제
+                  </button>
+                </div>
+              </section>
+            );
+          })
+        )}
+      </div>
+
+      <div className="mt-4 hidden overflow-x-auto md:block">
         <table className="w-full min-w-[720px] border-collapse text-left text-[12px]">
           <thead>
             <tr className="border-b border-border text-textMuted">
@@ -650,6 +745,27 @@ export function MarketTodoList({
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function TodoMobileCell({
+  label,
+  value,
+  preserveWhitespace = false,
+}: {
+  label: string;
+  value: string;
+  preserveWhitespace?: boolean;
+}) {
+  return (
+    <div className="rounded-md border border-border/70 bg-surface px-3 py-2">
+      <p className="text-[11px] text-textMuted">{label}</p>
+      <p
+        className={`mt-1 text-[13px] ${preserveWhitespace ? 'whitespace-pre-wrap' : 'truncate'} text-textMain`}
+      >
+        {value}
+      </p>
     </div>
   );
 }
