@@ -308,15 +308,15 @@ export function HoldingsTable({
           return (
             <section
               key={p.id}
-              className={`rounded-lg border border-border/70 bg-background/40 p-3 ${
+              className={`overflow-x-auto rounded-lg border border-border/70 bg-background/40 px-0 py-2 ${
                 rowWarn ? 'ring-1 ring-warning/35' : ''
               }`}
             >
-              <div className="grid grid-cols-[1.45fr_repeat(4,minmax(0,1fr))] gap-x-2 gap-y-1.5">
+              <div className="grid min-w-[34rem] grid-cols-[1.35fr_repeat(4,minmax(4.6rem,1fr))] gap-x-1.5 gap-y-1.5 px-2">
                 <button
                   type="button"
                   onClick={() => onOpenDetail(p.id)}
-                  className="row-span-2 min-w-0 rounded-md border border-border/60 bg-surface px-2.5 py-2 text-left"
+                  className="row-span-2 min-w-0 rounded-md border border-border/60 bg-surface px-2 py-1.5 text-left"
                 >
                   <span className="block truncate text-[14px] font-semibold text-textMain underline-offset-2 hover:underline">
                     {p.name}
@@ -664,12 +664,12 @@ function MobileMetricCell({
 }) {
   return (
     <div
-      className="rounded-md border border-border/70 bg-surface px-3 py-2"
+      className="rounded-md border border-border/70 bg-surface px-2 py-1.5"
       title={title}
     >
       <p className="text-[11px] text-textMuted">{label}</p>
       <p
-        className={`mt-1 text-[14px] font-semibold tabular-nums ${
+        className={`mt-0.5 text-[13px] font-semibold tabular-nums ${
           emph === 'pos'
             ? 'text-positive'
             : emph === 'neg'
