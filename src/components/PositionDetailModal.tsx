@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { Position, PositionMetrics } from '../types/portfolio';
 import type { Trade } from '../types/trade';
 import type { TradePlanTodo } from '../types/todo';
@@ -71,6 +71,11 @@ export function PositionDetailModal({
 
   const journalTrades = trades.filter((t) => !t.excludeFromJournal);
   const ledgerJournalTrades = journalTrades.filter(tradeAppliesToLedger);
+  const sortedTodos = useMemo(
+    () =>
+      [...todos].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [todos],
+  );
 
   const retPct =
     metric.cost_basis > 0 ? (metric.pnl / metric.cost_basis) * 100 : 0;
@@ -336,30 +341,47 @@ export function PositionDetailModal({
                 className="rounded border border-border bg-background px-2 py-1.5 text-xs text-textMain outline-none focus:border-accent md:col-span-4"
               />
             </form>
-            <ul className="mt-2 max-h-48 space-y-1 overflow-auto text-[12px]">
-              {todos.length === 0 ? (
+            <ul className="mt-2 max-h-56 space-y-2 overflow-auto text-[12px]">
+              {sortedTodos.length === 0 ? (
                 <li className="text-textMuted">등록된 계획 없음</li>
               ) : (
-                todos.map((x) => (
-                  <li key={x.id} className="flex items-center justify-between gap-2">
-                    <span className="min-w-0 text-textMain">
-                      <span className="font-medium">{position.ticker}</span>
-                      {(x.name ?? position.name) ? (
-                        <span className="text-textMuted">
-                          {' '}
-                          · {x.name ?? position.name}
+                sortedTodos.map((x) => (
+                  <li
+                    key={x.id}
+                    className="rounded border border-border/70 bg-background/50 px-3 py-2"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="min-w-0 text-textMain">
+                        <span className="font-medium">{position.ticker}</span>
+                        {(x.name ?? position.name) ? (
+                          <span className="text-textMuted">
+                            {' '}
+                            · {x.name ?? position.name}
+                          </span>
+                        ) : null}
+                        <span className="mt-0.5 block">
+                          {x.action === 'buy' ? '매수' : '매도'} {x.quantity}주
                         </span>
-                      ) : null}
-                      <span className="block">
-                        {x.action === 'buy' ? '매수' : '매도'} {x.quantity}주
                       </span>
-                    </span>
-                    <span className="tabular-nums text-textMain">
-                      {formatMoney(x.targetPrice, position.currency)}
-                    </span>
-                    <span className={x.done ? 'text-textMuted' : 'text-warning'}>
-                      {x.done ? '완료' : '진행'}
-                    </span>
+                      <div className="shrink-0 text-right">
+                        <span className="block tabular-nums text-textMain">
+                          {formatMoney(x.targetPrice, position.currency)}
+                        </span>
+                        <span className={x.done ? 'text-textMuted' : 'text-warning'}>
+                          {x.done ? '완료' : '진행'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-textMuted">
+                      <span className="tabular-nums">
+                        {x.createdAt.slice(0, 10)}
+                      </span>
+                    </div>
+                    {x.note?.trim() ? (
+                      <p className="mt-1 whitespace-pre-wrap text-[12px] text-textMain">
+                        {x.note}
+                      </p>
+                    ) : null}
                   </li>
                 ))
               )}
