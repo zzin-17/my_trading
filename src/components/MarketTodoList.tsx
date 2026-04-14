@@ -235,9 +235,9 @@ export function MarketTodoList({
         </p>
       </div>
 
-      <form className="space-y-3" onSubmit={(e) => void handleAddSubmit(e)}>
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
-          <div className="relative md:col-span-2">
+      <form className="space-y-2.5" onSubmit={(e) => void handleAddSubmit(e)}>
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
+          <div className="relative md:col-span-3">
             <input
               placeholder={
                 market === 'KR' ? '종목코드(6자리) 또는 종목명 검색' : '티커 (예: AAPL)'
@@ -293,10 +293,10 @@ export function MarketTodoList({
           <select
             value={action}
             onChange={(e) => setAction(e.target.value as PlanAction)}
-            className="rounded-md border border-border bg-background px-2 py-2 text-sm text-textMain outline-none focus:border-accent"
+            className="rounded-md border border-border bg-background px-2 py-2 text-sm text-textMain outline-none focus:border-accent md:col-span-2"
           >
-            <option value="buy">매수 계획</option>
-            <option value="sell">매도 계획</option>
+            <option value="buy">매수</option>
+            <option value="sell">매도</option>
           </select>
           <input
             type="number"
@@ -305,7 +305,7 @@ export function MarketTodoList({
             placeholder={`목표가 (${currency})`}
             value={targetPrice}
             onChange={(e) => setTargetPrice(e.target.value)}
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+            className="rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent md:col-span-2"
           />
           <input
             type="number"
@@ -314,22 +314,22 @@ export function MarketTodoList({
             placeholder="수량"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+            className="rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent md:col-span-1"
           />
           <input
             placeholder="메모(선택)"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent md:col-span-2"
+            className="rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent md:col-span-3"
           />
+          <button
+            type="submit"
+            disabled={addSubmitting}
+            className="rounded-md bg-accent px-2.5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60 md:col-span-1"
+          >
+            {addSubmitting ? '추가 중…' : '추가'}
+          </button>
         </div>
-        <button
-          type="submit"
-          disabled={addSubmitting}
-          className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60 md:w-auto"
-        >
-          {addSubmitting ? '추가 중…' : '계획 추가'}
-        </button>
       </form>
 
       <div className="mt-4">
@@ -393,7 +393,7 @@ export function MarketTodoList({
                           sell ? 'text-negative' : 'text-positive'
                         }`}
                       >
-                        {sell ? '매도 계획' : '매수 계획'}
+                        {sell ? '매도' : '매수'}
                       </span>
                     </td>
                     <td className="py-2 pr-3 text-right tabular-nums text-textMain">
