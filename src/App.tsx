@@ -1551,6 +1551,8 @@ export default function App() {
             market={marketTab}
             items={visibleTodos}
             quotes={quotes}
+            ledger={ledger}
+            trades={trades}
             onAdd={(payload) =>
               setTodos((prev) => [
                 ...prev,

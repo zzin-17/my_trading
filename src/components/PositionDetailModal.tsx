@@ -286,6 +286,7 @@ export function PositionDetailModal({
                 onAddTodo({
                   market: position.market,
                   ticker: position.ticker,
+                  name: position.name,
                   action: todoAction,
                   targetPrice: roundMoney(p, position.currency),
                   quantity: Math.floor(q),
@@ -341,8 +342,17 @@ export function PositionDetailModal({
               ) : (
                 todos.map((x) => (
                   <li key={x.id} className="flex items-center justify-between gap-2">
-                    <span className="text-textMain">
-                      {x.action === 'buy' ? '매수' : '매도'} {x.quantity}주
+                    <span className="min-w-0 text-textMain">
+                      <span className="font-medium">{position.ticker}</span>
+                      {(x.name ?? position.name) ? (
+                        <span className="text-textMuted">
+                          {' '}
+                          · {x.name ?? position.name}
+                        </span>
+                      ) : null}
+                      <span className="block">
+                        {x.action === 'buy' ? '매수' : '매도'} {x.quantity}주
+                      </span>
                     </span>
                     <span className="tabular-nums text-textMain">
                       {formatMoney(x.targetPrice, position.currency)}
