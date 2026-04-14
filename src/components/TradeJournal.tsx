@@ -696,9 +696,10 @@ export function TradeJournal({
           }}
           onDeleteTrade={(t) => {
             const deleted = onDeleteTrade(t);
-            if (!deleted) return;
+            if (!deleted) return false;
             setSearchModalOpen(false);
             setSearchModalQuery('');
+            return true;
           }}
           onMarkTradeFilled={onMarkTradeFilled}
         />
