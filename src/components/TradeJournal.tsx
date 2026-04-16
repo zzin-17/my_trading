@@ -326,9 +326,9 @@ export function TradeJournal({
   );
 
   const tradeNetPnlById = useMemo(() => {
-    const events = computeRealizedSellEvents(journalTrades, krSellCommissionRate);
+    const events = computeRealizedSellEvents(trades, krSellCommissionRate);
     return new Map(events.map((e) => [e.tradeId, e.netPnl]));
-  }, [journalTrades, krSellCommissionRate]);
+  }, [trades, krSellCommissionRate]);
 
   const runJournalSearch = useCallback(() => {
     const raw = journalSearchText.trim();
