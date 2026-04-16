@@ -14,6 +14,7 @@ import {
   roundMoney,
   roundPercent,
 } from '../lib/portfolioMath';
+import { computeRealizedSellEvents } from '../lib/realizedPnl';
 import { todayIsoLocal } from '../lib/tradePendingExpiry';
 import type { Trade } from '../types/trade';
 import { ExpandableText } from './ExpandableText';
@@ -324,6 +325,11 @@ export function TradeJournal({
     [matchingSearchTrades],
   );
 
+  const tradeNetPnlById = useMemo(() => {
+    const events = computeRealizedSellEvents(journalTrades, krSellCommissionRate);
+    return new Map(events.map((e) => [e.tradeId, e.netPnl]));
+  }, [journalTrades, krSellCommissionRate]);
+
   const runJournalSearch = useCallback(() => {
     const raw = journalSearchText.trim();
     if (!raw) {
@@ -446,6 +452,7 @@ export function TradeJournal({
           <FilledSummaryLine summary={todayFilledSummary} />
           <JournalTradesTable
             trades={todayTrades}
+            tradeNetPnlById={tradeNetPnlById}
             onEditTrade={onEditTrade}
             onDeleteTrade={onDeleteTrade}
             onMarkTradeFilled={onMarkTradeFilled}
@@ -504,6 +511,7 @@ export function TradeJournal({
                   ) : null}
                   <JournalTradesTable
                     trades={pastSortedDesc}
+                    tradeNetPnlById={tradeNetPnlById}
                     onEditTrade={onEditTrade}
                     onDeleteTrade={onDeleteTrade}
                     onMarkTradeFilled={onMarkTradeFilled}
@@ -532,6 +540,7 @@ export function TradeJournal({
                         />
                         <JournalTradesTable
                           trades={group}
+                          tradeNetPnlById={tradeNetPnlById}
                           onEditTrade={onEditTrade}
                           onDeleteTrade={onDeleteTrade}
                           onMarkTradeFilled={onMarkTradeFilled}
@@ -640,6 +649,7 @@ export function TradeJournal({
                       ) : null}
                       <JournalTradesTable
                         trades={tradesOnSelectedCalendarDay}
+                        tradeNetPnlById={tradeNetPnlById}
                         onEditTrade={onEditTrade}
                         onDeleteTrade={onDeleteTrade}
                         onMarkTradeFilled={onMarkTradeFilled}
@@ -665,6 +675,7 @@ export function TradeJournal({
                   <div className="mt-3">
                     <JournalTradesTable
                       trades={futureTrades}
+                      tradeNetPnlById={tradeNetPnlById}
                       onEditTrade={onEditTrade}
                       onDeleteTrade={onDeleteTrade}
                       onMarkTradeFilled={onMarkTradeFilled}
@@ -686,6 +697,7 @@ export function TradeJournal({
           filledSummary={searchModalFilledSummary}
           stats={searchModalStats}
           summaryRow={searchModalLedgerRow}
+          tradeNetPnlById={tradeNetPnlById}
           onClose={() => {
             setSearchModalOpen(false);
             setSearchModalQuery('');
@@ -727,6 +739,7 @@ function JournalSearchResultsModal({
   filledSummary,
   stats,
   summaryRow,
+  tradeNetPnlById,
   onClose,
   onEditTrade,
   onDeleteTrade,
@@ -738,6 +751,7 @@ function JournalSearchResultsModal({
   filledSummary: FilledDaySummary;
   stats: SearchModalStatsRow | null;
   summaryRow: LedgerRow | undefined;
+  tradeNetPnlById: Map<string, number>;
   onClose: () => void;
   onEditTrade: (trade: Trade) => void;
   onDeleteTrade: (trade: Trade) => boolean;
@@ -850,6 +864,7 @@ function JournalSearchResultsModal({
 
         <JournalTradesTable
           trades={trades}
+          tradeNetPnlById={tradeNetPnlById}
           onEditTrade={onEditTrade}
           onDeleteTrade={onDeleteTrade}
           onMarkTradeFilled={onMarkTradeFilled}
@@ -862,12 +877,14 @@ function JournalSearchResultsModal({
 
 function JournalTradesTable({
   trades,
+  tradeNetPnlById,
   onEditTrade,
   onDeleteTrade,
   onMarkTradeFilled,
   emptyLabel,
 }: {
   trades: Trade[];
+  tradeNetPnlById: Map<string, number>;
   onEditTrade: (trade: Trade) => void;
   onDeleteTrade: (trade: Trade) => boolean;
   onMarkTradeFilled: (id: string) => void;
@@ -885,6 +902,8 @@ function JournalTradesTable({
             const amt = roundMoney(tr.quantity * tr.price, tr.currency);
             const sell = tr.side === 'sell';
             const pending = !tradeAppliesToLedger(tr);
+            const tradeNetPnl =
+              !pending && sell ? tradeNetPnlById.get(tr.id) ?? null : null;
             return (
               <div
                 key={tr.id}
@@ -926,9 +945,21 @@ function JournalTradesTable({
                     value={formatMoney(amt, tr.currency)}
                   />
                   <JournalMobileCell
-                    label="비고"
-                    value={tr.note ?? '—'}
-                    preserveWhitespace={false}
+                    label="매매손익"
+                    value={
+                      tradeNetPnl === null
+                        ? '—'
+                        : formatMoney(tradeNetPnl, tr.currency)
+                    }
+                    tone={
+                      tradeNetPnl === null
+                        ? undefined
+                        : tradeNetPnl > 0
+                          ? 'pos'
+                          : tradeNetPnl < 0
+                            ? 'neg'
+                            : undefined
+                    }
                   />
                 </div>
 
@@ -975,7 +1006,7 @@ function JournalTradesTable({
             <th className="py-2 pr-3 text-right font-medium tabular-nums">수량</th>
             <th className="py-2 pr-3 text-right font-medium tabular-nums">단가</th>
             <th className="py-2 pr-3 text-right font-medium tabular-nums">거래금액</th>
-            <th className="py-2 pr-3 font-medium">비고</th>
+            <th className="py-2 pr-3 text-right font-medium tabular-nums">매매손익</th>
             <th className="py-2 pr-2 text-right font-medium">동작</th>
           </tr>
         </thead>
@@ -991,6 +1022,8 @@ function JournalTradesTable({
               const amt = roundMoney(tr.quantity * tr.price, tr.currency);
               const sell = tr.side === 'sell';
               const pending = !tradeAppliesToLedger(tr);
+              const tradeNetPnl =
+                !pending && sell ? tradeNetPnlById.get(tr.id) ?? null : null;
               return (
                 <tr
                   key={tr.id}
@@ -1039,8 +1072,18 @@ function JournalTradesTable({
                   <td className="py-2 pr-3 text-right tabular-nums text-textMain">
                     {formatMoney(amt, tr.currency)}
                   </td>
-                  <td className="max-w-[200px] truncate py-2 pr-2 text-textMuted">
-                    {tr.note ?? '—'}
+                  <td
+                    className={`py-2 pr-2 text-right tabular-nums ${
+                      tradeNetPnl === null
+                        ? 'text-textMuted'
+                        : tradeNetPnl > 0
+                          ? 'text-red-400'
+                          : tradeNetPnl < 0
+                            ? 'text-blue-400'
+                            : 'text-textMain'
+                    }`}
+                  >
+                    {tradeNetPnl === null ? '—' : formatMoney(tradeNetPnl, tr.currency)}
                   </td>
                   <td className="py-2 pr-2 text-right">
                     <div className="flex flex-wrap justify-end gap-1">
@@ -1075,10 +1118,12 @@ function JournalMobileCell({
   label,
   value,
   preserveWhitespace = false,
+  tone,
 }: {
   label: string;
   value: string;
   preserveWhitespace?: boolean;
+  tone?: 'pos' | 'neg';
 }) {
   return (
     <div className="rounded-md border border-border/70 bg-surface px-3 py-2">
@@ -1088,7 +1133,15 @@ function JournalMobileCell({
         maxChars={30}
         preserveWhitespace={preserveWhitespace}
         className="mt-1"
-        textClassName={`text-[13px] ${preserveWhitespace ? 'whitespace-pre-wrap' : 'truncate'} text-textMain`}
+        textClassName={`text-[13px] ${
+          preserveWhitespace ? 'whitespace-pre-wrap' : 'truncate'
+        } ${
+          tone === 'pos'
+            ? 'text-red-400'
+            : tone === 'neg'
+              ? 'text-blue-400'
+              : 'text-textMain'
+        }`}
         buttonClassName="text-[10px]"
       />
     </div>
