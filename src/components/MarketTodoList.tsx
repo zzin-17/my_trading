@@ -454,17 +454,19 @@ export function MarketTodoList({
                       </span>
                     </button>
                   </div>
-                  <div className="text-right">
+                  <div className="flex shrink-0 flex-col items-end gap-1 text-right">
                     <span
-                      className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                      className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[11px] font-semibold leading-none ${
                         sell ? 'text-negative' : 'text-positive'
                       }`}
                     >
                       {sell ? '매도' : '매수'}
                     </span>
-                    <div className="mt-1">
+                    <div className="inline-flex items-center justify-end">
                       {x.done ? (
-                        <span className="text-[11px] text-textMuted">완료</span>
+                        <span className="rounded bg-border px-1.5 py-0.5 text-[11px] font-medium leading-none text-textMuted">
+                          완료
+                        </span>
                       ) : (
                         <StatusBadge status={getTodoStatus(x, quotes)} />
                       )}
@@ -776,15 +778,21 @@ function getTodoStatus(todo: TradePlanTodo, quotes: Record<string, number>): 're
 function StatusBadge({ status }: { status: 'reached' | 'near' | 'waiting' }) {
   if (status === 'reached') {
     return (
-      <span className="rounded bg-positive/20 px-1.5 py-0.5 font-medium text-positive">도달</span>
+      <span className="inline-flex items-center justify-center rounded bg-positive/20 px-1.5 py-0.5 text-[11px] font-medium leading-none text-positive">
+        도달
+      </span>
     );
   }
   if (status === 'near') {
     return (
-      <span className="rounded bg-warning/20 px-1.5 py-0.5 font-medium text-warning">근접(2%)</span>
+      <span className="inline-flex items-center justify-center rounded bg-warning/20 px-1.5 py-0.5 text-[11px] font-medium leading-none text-warning">
+        근접(2%)
+      </span>
     );
   }
   return (
-    <span className="rounded bg-border px-1.5 py-0.5 font-medium text-textMuted">대기</span>
+    <span className="inline-flex items-center justify-center rounded bg-border px-1.5 py-0.5 text-[11px] font-medium leading-none text-textMuted">
+      대기
+    </span>
   );
 }
