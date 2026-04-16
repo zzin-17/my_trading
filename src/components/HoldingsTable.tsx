@@ -304,8 +304,8 @@ export function HoldingsTable({
                       : '내림차순 · 다시 클릭하면 오름차순'
                     : '클릭하여 오름차순 정렬'
                 }
-                className="flex shrink-0 items-center justify-between gap-1 border-r border-border/60 bg-surface px-2 py-2 text-left text-[11px] font-medium text-textMuted"
-                style={{ width: mobileNameColWidth, height: '84px' }}
+                className="flex shrink-0 items-center justify-between gap-1 border-r border-border/60 bg-surface px-2 py-1.5 text-left text-[11px] font-medium text-textMuted"
+                style={{ width: mobileNameColWidth, height: '72px' }}
               >
                 <span className="truncate">종목</span>
                 <span
@@ -323,7 +323,7 @@ export function HoldingsTable({
                   style={{
                     minWidth: mobileMetricColsWidth,
                     gridTemplateColumns: mobileMetricGridTemplate,
-                    gridTemplateRows: 'repeat(2, 42px)',
+                    gridTemplateRows: 'repeat(2, 36px)',
                     transform: `translateX(-${mobileScrollLeft}px)`,
                   }}
                 >
@@ -431,12 +431,12 @@ export function HoldingsTable({
                     <button
                       type="button"
                       onClick={() => onOpenDetail(p.id)}
-                      className="sticky left-0 z-[11] row-span-2 min-w-0 overflow-hidden border-r border-border/60 bg-surface px-2 py-2 text-left shadow-[8px_0_12px_-10px_rgba(0,0,0,0.45)]"
+                      className="sticky left-0 z-[11] row-span-2 min-w-0 overflow-hidden border-r border-border/60 bg-surface px-2 py-1.5 text-left shadow-[8px_0_12px_-10px_rgba(0,0,0,0.45)]"
                     >
-                      <span className="block line-clamp-2 text-[13px] font-semibold leading-snug text-textMain underline-offset-2 hover:underline">
+                      <span className="block line-clamp-2 text-[12px] font-semibold leading-snug text-textMain underline-offset-2 hover:underline">
                         {p.name}
                       </span>
-                      <span className="mt-1 flex flex-wrap items-center gap-1">
+                      <span className="mt-0.5 flex flex-wrap items-center gap-0.5">
                         <span
                           className={`inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-[9px] font-semibold ${krBoardBadgeClass(
                             p.market === 'KR' ? krBoardByTicker.get(p.ticker) : undefined,
@@ -753,7 +753,7 @@ function HoldingHeaderCell({
   borderTop?: boolean;
 }) {
   const active = !!columnKey && sortKey === columnKey;
-  const baseClass = `flex h-[42px] items-center px-1.5 py-2 text-[10px] font-medium text-textMuted ${
+  const baseClass = `flex h-[36px] items-center px-1.5 py-1.5 text-[10px] font-medium text-textMuted ${
     borderLeft ? 'border-l border-border/50' : ''
   } ${
     borderTop ? 'border-t border-border/50' : ''
@@ -804,7 +804,7 @@ function HoldingValueCell({
 }) {
   return (
     <div
-      className={`px-1.5 py-1.5 text-right ${borderLeft ? 'border-l border-border/50' : ''} ${
+      className={`px-1.5 py-1 text-right ${borderLeft ? 'border-l border-border/50' : ''} ${
         borderTop ? 'border-t border-border/50' : ''
       }`}
       title={title}
