@@ -119,8 +119,10 @@ export function HoldingsTable({
     () => new Map(),
   );
   const mobileNameColWidth = '7.25rem';
-  const mobileMetricColsWidth = '22rem';
-  const mobileTotalMinWidth = '29.25rem';
+  const mobileMetricGridTemplate =
+    'minmax(5.35rem,1.2fr) minmax(4.25rem,0.95fr) minmax(5.35rem,1.2fr) minmax(5.35rem,1.2fr)';
+  const mobileMetricColsWidth = '20.3rem';
+  const mobileTotalMinWidth = '27.55rem';
 
   const handleSortHeader = useCallback((key: HoldingSortKey) => {
     // setSortDir를 setSortKey 업데이트 함수 안에서 호출하면 배치 순서 때문에 토글이 누락될 수 있음
@@ -320,7 +322,7 @@ export function HoldingsTable({
                   className="grid"
                   style={{
                     minWidth: mobileMetricColsWidth,
-                    gridTemplateColumns: 'repeat(4, minmax(5.5rem, 1fr))',
+                    gridTemplateColumns: mobileMetricGridTemplate,
                     transform: `translateX(-${mobileScrollLeft}px)`,
                   }}
                 >
@@ -423,7 +425,7 @@ export function HoldingsTable({
                     className={`grid border-t border-border/40 ${
                       rowWarn ? 'bg-warning/5' : ''
                     }`}
-                    style={{ gridTemplateColumns: '7.25rem repeat(4, minmax(5.5rem, 1fr))' }}
+                    style={{ gridTemplateColumns: `${mobileNameColWidth} ${mobileMetricGridTemplate}` }}
                   >
                     <button
                       type="button"
@@ -801,7 +803,7 @@ function HoldingValueCell({
 }) {
   return (
     <div
-      className={`px-1.5 py-1.5 ${borderLeft ? 'border-l border-border/50' : ''} ${
+      className={`px-1.5 py-1.5 text-right ${borderLeft ? 'border-l border-border/50' : ''} ${
         borderTop ? 'border-t border-border/50' : ''
       }`}
       title={title}
