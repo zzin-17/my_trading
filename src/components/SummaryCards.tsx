@@ -16,7 +16,7 @@ export function SummaryCards({ summary, quoteDisclaimer }: SummaryCardsProps) {
     <div className="space-y-2">
       <div className="rounded-lg border border-border bg-surface md:hidden">
         <div className="px-4 py-3">
-          <p className="text-[13px] font-semibold text-textMain">총 평가손익</p>
+          <p className="text-[13px] font-semibold text-textMain">총평가손익(예상)</p>
           <div className="mt-2 text-right">
             <p
               className={`max-w-full text-[clamp(20px,8vw,32px)] font-bold tabular-nums leading-none ${pnlPositive ? 'text-positive' : 'text-negative'}`}
@@ -38,17 +38,6 @@ export function SummaryCards({ summary, quoteDisclaimer }: SummaryCardsProps) {
           <CompactSummaryCell
             label="총 투자금"
             value={formatMoney(summary.total_cost_basis, currency)}
-            bordered
-          />
-          <CompactSummaryCell
-            label="예상손익"
-            value={formatMoney(summary.total_pnl, currency)}
-            tone={pnlPositive ? 'pos' : 'neg'}
-          />
-          <CompactSummaryCell
-            label="예상수익률"
-            value={formatPercent(summary.total_return_pct, true)}
-            tone={pnlPositive ? 'pos' : 'neg'}
             bordered
           />
         </div>

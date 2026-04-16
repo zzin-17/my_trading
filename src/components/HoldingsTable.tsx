@@ -286,7 +286,7 @@ export function HoldingsTable({
         ) : null}
 
         {sortedRows.length > 0 ? (
-          <div className="max-h-[min(58vh,34rem)] overflow-auto rounded-lg border border-border/50 bg-background/10">
+          <div className="overflow-x-auto rounded-lg border border-border/50 bg-background/10">
             <div className="min-w-[42rem]">
               <div className="sticky top-0 z-10 grid grid-cols-[9rem_repeat(4,minmax(7rem,1fr))] bg-surface/95 shadow-sm backdrop-blur">
                 <HoldingHeaderCell
@@ -397,9 +397,7 @@ export function HoldingsTable({
                     <button
                       type="button"
                       onClick={() => onOpenDetail(p.id)}
-                      className={`sticky left-0 z-[1] row-span-2 min-w-0 border-r border-border/50 px-2 py-2 text-left ${
-                        rowWarn ? 'bg-warning/5' : 'bg-background/10'
-                      }`}
+                      className="sticky left-0 z-[11] row-span-2 min-w-0 overflow-hidden border-r border-border/60 bg-surface px-2 py-2 text-left shadow-[8px_0_12px_-10px_rgba(0,0,0,0.45)]"
                     >
                       <span className="block truncate text-[14px] font-semibold text-textMain underline-offset-2 hover:underline">
                         {p.name}
