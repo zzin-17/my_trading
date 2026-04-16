@@ -435,7 +435,7 @@ export function MarketTodoList({
             return (
               <section
                 key={x.id}
-                className={`rounded-lg border border-border/70 p-3 ${
+                className={`rounded-lg border border-border/70 px-3 py-2.5 ${
                   x.done ? 'opacity-60' : ''
                 } ${sell ? 'bg-negative/5' : 'bg-positive/5'}`}
               >
@@ -446,7 +446,7 @@ export function MarketTodoList({
                       onClick={() => openEditModal(x)}
                       className="block max-w-full text-left"
                     >
-                      <span className="block truncate text-sm font-medium text-textMain underline-offset-2 hover:underline">
+                      <span className="block truncate text-[15px] font-medium text-textMain underline-offset-2 hover:underline">
                         {displayName}
                       </span>
                       <span className="mt-0.5 block text-[12px] text-textMuted">
@@ -472,25 +472,33 @@ export function MarketTodoList({
                   </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <TodoMobileCell
-                    label="목표가"
-                    value={formatMoney(x.targetPrice, currency)}
-                  />
-                  <TodoMobileCell label="수량" value={`${x.quantity}주`} />
-                  <TodoMobileCell
-                    label="비고"
-                    value={x.note ?? '—'}
-                    preserveWhitespace={false}
-                  />
+                <div className="mt-2 grid grid-cols-[auto_1fr_auto_1fr] items-start gap-x-2 gap-y-1 text-[12px]">
+                  <span className="text-textMuted">목표가</span>
+                  <span className="truncate text-right font-semibold tabular-nums text-textMain">
+                    {formatMoney(x.targetPrice, currency)}
+                  </span>
+                  <span className="text-textMuted">수량</span>
+                  <span className="text-right font-semibold tabular-nums text-textMain">
+                    {x.quantity}주
+                  </span>
+                  <span className="self-start text-textMuted">비고</span>
+                  <div className="col-span-3 min-w-0">
+                    <ExpandableText
+                      text={x.note ?? '—'}
+                      maxChars={30}
+                      preserveWhitespace={false}
+                      textClassName="text-[13px] text-textMain"
+                      buttonClassName="text-[10px]"
+                    />
+                  </div>
                 </div>
 
-                <div className="mt-3 flex flex-wrap justify-end gap-1.5">
+                <div className="mt-2.5 flex flex-wrap justify-end gap-1">
                   {onOpenHoldingDetail ? (
                     <button
                       type="button"
                       onClick={() => onOpenHoldingDetail(x.ticker, market)}
-                      className="rounded border border-accent/40 px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent/10"
+                      className="rounded border border-accent/40 px-2 py-1 text-[10px] font-medium text-accent hover:bg-accent/10"
                     >
                       보유 상세
                     </button>
@@ -498,14 +506,14 @@ export function MarketTodoList({
                   <button
                     type="button"
                     onClick={() => onToggleDone(x.id)}
-                    className="rounded border border-border px-2 py-1 text-[11px] text-textMain hover:bg-white/5"
+                    className="rounded border border-border px-2 py-1 text-[10px] text-textMain hover:bg-white/5"
                   >
                     {x.done ? '미완료' : '완료'}
                   </button>
                   <button
                     type="button"
                     onClick={() => onDelete(x.id)}
-                    className="rounded border border-negative/40 px-2 py-1 text-[11px] text-negative hover:bg-negative/10"
+                    className="rounded border border-negative/40 px-2 py-1 text-[10px] text-negative hover:bg-negative/10"
                   >
                     삭제
                   </button>
@@ -746,30 +754,6 @@ export function MarketTodoList({
           </div>
         </div>
       ) : null}
-    </div>
-  );
-}
-
-function TodoMobileCell({
-  label,
-  value,
-  preserveWhitespace = false,
-}: {
-  label: string;
-  value: string;
-  preserveWhitespace?: boolean;
-}) {
-  return (
-    <div className="rounded-md border border-border/70 bg-surface px-3 py-2">
-      <p className="text-[11px] text-textMuted">{label}</p>
-      <ExpandableText
-        text={value}
-        maxChars={30}
-        preserveWhitespace={preserveWhitespace}
-        className="mt-1"
-        textClassName={`text-[13px] ${preserveWhitespace ? 'whitespace-pre-wrap' : 'truncate'} text-textMain`}
-        buttonClassName="text-[10px]"
-      />
     </div>
   );
 }
