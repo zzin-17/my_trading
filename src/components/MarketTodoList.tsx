@@ -425,50 +425,52 @@ export function MarketTodoList({
         </div>
       </form>
 
-      <div className="mt-4">
-        <label className="text-[12px] text-textMuted" htmlFor="todo-list-search">
-          {viewTab === 'open' ? '진행중 목록 검색' : '완료 목록 검색'} (종목코드·종목명)
-        </label>
-        <input
-          id="todo-list-search"
-          value={listSearchText}
-          onChange={(e) => setListSearchText(e.target.value)}
-          placeholder="예: 005930, 삼성…"
-          className="mt-1 w-full max-w-md rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
-        />
-      </div>
+      <div className="mt-4 flex flex-wrap items-end gap-2">
+        <div className="min-w-[14rem] flex-1">
+          <label className="text-[12px] text-textMuted" htmlFor="todo-list-search">
+            {viewTab === 'open' ? '진행중 목록 검색' : '완료 목록 검색'} (종목코드·종목명)
+          </label>
+          <input
+            id="todo-list-search"
+            value={listSearchText}
+            onChange={(e) => setListSearchText(e.target.value)}
+            placeholder="예: 005930, 삼성…"
+            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+          />
+        </div>
 
-      <div
-        className="mt-3 flex flex-wrap gap-1 rounded-md border border-border bg-background p-0.5"
-        role="tablist"
-        aria-label="To-do 보기 구분"
-      >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={viewTab === 'open'}
-          onClick={() => setViewTab('open')}
-          className={`rounded px-3 py-1.5 text-[12px] font-medium transition ${
-            viewTab === 'open'
-              ? 'bg-accent text-white'
-              : 'text-textMuted hover:bg-white/5 hover:text-textMain'
-          }`}
+        <div
+          className="flex shrink-0 flex-wrap gap-1 rounded-md border border-border bg-background p-0.5"
+          role="tablist"
+          aria-label="To-do 보기 구분"
         >
-          진행중 ({openItems.length}건)
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={viewTab === 'done'}
-          onClick={() => setViewTab('done')}
-          className={`rounded px-3 py-1.5 text-[12px] font-medium transition ${
-            viewTab === 'done'
-              ? 'bg-accent text-white'
-              : 'text-textMuted hover:bg-white/5 hover:text-textMain'
-          }`}
-        >
-          완료 ({doneItems.length}건)
-        </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={viewTab === 'open'}
+            onClick={() => setViewTab('open')}
+            className={`rounded px-3 py-1.5 text-[12px] font-medium transition ${
+              viewTab === 'open'
+                ? 'bg-accent text-white'
+                : 'text-textMuted hover:bg-white/5 hover:text-textMain'
+            }`}
+          >
+            진행중 ({openItems.length}건)
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={viewTab === 'done'}
+            onClick={() => setViewTab('done')}
+            className={`rounded px-3 py-1.5 text-[12px] font-medium transition ${
+              viewTab === 'done'
+                ? 'bg-accent text-white'
+                : 'text-textMuted hover:bg-white/5 hover:text-textMain'
+            }`}
+          >
+            완료 ({doneItems.length}건)
+          </button>
+        </div>
       </div>
 
       <div className="mt-4 space-y-3 md:hidden">
