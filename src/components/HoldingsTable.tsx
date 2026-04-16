@@ -323,6 +323,7 @@ export function HoldingsTable({
                   style={{
                     minWidth: mobileMetricColsWidth,
                     gridTemplateColumns: mobileMetricGridTemplate,
+                    gridTemplateRows: 'repeat(2, 42px)',
                     transform: `translateX(-${mobileScrollLeft}px)`,
                   }}
                 >
@@ -752,7 +753,7 @@ function HoldingHeaderCell({
   borderTop?: boolean;
 }) {
   const active = !!columnKey && sortKey === columnKey;
-  const baseClass = `px-1.5 py-2 text-[10px] font-medium text-textMuted ${
+  const baseClass = `flex h-[42px] items-center px-1.5 py-2 text-[10px] font-medium text-textMuted ${
     borderLeft ? 'border-l border-border/50' : ''
   } ${
     borderTop ? 'border-t border-border/50' : ''
