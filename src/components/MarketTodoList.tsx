@@ -26,6 +26,8 @@ interface MarketTodoListProps {
   onOpenHoldingDetail?: (ticker: string, market: Market) => void;
 }
 
+type TodoViewTab = 'open' | 'done';
+
 function normalizeTodoSearchQuery(q: string): string {
   return q.trim().toLowerCase();
 }
@@ -85,6 +87,7 @@ export function MarketTodoList({
   const [quantity, setQuantity] = useState('');
   const [note, setNote] = useState('');
   const [listSearchText, setListSearchText] = useState('');
+  const [viewTab, setViewTab] = useState<TodoViewTab>('open');
   const [krSuggestions, setKrSuggestions] = useState<
     { ticker: string; name: string; sector: string }[]
   >([]);
@@ -103,33 +106,45 @@ export function MarketTodoList({
   const currency = defaultCurrencyForMarket(market);
   const title = market === 'KR' ? '한국장 To-do' : '미국장 To-do';
 
-  const sorted = useMemo(
+  const openItems = useMemo(
     () =>
-      [...items].sort((a, b) => {
-        if (a.done !== b.done) return a.done ? 1 : -1;
-        return a.createdAt.localeCompare(b.createdAt);
-      }),
+      items
+        .filter((x) => !x.done)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
     [items],
   );
 
-  const filteredSorted = useMemo(
-    () => filterTodosBySearch(sorted, listSearchText),
-    [sorted, listSearchText],
+  const doneItems = useMemo(
+    () =>
+      items
+        .filter((x) => x.done)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [items],
   );
 
+  const selectedItems = useMemo(
+    () => (viewTab === 'open' ? openItems : doneItems),
+    [viewTab, openItems, doneItems],
+  );
+
+  const filteredSelected = useMemo(
+    () => filterTodosBySearch(selectedItems, listSearchText),
+    [selectedItems, listSearchText],
+  );
+
+  const totalTodoCount = openItems.length + doneItems.length;
   const statusCounts = useMemo(() => {
     let reached = 0;
     let near = 0;
     let waiting = 0;
-    for (const item of sorted) {
-      if (item.done) continue;
+    for (const item of openItems) {
       const st = getTodoStatus(item, quotes);
       if (st === 'reached') reached += 1;
       else if (st === 'near') near += 1;
       else waiting += 1;
     }
     return { reached, near, waiting };
-  }, [sorted, quotes]);
+  }, [openItems, quotes]);
 
   const editingDisplayName = useMemo(
     () =>
@@ -307,7 +322,9 @@ export function MarketTodoList({
           예) 평단 근처면 3주 매수 / 목표가 도달하면 일부 매도 · 종목은 코드 또는(한국) 종목명 검색
         </p>
         <p className="mt-1 text-[11px] text-textMuted">
-          상태: 도달 {statusCounts.reached} · 근접 {statusCounts.near} · 대기 {statusCounts.waiting}
+          {viewTab === 'open'
+            ? `상태: 도달 ${statusCounts.reached} · 근접 ${statusCounts.near} · 대기 ${statusCounts.waiting}`
+            : `완료된 계획 ${doneItems.length}건 · 전체 ${totalTodoCount}건`}
         </p>
       </div>
 
@@ -410,7 +427,7 @@ export function MarketTodoList({
 
       <div className="mt-4">
         <label className="text-[12px] text-textMuted" htmlFor="todo-list-search">
-          목록 검색 (종목코드·종목명)
+          {viewTab === 'open' ? '진행중 목록 검색' : '완료 목록 검색'} (종목코드·종목명)
         </label>
         <input
           id="todo-list-search"
@@ -421,15 +438,50 @@ export function MarketTodoList({
         />
       </div>
 
+      <div
+        className="mt-3 flex flex-wrap gap-1 rounded-md border border-border bg-background p-0.5"
+        role="tablist"
+        aria-label="To-do 보기 구분"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={viewTab === 'open'}
+          onClick={() => setViewTab('open')}
+          className={`rounded px-3 py-1.5 text-[12px] font-medium transition ${
+            viewTab === 'open'
+              ? 'bg-accent text-white'
+              : 'text-textMuted hover:bg-white/5 hover:text-textMain'
+          }`}
+        >
+          진행중 ({openItems.length}건)
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={viewTab === 'done'}
+          onClick={() => setViewTab('done')}
+          className={`rounded px-3 py-1.5 text-[12px] font-medium transition ${
+            viewTab === 'done'
+              ? 'bg-accent text-white'
+              : 'text-textMuted hover:bg-white/5 hover:text-textMain'
+          }`}
+        >
+          완료 ({doneItems.length}건)
+        </button>
+      </div>
+
       <div className="mt-4 space-y-3 md:hidden">
-        {filteredSorted.length === 0 ? (
+        {filteredSelected.length === 0 ? (
           <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
-            {sorted.length === 0
-              ? '등록된 계획이 없습니다.'
+            {selectedItems.length === 0
+              ? viewTab === 'open'
+                ? '진행중인 계획이 없습니다.'
+                : '완료된 계획이 없습니다.'
               : '검색 조건에 맞는 계획이 없습니다.'}
           </div>
         ) : (
-          filteredSorted.map((x) => {
+          filteredSelected.map((x) => {
             const displayName = resolveTodoDisplayName(x, market, ledger, trades);
             const sell = x.action === 'sell';
             return (
@@ -542,16 +594,18 @@ export function MarketTodoList({
             </tr>
           </thead>
           <tbody>
-            {filteredSorted.length === 0 ? (
+            {filteredSelected.length === 0 ? (
               <tr>
                 <td colSpan={9} className="py-8 text-center text-textMuted">
-                  {sorted.length === 0
-                    ? '등록된 계획이 없습니다.'
+                  {selectedItems.length === 0
+                    ? viewTab === 'open'
+                      ? '진행중인 계획이 없습니다.'
+                      : '완료된 계획이 없습니다.'
                     : '검색 조건에 맞는 계획이 없습니다.'}
                 </td>
               </tr>
             ) : (
-              filteredSorted.map((x) => {
+              filteredSelected.map((x) => {
                 const displayName = resolveTodoDisplayName(x, market, ledger, trades);
                 const sell = x.action === 'sell';
                 return (
