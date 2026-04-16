@@ -114,9 +114,13 @@ export function HoldingsTable({
 }: HoldingsTableProps) {
   const [sortKey, setSortKey] = useState<HoldingSortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [mobileScrollLeft, setMobileScrollLeft] = useState(0);
   const [krBoardByTicker, setKrBoardByTicker] = useState<Map<string, string>>(
     () => new Map(),
   );
+  const mobileNameColWidth = '7.25rem';
+  const mobileMetricColsWidth = '22rem';
+  const mobileTotalMinWidth = '29.25rem';
 
   const handleSortHeader = useCallback((key: HoldingSortKey) => {
     // setSortDir를 setSortKey 업데이트 함수 안에서 호출하면 배치 순서 때문에 토글이 누락될 수 있음
@@ -286,81 +290,107 @@ export function HoldingsTable({
         ) : null}
 
         {sortedRows.length > 0 ? (
-          <div className="overflow-x-auto rounded-lg border border-border/50 bg-background/10">
-            <div className="min-w-[42rem]">
-              <div className="sticky top-0 z-10 grid grid-cols-[9rem_repeat(4,minmax(7rem,1fr))] bg-surface/95 shadow-sm backdrop-blur">
-                <HoldingHeaderCell
-                  label="종목"
-                  columnKey="name"
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={handleSortHeader}
-                  rowSpanTwo
-                  stickyLeft
-                />
-                <HoldingHeaderCell
-                  label="매입가"
-                  columnKey="avg_price"
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={handleSortHeader}
-                  borderLeft
-                />
-                <HoldingHeaderCell
-                  label="보유수량"
-                  columnKey="quantity"
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={handleSortHeader}
-                  borderLeft
-                />
-                <HoldingHeaderCell
-                  label="평가손익"
-                  columnKey="pnl"
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={handleSortHeader}
-                  borderLeft
-                />
-                <HoldingHeaderCell
-                  label="매입금액"
-                  borderLeft
-                />
-                <HoldingHeaderCell
-                  label="현재가"
-                  columnKey="current_price"
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={handleSortHeader}
-                  borderTop
-                  borderLeft
-                />
-                <HoldingHeaderCell
-                  label="가능수량"
-                  borderTop
-                  borderLeft
-                />
-                <HoldingHeaderCell
-                  label="수익률"
-                  columnKey="return_pct"
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={handleSortHeader}
-                  borderTop
-                  borderLeft
-                />
-                <HoldingHeaderCell
-                  label="평가금액"
-                  columnKey="market_value"
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={handleSortHeader}
-                  borderTop
-                  borderLeft
-                />
+          <div className="rounded-lg border border-border/50 bg-background/10">
+            <div className="sticky top-0 z-20 flex overflow-hidden rounded-t-lg border-b border-border/60 bg-surface/95 shadow-sm backdrop-blur">
+              <button
+                type="button"
+                onClick={() => handleSortHeader('name')}
+                title={
+                  sortKey === 'name'
+                    ? sortDir === 'asc'
+                      ? '오름차순 · 다시 클릭하면 내림차순'
+                      : '내림차순 · 다시 클릭하면 오름차순'
+                    : '클릭하여 오름차순 정렬'
+                }
+                className="flex shrink-0 items-center justify-between gap-1 border-r border-border/60 bg-surface px-2 py-2 text-left text-[11px] font-medium text-textMuted"
+                style={{ width: mobileNameColWidth, height: '84px' }}
+              >
+                <span className="truncate">종목</span>
+                <span
+                  className={`shrink-0 text-[10px] tabular-nums ${
+                    sortKey === 'name' ? 'text-accent' : 'text-textMuted/35'
+                  }`}
+                  aria-hidden
+                >
+                  {sortKey === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+                </span>
+              </button>
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <div
+                  className="grid"
+                  style={{
+                    minWidth: mobileMetricColsWidth,
+                    gridTemplateColumns: 'repeat(4, minmax(5.5rem, 1fr))',
+                    transform: `translateX(-${mobileScrollLeft}px)`,
+                  }}
+                >
+                  <HoldingHeaderCell
+                    label="매입가"
+                    columnKey="avg_price"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={handleSortHeader}
+                  />
+                  <HoldingHeaderCell
+                    label="보유수량"
+                    columnKey="quantity"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={handleSortHeader}
+                    borderLeft
+                  />
+                  <HoldingHeaderCell
+                    label="평가손익"
+                    columnKey="pnl"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={handleSortHeader}
+                    borderLeft
+                  />
+                  <HoldingHeaderCell
+                    label="매입금액"
+                    borderLeft
+                  />
+                  <HoldingHeaderCell
+                    label="현재가"
+                    columnKey="current_price"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={handleSortHeader}
+                    borderTop
+                  />
+                  <HoldingHeaderCell
+                    label="가능수량"
+                    borderTop
+                    borderLeft
+                  />
+                  <HoldingHeaderCell
+                    label="수익률"
+                    columnKey="return_pct"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={handleSortHeader}
+                    borderTop
+                    borderLeft
+                  />
+                  <HoldingHeaderCell
+                    label="평가금액"
+                    columnKey="market_value"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={handleSortHeader}
+                    borderTop
+                    borderLeft
+                  />
+                </div>
               </div>
-
-              {sortedRows.map(({ p, m }) => {
+            </div>
+            <div
+              className="overflow-x-auto"
+              onScroll={(e) => setMobileScrollLeft(e.currentTarget.scrollLeft)}
+            >
+              <div style={{ minWidth: mobileTotalMinWidth }}>
+                {sortedRows.map(({ p, m }) => {
                 const ret =
                   m.cost_basis > 0
                     ? roundPercent((m.pnl / m.cost_basis) * 100)
@@ -390,20 +420,18 @@ export function HoldingsTable({
                 return (
                   <section
                     key={p.id}
-                    className={`grid grid-cols-[9rem_repeat(4,minmax(7rem,1fr))] border-t border-border/40 ${
+                    className={`grid border-t border-border/40 ${
                       rowWarn ? 'bg-warning/5' : ''
                     }`}
+                    style={{ gridTemplateColumns: '7.25rem repeat(4, minmax(5.5rem, 1fr))' }}
                   >
                     <button
                       type="button"
                       onClick={() => onOpenDetail(p.id)}
                       className="sticky left-0 z-[11] row-span-2 min-w-0 overflow-hidden border-r border-border/60 bg-surface px-2 py-2 text-left shadow-[8px_0_12px_-10px_rgba(0,0,0,0.45)]"
                     >
-                      <span className="block truncate text-[14px] font-semibold text-textMain underline-offset-2 hover:underline">
+                      <span className="block line-clamp-2 text-[13px] font-semibold leading-snug text-textMain underline-offset-2 hover:underline">
                         {p.name}
-                      </span>
-                      <span className="mt-1 block truncate text-[12px] tabular-nums text-textMuted">
-                        {p.ticker}
                       </span>
                       <span className="mt-1 flex flex-wrap items-center gap-1">
                         <span
@@ -426,7 +454,6 @@ export function HoldingsTable({
 
                     <HoldingValueCell
                       value={formatMoney(p.avg_price, p.currency)}
-                      borderLeft
                     />
                     <HoldingValueCell value={`${p.quantity}`} borderLeft />
                     <HoldingValueCell
@@ -444,7 +471,6 @@ export function HoldingsTable({
                       emph={openAttention ? 'warn' : undefined}
                       title={openTip}
                       borderTop
-                      borderLeft
                     />
                     <HoldingValueCell
                       value={`${availableQty}`}
@@ -464,7 +490,8 @@ export function HoldingsTable({
                     />
                   </section>
                 );
-              })}
+                })}
+              </div>
             </div>
           </div>
         ) : null}
@@ -711,27 +738,22 @@ function HoldingHeaderCell({
   sortKey,
   sortDir,
   onSort,
-  rowSpanTwo = false,
   borderLeft = false,
   borderTop = false,
-  stickyLeft = false,
 }: {
   label: string;
   columnKey?: HoldingSortKey;
   sortKey?: HoldingSortKey;
   sortDir?: SortDir;
   onSort?: (k: HoldingSortKey) => void;
-  rowSpanTwo?: boolean;
   borderLeft?: boolean;
   borderTop?: boolean;
-  stickyLeft?: boolean;
 }) {
   const active = !!columnKey && sortKey === columnKey;
-  const baseClass = `px-2 py-2 text-[11px] font-medium text-textMuted ${
-    rowSpanTwo ? 'row-span-2' : ''
-  } ${borderLeft ? 'border-l border-border/50' : ''} ${
+  const baseClass = `px-1.5 py-2 text-[10px] font-medium text-textMuted ${
+    borderLeft ? 'border-l border-border/50' : ''
+  } ${
     borderTop ? 'border-t border-border/50' : ''
-  } ${stickyLeft ? 'sticky left-0 z-20 border-r border-border/60 bg-surface/95 shadow-[6px_0_12px_-10px_rgba(0,0,0,0.55)]' : ''
   }`;
 
   if (!columnKey || !onSort || !sortKey || !sortDir) {
@@ -779,13 +801,13 @@ function HoldingValueCell({
 }) {
   return (
     <div
-      className={`px-2 py-2 ${borderLeft ? 'border-l border-border/50' : ''} ${
+      className={`px-1.5 py-1.5 ${borderLeft ? 'border-l border-border/50' : ''} ${
         borderTop ? 'border-t border-border/50' : ''
       }`}
       title={title}
     >
       <p
-        className={`whitespace-nowrap text-[13px] font-semibold tabular-nums ${
+        className={`whitespace-nowrap text-[12px] font-semibold tabular-nums ${
           emph === 'pos'
             ? 'text-positive'
             : emph === 'neg'
