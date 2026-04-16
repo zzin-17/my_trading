@@ -812,9 +812,9 @@ function HoldingValueCell({
       <p
         className={`whitespace-nowrap text-[12px] font-semibold tabular-nums ${
           emph === 'pos'
-            ? 'text-positive'
+            ? 'text-red-400'
             : emph === 'neg'
-              ? 'text-negative'
+              ? 'text-blue-400'
               : emph === 'warn'
                 ? 'text-warning'
                 : 'text-textMain'
