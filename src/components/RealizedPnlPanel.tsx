@@ -358,61 +358,85 @@ export function RealizedPnlPanel({
               {formatPeriodLabel(drill.period, granularity)} · {drill.currency}
             </span>
           </div>
-          <div className="mt-3 space-y-3 md:hidden">
+          <div className="mt-3 md:hidden">
             {tickerRows.length === 0 ? (
               <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
                 내역이 없습니다.
               </div>
             ) : (
-              tickerRows.map((r) => (
-                <div
-                  key={r.ticker}
-                  className="rounded-lg border border-border bg-background/40 p-3"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-textMain">
-                        {r.name}
-                      </p>
-                      <p className="mt-0.5 text-[12px] text-textMuted">{r.ticker}</p>
+              <div className="overflow-x-auto rounded-lg border border-border/70 bg-background/10">
+                <div style={{ minWidth: '34rem' }}>
+                  <div
+                    className="sticky top-0 z-10 grid border-b border-border/60 bg-surface/95 text-[10px] font-medium text-textMuted shadow-sm backdrop-blur"
+                    style={{
+                      gridTemplateColumns:
+                        '8.5rem 3.5rem 5.5rem 4.5rem 5.25rem 5.25rem',
+                    }}
+                  >
+                    <div className="sticky left-0 z-20 border-r border-border/60 bg-surface px-2 py-2">
+                      종목
                     </div>
-                    <div className="text-right">
-                      <p
-                        className={`text-base font-semibold tabular-nums ${pnlToneClass(
+                    <div className="border-l border-border/50 px-1.5 py-2 text-right">
+                      매도수량
+                    </div>
+                    <div className="border-l border-border/50 px-1.5 py-2 text-right">
+                      실현손익
+                    </div>
+                    <div className="border-l border-border/50 px-1.5 py-2 text-right">
+                      수익률
+                    </div>
+                    <div className="border-l border-border/50 px-1.5 py-2 text-right">
+                      매입가
+                    </div>
+                    <div className="border-l border-border/50 px-1.5 py-2 text-right">
+                      매도가
+                    </div>
+                  </div>
+
+                  {tickerRows.map((r) => (
+                    <div
+                      key={r.ticker}
+                      className="grid border-t border-border/40 text-[11px]"
+                      style={{
+                        gridTemplateColumns:
+                          '8.5rem 3.5rem 5.5rem 4.5rem 5.25rem 5.25rem',
+                      }}
+                    >
+                      <div className="sticky left-0 z-[11] border-r border-border/60 bg-surface px-2 py-2 shadow-[8px_0_12px_-10px_rgba(0,0,0,0.45)]">
+                        <p className="line-clamp-2 text-[12px] font-semibold leading-snug text-textMain">
+                          {r.name}
+                        </p>
+                        <p className="mt-0.5 text-[10px] text-textMuted">{r.ticker}</p>
+                      </div>
+                      <div className="border-l border-border/50 px-1.5 py-2 text-right tabular-nums text-textMain">
+                        {r.quantitySold}
+                      </div>
+                      <div
+                        className={`border-l border-border/50 px-1.5 py-2 text-right tabular-nums font-semibold ${pnlToneClass(
                           r.netPnl,
                           r.currency,
                         )}`}
                       >
                         {formatMoney(r.netPnl, r.currency)}
-                      </p>
-                      <p
-                        className={`mt-0.5 text-[12px] tabular-nums ${pnlToneClass(
+                      </div>
+                      <div
+                        className={`border-l border-border/50 px-1.5 py-2 text-right tabular-nums ${pnlToneClass(
                           r.returnPct,
                           r.currency,
                         )}`}
                       >
                         {formatPercent(r.returnPct, true)}
-                      </p>
+                      </div>
+                      <div className="border-l border-border/50 px-1.5 py-2 text-right tabular-nums text-textMain">
+                        {formatMoney(r.avgBuyPrice, r.currency)}
+                      </div>
+                      <div className="border-l border-border/50 px-1.5 py-2 text-right tabular-nums text-textMain">
+                        {formatMoney(r.avgSellPrice, r.currency)}
+                      </div>
                     </div>
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <RealizedMobileCell label="매도수량" value={`${r.quantitySold}`} />
-                    <RealizedMobileCell
-                      label="매입가(평단)"
-                      value={formatMoney(r.avgBuyPrice, r.currency)}
-                    />
-                    <RealizedMobileCell
-                      label="매도체결가"
-                      value={formatMoney(r.avgSellPrice, r.currency)}
-                    />
-                    <RealizedMobileCell
-                      label="수익률"
-                      value={formatPercent(r.returnPct, true)}
-                      tone={pnlToneClass(r.returnPct, r.currency)}
-                    />
-                  </div>
+                  ))}
                 </div>
-              ))
+              </div>
             )}
           </div>
 
