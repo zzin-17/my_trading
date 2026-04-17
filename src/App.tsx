@@ -1499,7 +1499,7 @@ export default function App() {
           주세요. 이 기기의 편집은 로컬에만 반영됩니다.
         </div>
       ) : null}
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 pb-32 md:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] sm:px-6">
+      <main className="mx-auto max-w-7xl space-y-6 px-0 py-6 pb-32 md:px-4 md:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] lg:px-6">
         <MarketTabs
           value={marketTab}
           onChange={setMarketTab}
@@ -1689,8 +1689,8 @@ export default function App() {
           </section>
         </div>
       </main>
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/96 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-2 backdrop-blur md:hidden">
-        <div className="mx-auto flex max-w-7xl items-center gap-1 rounded-2xl border border-border/70 bg-surface/72 p-1.5 shadow-[0_-8px_24px_rgba(0,0,0,0.18)]">
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/96 px-0 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-2 backdrop-blur md:hidden">
+        <div className="mx-auto flex max-w-7xl items-center gap-1 border border-border/70 bg-surface/72 p-1.5 shadow-[0_-8px_24px_rgba(0,0,0,0.18)]">
           <MobileBottomTabButton
             label="자산"
             hint="요약·보유"
