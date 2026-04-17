@@ -17,7 +17,6 @@ import {
 import { computeRealizedSellEvents } from '../lib/realizedPnl';
 import { todayIsoLocal } from '../lib/tradePendingExpiry';
 import type { Trade } from '../types/trade';
-import { ExpandableText } from './ExpandableText';
 
 interface TradeJournalProps {
   trades: Trade[];
@@ -890,107 +889,121 @@ function JournalTradesTable({
   onMarkTradeFilled: (id: string) => void;
   emptyLabel: string;
 }) {
+  const mobileGridTemplate =
+    '8.25rem 3.25rem 3.75rem 3.5rem 5.25rem 5.25rem 5.25rem 4.75rem';
+
   return (
     <div className="mt-4">
-      <div className="space-y-3 md:hidden">
+      <div className="md:hidden">
         {trades.length === 0 ? (
           <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
             {emptyLabel}
           </div>
         ) : (
-          trades.map((tr) => {
-            const amt = roundMoney(tr.quantity * tr.price, tr.currency);
-            const sell = tr.side === 'sell';
-            const pending = !tradeAppliesToLedger(tr);
-            const tradeNetPnl =
-              !pending && sell ? tradeNetPnlById.get(tr.id) ?? null : null;
-            return (
+          <div className="overflow-x-auto rounded-lg border border-border/70 bg-background/10">
+            <div style={{ minWidth: '39.25rem' }}>
               <div
-                key={tr.id}
-                className={`rounded-lg border border-border/70 p-3 ${
-                  pending ? 'opacity-90' : ''
-                } ${sell ? 'bg-negative/5' : 'bg-positive/5'}`}
+                className="sticky top-0 z-10 grid border-b border-border/60 bg-surface/95 text-[10px] font-medium text-textMuted shadow-sm backdrop-blur"
+                style={{ gridTemplateColumns: mobileGridTemplate }}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-textMain">
-                      {tr.name}
-                    </p>
-                    <p className="mt-0.5 text-[12px] text-textMuted">
-                      {tr.ticker} · {tr.date}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p
-                      className={`text-[13px] font-semibold ${
+                <div className="sticky left-0 z-20 border-r border-border/60 bg-surface px-2 py-2">
+                  종목
+                </div>
+                <div className="border-l border-border/50 px-1.5 py-2 text-center">구분</div>
+                <div className="border-l border-border/50 px-1.5 py-2 text-center">체결</div>
+                <div className="border-l border-border/50 px-1.5 py-2 text-right">수량</div>
+                <div className="border-l border-border/50 px-1.5 py-2 text-right">단가</div>
+                <div className="border-l border-border/50 px-1.5 py-2 text-right">거래금액</div>
+                <div className="border-l border-border/50 px-1.5 py-2 text-right">매매손익</div>
+                <div className="border-l border-border/50 px-1.5 py-2 text-center">동작</div>
+              </div>
+
+              {trades.map((tr) => {
+                const amt = roundMoney(tr.quantity * tr.price, tr.currency);
+                const sell = tr.side === 'sell';
+                const pending = !tradeAppliesToLedger(tr);
+                const tradeNetPnl =
+                  !pending && sell ? tradeNetPnlById.get(tr.id) ?? null : null;
+                return (
+                  <div
+                    key={tr.id}
+                    className={`grid border-t border-border/40 text-[11px] ${
+                      pending ? 'opacity-90' : ''
+                    } ${sell ? 'bg-negative/5' : 'bg-positive/5'}`}
+                    style={{ gridTemplateColumns: mobileGridTemplate }}
+                  >
+                    <div className="sticky left-0 z-[11] border-r border-border/60 bg-surface px-2 py-2 shadow-[8px_0_12px_-10px_rgba(0,0,0,0.45)]">
+                      <p className="line-clamp-2 text-[12px] font-semibold leading-snug text-textMain">
+                        {tr.name}
+                      </p>
+                      <p className="mt-0.5 text-[10px] tabular-nums text-textMuted">
+                        {tr.ticker} · {tr.date}
+                      </p>
+                    </div>
+                    <div
+                      className={`border-l border-border/50 px-1.5 py-2 text-center font-semibold ${
                         sell ? 'text-negative' : 'text-positive'
                       }`}
                     >
                       {sell ? '매도' : '매수'}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-textMuted">
+                    </div>
+                    <div className="border-l border-border/50 px-1.5 py-2 text-center text-textMuted">
                       {pending ? '미체결' : '체결'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <JournalMobileCell label="수량" value={`${tr.quantity}`} />
-                  <JournalMobileCell
-                    label="단가"
-                    value={formatMoney(tr.price, tr.currency)}
-                  />
-                  <JournalMobileCell
-                    label="거래금액"
-                    value={formatMoney(amt, tr.currency)}
-                  />
-                  <JournalMobileCell
-                    label="매매손익"
-                    value={
-                      tradeNetPnl === null
-                        ? '—'
-                        : formatMoney(tradeNetPnl, tr.currency)
-                    }
-                    tone={
-                      tradeNetPnl === null
-                        ? undefined
-                        : tradeNetPnl > 0
-                          ? 'pos'
-                          : tradeNetPnl < 0
-                            ? 'neg'
-                            : undefined
-                    }
-                  />
-                </div>
-
-                <div className="mt-3 flex flex-wrap justify-end gap-1.5">
-                  {pending ? (
-                    <button
-                      type="button"
-                      onClick={() => onMarkTradeFilled(tr.id)}
-                      className="rounded border border-border px-2 py-1 text-[11px] font-medium text-textMain hover:bg-white/5"
+                    </div>
+                    <div className="border-l border-border/50 px-1.5 py-2 text-right tabular-nums text-textMain">
+                      {tr.quantity}
+                    </div>
+                    <div className="border-l border-border/50 px-1.5 py-2 text-right tabular-nums text-textMain">
+                      {formatMoney(tr.price, tr.currency)}
+                    </div>
+                    <div className="border-l border-border/50 px-1.5 py-2 text-right tabular-nums text-textMain">
+                      {formatMoney(amt, tr.currency)}
+                    </div>
+                    <div
+                      className={`border-l border-border/50 px-1.5 py-2 text-right tabular-nums ${
+                        tradeNetPnl === null
+                          ? 'text-textMuted'
+                          : tradeNetPnl > 0
+                            ? 'text-red-400'
+                            : tradeNetPnl < 0
+                              ? 'text-blue-400'
+                              : 'text-textMain'
+                      }`}
                     >
-                      체결 처리
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => onEditTrade(tr)}
-                    className="rounded border border-border px-2 py-1 text-[11px] font-medium text-textMain hover:bg-white/5"
-                  >
-                    수정
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDeleteTrade(tr)}
-                    className="rounded border border-negative/40 px-2 py-1 text-[11px] font-medium text-negative hover:bg-negative/10"
-                  >
-                    삭제
-                  </button>
-                </div>
-              </div>
-            );
-          })
+                      {tradeNetPnl === null ? '—' : formatMoney(tradeNetPnl, tr.currency)}
+                    </div>
+                    <div className="border-l border-border/50 px-1 py-1.5">
+                      <div className="flex flex-wrap justify-center gap-1">
+                        {pending ? (
+                          <button
+                            type="button"
+                            onClick={() => onMarkTradeFilled(tr.id)}
+                            className="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-textMain hover:bg-white/5"
+                          >
+                            체결
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => onEditTrade(tr)}
+                          className="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-textMain hover:bg-white/5"
+                        >
+                          수정
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteTrade(tr)}
+                          className="rounded border border-negative/40 px-1.5 py-0.5 text-[10px] font-medium text-negative hover:bg-negative/10"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
 
@@ -1110,40 +1123,6 @@ function JournalTradesTable({
         </tbody>
       </table>
       </div>
-    </div>
-  );
-}
-
-function JournalMobileCell({
-  label,
-  value,
-  preserveWhitespace = false,
-  tone,
-}: {
-  label: string;
-  value: string;
-  preserveWhitespace?: boolean;
-  tone?: 'pos' | 'neg';
-}) {
-  return (
-    <div className="rounded-md border border-border/70 bg-surface px-3 py-2">
-      <p className="text-[11px] text-textMuted">{label}</p>
-      <ExpandableText
-        text={value}
-        maxChars={30}
-        preserveWhitespace={preserveWhitespace}
-        className="mt-1"
-        textClassName={`text-[13px] ${
-          preserveWhitespace ? 'whitespace-pre-wrap' : 'truncate'
-        } ${
-          tone === 'pos'
-            ? 'text-red-400'
-            : tone === 'neg'
-              ? 'text-blue-400'
-              : 'text-textMain'
-        }`}
-        buttonClassName="text-[10px]"
-      />
     </div>
   );
 }
