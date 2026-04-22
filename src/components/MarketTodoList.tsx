@@ -314,6 +314,19 @@ export function MarketTodoList({
     ],
   );
 
+  const handleDeleteTodo = useCallback(
+    (todo: TradePlanTodo) => {
+      const displayName = resolveTodoDisplayName(todo, market, ledger, trades);
+      const actionLabel = todo.action === 'buy' ? '매수' : '매도';
+      const ok = window.confirm(
+        `${displayName} (${todo.ticker}) ${actionLabel} 계획을 삭제할까요?`,
+      );
+      if (!ok) return;
+      onDelete(todo.id);
+    },
+    [market, ledger, trades, onDelete],
+  );
+
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
       <div className="mb-3">
@@ -568,7 +581,7 @@ export function MarketTodoList({
                   </button>
                   <button
                     type="button"
-                    onClick={() => onDelete(x.id)}
+                    onClick={() => handleDeleteTodo(x)}
                     className="rounded border border-negative/40 px-2 py-1 text-[10px] text-negative hover:bg-negative/10"
                   >
                     삭제
@@ -674,7 +687,7 @@ export function MarketTodoList({
                         </button>
                         <button
                           type="button"
-                          onClick={() => onDelete(x.id)}
+                          onClick={() => handleDeleteTodo(x)}
                           className="rounded border border-negative/40 px-2 py-1 text-[11px] text-negative hover:bg-negative/10"
                         >
                           삭제
