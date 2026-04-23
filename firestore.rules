@@ -2,9 +2,94 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // TraderOS 클라우드 스냅샷: 경로 users/{uid}/traderos/v1, 필드 body·updatedAt
-    // 로그인한 본인만 접근, 문서 ID는 v1만 허용
-    // delete·list 금지: 단건 get/setDoc만 사용(컬렉션 나열·문서 삭제 불가)
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isMoney(value) {
+      return value is int || value is float;
+    }
+
+    function validTradeDoc(tradeId) {
+      return request.resource.data.keys().hasOnly([
+          'id',
+          'date',
+          'ticker',
+          'name',
+          'sector',
+          'market',
+          'side',
+          'quantity',
+          'price',
+          'currency',
+          'note',
+          'excludeFromJournal',
+          'executionStatus',
+          'updatedAt',
+        ])
+        && request.resource.data.id is string
+        && request.resource.data.id == tradeId
+        && request.resource.data.date is string
+        && request.resource.data.ticker is string
+        && request.resource.data.name is string
+        && request.resource.data.sector is string
+        && (request.resource.data.market == 'KR' || request.resource.data.market == 'US')
+        && (request.resource.data.side == 'buy' || request.resource.data.side == 'sell')
+        && request.resource.data.quantity is int
+        && request.resource.data.quantity > 0
+        && isMoney(request.resource.data.price)
+        && request.resource.data.price >= 0
+        && (
+          request.resource.data.currency == 'KRW' ||
+          request.resource.data.currency == 'USD'
+        )
+        && (!('note' in request.resource.data) || request.resource.data.note is string)
+        && (
+          !('excludeFromJournal' in request.resource.data) ||
+          request.resource.data.excludeFromJournal is bool
+        )
+        && (
+          !('executionStatus' in request.resource.data) ||
+          request.resource.data.executionStatus == 'pending' ||
+          request.resource.data.executionStatus == 'filled'
+        )
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    function validTodoDoc(todoId) {
+      return request.resource.data.keys().hasOnly([
+          'id',
+          'market',
+          'ticker',
+          'name',
+          'action',
+          'targetPrice',
+          'quantity',
+          'note',
+          'done',
+          'createdAt',
+          'updatedAt',
+        ])
+        && request.resource.data.id is string
+        && request.resource.data.id == todoId
+        && (request.resource.data.market == 'KR' || request.resource.data.market == 'US')
+        && request.resource.data.ticker is string
+        && (!('name' in request.resource.data) || request.resource.data.name is string)
+        && (
+          request.resource.data.action == 'buy' ||
+          request.resource.data.action == 'sell'
+        )
+        && isMoney(request.resource.data.targetPrice)
+        && request.resource.data.targetPrice >= 0
+        && request.resource.data.quantity is int
+        && request.resource.data.quantity > 0
+        && (!('note' in request.resource.data) || request.resource.data.note is string)
+        && request.resource.data.done is bool
+        && request.resource.data.createdAt is string
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    // 이전 버전 전체 스냅샷 백업: 경로 users/{uid}/traderos/v1
     match /users/{userId}/traderos/{docId} {
       allow get: if request.auth != null
         && request.auth.uid == userId
@@ -21,6 +106,20 @@ service cloud.firestore {
         && request.resource.data.updatedAt is timestamp;
 
       allow delete, list: if false;
+    }
+
+    // 실시간 동기화용 거래 컬렉션
+    match /users/{userId}/trades/{tradeId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && validTradeDoc(tradeId);
+      allow delete: if isOwner(userId);
+    }
+
+    // 실시간 동기화용 To-do 컬렉션
+    match /users/{userId}/todos/{todoId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && validTodoDoc(todoId);
+      allow delete: if isOwner(userId);
     }
 
     // 위에서 허용한 경로 외에는 전부 거부(명시)

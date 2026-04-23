@@ -49,8 +49,13 @@ import {
   parsePortfolioImportJson,
 } from './lib/portfolioExport';
 import {
+  fetchCloudLivePortfolio,
   fetchCloudPortfolio,
   pushCloudPortfolio,
+  subscribeCloudTodos,
+  subscribeCloudTrades,
+  syncCloudTodos,
+  syncCloudTrades,
 } from './lib/cloudPortfolio';
 import { useAuth } from './auth/AuthContext';
 import { MixedCurrencyBanner } from './components/MixedCurrencyBanner';
@@ -79,6 +84,70 @@ const ONBOARDING_DONE_KEY = 'traderos-onboarding-done-v1';
 
 type ThemeMode = 'dark' | 'light';
 type MobileHomeTab = 'portfolio' | 'journal' | 'settings';
+
+function tradeFingerprint(trade: Trade): string {
+  return JSON.stringify([
+    trade.date,
+    trade.ticker,
+    trade.name,
+    trade.sector,
+    trade.market,
+    trade.side,
+    trade.quantity,
+    trade.price,
+    trade.currency,
+    trade.note ?? null,
+    trade.excludeFromJournal === true,
+    trade.executionStatus ?? null,
+  ]);
+}
+
+function todoFingerprint(todo: TradePlanTodo): string {
+  return JSON.stringify([
+    todo.market,
+    todo.ticker,
+    todo.name ?? null,
+    todo.action,
+    todo.targetPrice,
+    todo.quantity,
+    todo.note ?? null,
+    todo.done,
+    todo.createdAt,
+  ]);
+}
+
+function buildTradeFingerprintMap(trades: Trade[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const trade of trades) out[trade.id] = tradeFingerprint(trade);
+  return out;
+}
+
+function buildTodoFingerprintMap(todos: TradePlanTodo[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const todo of todos) out[todo.id] = todoFingerprint(todo);
+  return out;
+}
+
+function sameFingerprintMaps(
+  a: Record<string, string>,
+  b: Record<string, string>,
+): boolean {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const key of aKeys) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
+}
+
+function sameTradeLists(a: Trade[], b: Trade[]): boolean {
+  return sameFingerprintMaps(buildTradeFingerprintMap(a), buildTradeFingerprintMap(b));
+}
+
+function sameTodoLists(a: TradePlanTodo[], b: TradePlanTodo[]): boolean {
+  return sameFingerprintMaps(buildTodoFingerprintMap(a), buildTodoFingerprintMap(b));
+}
 
 async function sha256Hex(input: string): Promise<string> {
   const bytes = new TextEncoder().encode(input);
@@ -325,15 +394,13 @@ export default function App() {
   });
   const importFileRef = useRef<HTMLInputElement>(null);
   const hadUserRef = useRef(false);
+  const cloudTradeFingerprintsRef = useRef<Record<string, string>>({});
+  const cloudTodoFingerprintsRef = useRef<Record<string, string>>({});
   const [cloudSessionReady, setCloudSessionReady] = useState(true);
   const [cloudBusy, setCloudBusy] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
   const [networkOnline, setNetworkOnline] = useState(
     () => typeof navigator !== 'undefined' && navigator.onLine,
-  );
-  const cloudMergeChoiceKey = useMemo(
-    () => (user ? `traderos-cloud-merge-choice:${user.uid}` : null),
-    [user],
   );
 
   useEffect(() => {
@@ -394,6 +461,8 @@ export default function App() {
 
   /** 로그아웃 시 개인정보(보유·일지·계획·메모 등) 로컬 흔적 제거 */
   const wipePrivatePortfolio = useCallback(() => {
+    cloudTradeFingerprintsRef.current = {};
+    cloudTodoFingerprintsRef.current = {};
     clearPersisted();
     clearInitialAppStateCache();
     setTrades([]);
@@ -425,47 +494,70 @@ export default function App() {
     if (!firebaseConfigured || !user || !authReady) return;
     setCloudSessionReady(false);
     let cancelled = false;
+    const cleanupFns: Array<() => void> = [];
     void (async () => {
       setCloudBusy(true);
       setCloudError(null);
       try {
-        const remote = await fetchCloudPortfolio(user.uid);
+        const [live, legacy] = await Promise.all([
+          fetchCloudLivePortfolio(user.uid),
+          fetchCloudPortfolio(user.uid),
+        ]);
         if (cancelled) return;
-        if (!remote) {
-          await pushCloudPortfolio(user.uid, portfolioRef.current);
+        const normalizedLegacy = legacy
+          ? normalizeLoadedPortfolio(legacy.portfolio)
+          : null;
+        const nextTrades =
+          live.trades.length > 0
+            ? live.trades
+            : normalizedLegacy?.trades ?? portfolioRef.current.trades;
+        const nextTodos =
+          live.todos.length > 0
+            ? live.todos
+            : normalizedLegacy?.todos ?? portfolioRef.current.todos;
+
+        if (normalizedLegacy && live.trades.length === 0 && live.todos.length === 0) {
+          applyNormalizedPortfolio({
+            ...normalizedLegacy,
+            trades: nextTrades,
+            todos: nextTodos,
+          });
         } else {
-          const savedChoice =
-            cloudMergeChoiceKey &&
-            typeof window !== 'undefined'
-              ? window.localStorage.getItem(cloudMergeChoiceKey)
-              : null;
-          let useRemote: boolean;
-          if (savedChoice === 'remote') {
-            useRemote = true;
-          } else if (savedChoice === 'local') {
-            useRemote = false;
-          } else {
-            const msg =
-              `클라우드에 저장된 데이터가 있습니다 (${new Date(remote.updatedAtMs).toLocaleString('ko-KR')}).\n\n` +
-              '[확인] 클라우드 데이터를 이 기기에 불러오기\n' +
-              '[취소] 이 기기 데이터로 클라우드 덮어쓰기\n\n' +
-              '(이 선택은 이 기기에서 기억되어 다음 로그인부터 자동 적용됩니다.)';
-            useRemote = window.confirm(msg);
-            if (cloudMergeChoiceKey && typeof window !== 'undefined') {
-              window.localStorage.setItem(
-                cloudMergeChoiceKey,
-                useRemote ? 'remote' : 'local',
+          setTrades((prev) => (sameTradeLists(prev, nextTrades) ? prev : nextTrades));
+          setTodos((prev) => (sameTodoLists(prev, nextTodos) ? prev : nextTodos));
+        }
+
+        cloudTradeFingerprintsRef.current = buildTradeFingerprintMap(live.trades);
+        cloudTodoFingerprintsRef.current = buildTodoFingerprintMap(live.todos);
+
+        cleanupFns.push(
+          subscribeCloudTrades(
+            user.uid,
+            (remoteTrades) => {
+              cloudTradeFingerprintsRef.current =
+                buildTradeFingerprintMap(remoteTrades);
+              setTrades((prev) =>
+                sameTradeLists(prev, remoteTrades) ? prev : remoteTrades,
               );
-            }
-          }
-          if (cancelled) return;
-          if (useRemote) {
-            applyNormalizedPortfolio(
-              normalizeLoadedPortfolio(remote.portfolio),
-            );
-          } else {
-            await pushCloudPortfolio(user.uid, portfolioRef.current);
-          }
+            },
+            (e) => setCloudError(humanizeCloudError(e)),
+          ),
+        );
+        cleanupFns.push(
+          subscribeCloudTodos(
+            user.uid,
+            (remoteTodos) => {
+              cloudTodoFingerprintsRef.current = buildTodoFingerprintMap(remoteTodos);
+              setTodos((prev) =>
+                sameTodoLists(prev, remoteTodos) ? prev : remoteTodos,
+              );
+            },
+            (e) => setCloudError(humanizeCloudError(e)),
+          ),
+        );
+        if (cancelled) {
+          cleanupFns.forEach((fn) => fn());
+          return;
         }
       } catch (e) {
         if (!cancelled) {
@@ -480,44 +572,65 @@ export default function App() {
     })();
     return () => {
       cancelled = true;
+      cleanupFns.forEach((fn) => fn());
     };
   }, [
     firebaseConfigured,
     user?.uid,
     authReady,
     applyNormalizedPortfolio,
-    cloudMergeChoiceKey,
   ]);
 
   useEffect(() => {
-    if (!firebaseConfigured || !user || !cloudSessionReady) return;
-    const uid = user.uid;
-    const tid = window.setTimeout(() => {
-      void (async () => {
-        if (typeof navigator !== 'undefined' && !navigator.onLine) return;
-        try {
-          await pushCloudPortfolio(uid, portfolioRef.current);
-          setCloudError(null);
-        } catch (e) {
-          setCloudError(humanizeCloudError(e));
-        }
-      })();
-    }, 3000);
-    return () => window.clearTimeout(tid);
+    if (!firebaseConfigured || !user || !cloudSessionReady || !networkOnline) return;
+    const localMap = buildTradeFingerprintMap(trades);
+    const remoteMap = cloudTradeFingerprintsRef.current;
+    const upserts = trades.filter((trade) => remoteMap[trade.id] !== localMap[trade.id]);
+    const deletes = Object.keys(remoteMap).filter((id) => !(id in localMap));
+    if (upserts.length === 0 && deletes.length === 0) return;
+    let cancelled = false;
+    void syncCloudTrades(user.uid, upserts, deletes)
+      .then(() => {
+        if (!cancelled) setCloudError(null);
+      })
+      .catch((e) => {
+        if (!cancelled) setCloudError(humanizeCloudError(e));
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [
     firebaseConfigured,
-    user,
+    user?.uid,
     cloudSessionReady,
     trades,
-    quotes,
-    positionIds,
+    networkOnline,
+  ]);
+
+  useEffect(() => {
+    if (!firebaseConfigured || !user || !cloudSessionReady || !networkOnline) return;
+    const localMap = buildTodoFingerprintMap(todos);
+    const remoteMap = cloudTodoFingerprintsRef.current;
+    const upserts = todos.filter((todo) => remoteMap[todo.id] !== localMap[todo.id]);
+    const deletes = Object.keys(remoteMap).filter((id) => !(id in localMap));
+    if (upserts.length === 0 && deletes.length === 0) return;
+    let cancelled = false;
+    void syncCloudTodos(user.uid, upserts, deletes)
+      .then(() => {
+        if (!cancelled) setCloudError(null);
+      })
+      .catch((e) => {
+        if (!cancelled) setCloudError(humanizeCloudError(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    firebaseConfigured,
+    user?.uid,
+    cloudSessionReady,
     todos,
-    notes,
-    quoteUpdatedAt,
-    lastKrQuoteBulkAt,
-    krSellCommissionRate,
-    krPreferExtendedQuote,
-    krDayOpenByTicker,
+    networkOnline,
   ]);
 
   const handleExportPortfolio = useCallback(() => {
@@ -557,7 +670,7 @@ export default function App() {
     if (!user) return;
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       window.alert(
-        '오프라인입니다. 네트워크 연결 후 「지금 클라우드에 저장」을 다시 눌러 주세요.',
+        '오프라인입니다. 네트워크 연결 후 「지금 스냅샷 백업 저장」을 다시 눌러 주세요.',
       );
       return;
     }
@@ -565,7 +678,7 @@ export default function App() {
     setCloudError(null);
     try {
       await pushCloudPortfolio(user.uid, portfolioRef.current);
-      window.alert('클라우드에 저장했습니다.');
+      window.alert('현재 상태를 클라우드 스냅샷으로 백업했습니다.');
     } catch (e) {
       setCloudError(humanizeCloudError(e));
     } finally {

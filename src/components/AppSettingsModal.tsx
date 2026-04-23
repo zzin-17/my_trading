@@ -120,9 +120,9 @@ export function AppSettingsModal({
               Google · 클라우드
             </h3>
             <p className="mt-1 text-[12px] leading-relaxed text-textMuted">
-              로그인한 계정의 Firestore에 포트폴리오를 저장합니다. 다른 PC에서도
-              같은 계정으로 이어 쓸 수 있습니다. Firebase 콘솔에서 보안 규칙을
-              본인만 읽고 쓰도록 설정해야 합니다.
+              매매일지·To-do·보유종목 기반 거래는 로그인한 계정의 Firestore와
+              실시간으로 맞춰집니다. 다른 PC·모바일에서도 같은 계정이면 자동으로
+              이어 볼 수 있습니다.
             </p>
             {!networkOnline ? (
               <p
@@ -148,13 +148,12 @@ export function AppSettingsModal({
                 <p>{cloudError}</p>
                 {!networkOnline ? (
                   <p className="mt-1 text-[11px] text-textMuted">
-                    연결이 복구되면 「지금 클라우드에 저장」을 눌러 다시 올릴 수
-                    있습니다.
+                    연결이 복구되면 변경분이 자동으로 다시 동기화됩니다.
                   </p>
                 ) : (
                   <p className="mt-1 text-[11px] text-textMuted">
-                    문제가 계속되면 「백업 파일 보내기」로 보낸 뒤, 잠시 후 다시
-                    저장해 보세요.
+                    문제가 계속되면 잠시 후 다시 확인하거나 「백업 파일 보내기」로
+                    현재 상태를 따로 보관해 주세요.
                   </p>
                 )}
               </div>
@@ -182,7 +181,7 @@ export function AppSettingsModal({
                     onClick={() => void onCloudPushNow?.()}
                     className="rounded-md border border-border bg-background px-3 py-2.5 text-left text-[13px] font-medium text-textMain hover:bg-white/5 disabled:opacity-50"
                   >
-                    {cloudBusy ? '처리 중…' : '지금 클라우드에 저장'}
+                    {cloudBusy ? '처리 중…' : '지금 스냅샷 백업 저장'}
                   </button>
                   <button
                     type="button"
