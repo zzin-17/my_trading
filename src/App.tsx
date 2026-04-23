@@ -149,6 +149,26 @@ function sameTodoLists(a: TradePlanTodo[], b: TradePlanTodo[]): boolean {
   return sameFingerprintMaps(buildTodoFingerprintMap(a), buildTodoFingerprintMap(b));
 }
 
+function mergeTradesById(preferred: Trade[], fallback: Trade[]): Trade[] {
+  const map = new Map<string, Trade>();
+  for (const trade of fallback) map.set(trade.id, trade);
+  for (const trade of preferred) map.set(trade.id, trade);
+  return [...map.values()].sort((a, b) => {
+    const d = a.date.localeCompare(b.date);
+    return d !== 0 ? d : a.id.localeCompare(b.id);
+  });
+}
+
+function mergeTodosById(preferred: TradePlanTodo[], fallback: TradePlanTodo[]): TradePlanTodo[] {
+  const map = new Map<string, TradePlanTodo>();
+  for (const todo of fallback) map.set(todo.id, todo);
+  for (const todo of preferred) map.set(todo.id, todo);
+  return [...map.values()].sort((a, b) => {
+    const d = a.createdAt.localeCompare(b.createdAt);
+    return d !== 0 ? d : a.id.localeCompare(b.id);
+  });
+}
+
 async function sha256Hex(input: string): Promise<string> {
   const bytes = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -507,14 +527,14 @@ export default function App() {
         const normalizedLegacy = legacy
           ? normalizeLoadedPortfolio(legacy.portfolio)
           : null;
-        const nextTrades =
-          live.trades.length > 0
-            ? live.trades
-            : normalizedLegacy?.trades ?? portfolioRef.current.trades;
-        const nextTodos =
-          live.todos.length > 0
-            ? live.todos
-            : normalizedLegacy?.todos ?? portfolioRef.current.todos;
+        const fallbackTrades = normalizedLegacy?.trades ?? portfolioRef.current.trades;
+        const fallbackTodos = normalizedLegacy?.todos ?? portfolioRef.current.todos;
+        const nextTrades = mergeTradesById(live.trades, fallbackTrades);
+        const nextTodos = mergeTodosById(live.todos, fallbackTodos);
+        const liveTradeIds = new Set(live.trades.map((x) => x.id));
+        const liveTodoIds = new Set(live.todos.map((x) => x.id));
+        const missingTradeDocs = nextTrades.filter((x) => !liveTradeIds.has(x.id));
+        const missingTodoDocs = nextTodos.filter((x) => !liveTodoIds.has(x.id));
 
         if (normalizedLegacy && live.trades.length === 0 && live.todos.length === 0) {
           applyNormalizedPortfolio({
@@ -527,8 +547,15 @@ export default function App() {
           setTodos((prev) => (sameTodoLists(prev, nextTodos) ? prev : nextTodos));
         }
 
-        cloudTradeFingerprintsRef.current = buildTradeFingerprintMap(live.trades);
-        cloudTodoFingerprintsRef.current = buildTodoFingerprintMap(live.todos);
+        if (missingTradeDocs.length > 0 || missingTodoDocs.length > 0) {
+          await Promise.all([
+            syncCloudTrades(user.uid, missingTradeDocs, []),
+            syncCloudTodos(user.uid, missingTodoDocs, []),
+          ]);
+        }
+
+        cloudTradeFingerprintsRef.current = buildTradeFingerprintMap(nextTrades);
+        cloudTodoFingerprintsRef.current = buildTodoFingerprintMap(nextTodos);
 
         cleanupFns.push(
           subscribeCloudTrades(
