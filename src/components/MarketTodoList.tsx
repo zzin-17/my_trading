@@ -27,6 +27,14 @@ interface MarketTodoListProps {
 }
 
 type TodoViewTab = 'open' | 'done';
+type TodoDisplayMode = 'item' | 'group';
+
+interface GroupedTodoEntry {
+  ticker: string;
+  displayName: string;
+  latest: TradePlanTodo;
+  items: TradePlanTodo[];
+}
 
 function normalizeTodoSearchQuery(q: string): string {
   return q.trim().toLowerCase();
@@ -88,6 +96,7 @@ export function MarketTodoList({
   const [note, setNote] = useState('');
   const [listSearchText, setListSearchText] = useState('');
   const [viewTab, setViewTab] = useState<TodoViewTab>('open');
+  const [displayMode, setDisplayMode] = useState<TodoDisplayMode>('item');
   const [krSuggestions, setKrSuggestions] = useState<
     { ticker: string; name: string; sector: string }[]
   >([]);
@@ -98,6 +107,7 @@ export function MarketTodoList({
   const [editTargetPrice, setEditTargetPrice] = useState('');
   const [editQuantity, setEditQuantity] = useState('');
   const [editNote, setEditNote] = useState('');
+  const [groupModalTicker, setGroupModalTicker] = useState<string | null>(null);
 
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** 목록에서 고른 코드·이름 쌍(같은 6자리 유지 시 이름 유지, 코드 바꾸면 초기화) */
@@ -132,6 +142,34 @@ export function MarketTodoList({
     [selectedItems, listSearchText],
   );
 
+  const groupedSelected = useMemo(() => {
+    const map = new Map<string, GroupedTodoEntry>();
+    for (const item of filteredSelected) {
+      const cur = map.get(item.ticker);
+      const displayName = resolveTodoDisplayName(item, market, ledger, trades);
+      if (!cur) {
+        map.set(item.ticker, {
+          ticker: item.ticker,
+          displayName,
+          latest: item,
+          items: [item],
+        });
+        continue;
+      }
+      cur.items.push(item);
+      if (item.createdAt > cur.latest.createdAt) {
+        cur.latest = item;
+        cur.displayName = displayName;
+      }
+    }
+    return [...map.values()]
+      .map((entry) => ({
+        ...entry,
+        items: [...entry.items].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+      }))
+      .sort((a, b) => b.latest.createdAt.localeCompare(a.latest.createdAt));
+  }, [filteredSelected, ledger, market, trades]);
+
   const totalTodoCount = openItems.length + doneItems.length;
   const statusCounts = useMemo(() => {
     let reached = 0;
@@ -165,6 +203,11 @@ export function MarketTodoList({
       )
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [editingTodo, items]);
+
+  const groupModalEntry = useMemo(() => {
+    if (!groupModalTicker) return null;
+    return groupedSelected.find((x) => x.ticker === groupModalTicker) ?? null;
+  }, [groupModalTicker, groupedSelected]);
 
   const trimmedSymbol = symbolField.trim();
   const krDigitsOnly = market === 'KR' && /^\d+$/.test(trimmedSymbol.replace(/\s/g, ''));
@@ -285,6 +328,10 @@ export function MarketTodoList({
     setEditNote('');
   }, []);
 
+  const closeGroupModal = useCallback(() => {
+    setGroupModalTicker(null);
+  }, []);
+
   const handleEditSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
@@ -326,6 +373,50 @@ export function MarketTodoList({
     },
     [market, ledger, trades, onDelete],
   );
+
+  const renderTodoActions = useCallback(
+    (todo: TradePlanTodo, small = false) => (
+      <div className="flex flex-wrap justify-end gap-1">
+        {onOpenHoldingDetail ? (
+          <button
+            type="button"
+            onClick={() => onOpenHoldingDetail(todo.ticker, market)}
+            className={`rounded border border-accent/40 font-medium text-accent hover:bg-accent/10 ${
+              small ? 'px-2 py-1 text-[10px]' : 'px-2 py-1 text-[11px]'
+            }`}
+          >
+            보유 상세
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => onToggleDone(todo.id)}
+          className={`rounded border border-border text-textMain hover:bg-white/5 ${
+            small ? 'px-2 py-1 text-[10px]' : 'px-2 py-1 text-[11px]'
+          }`}
+        >
+          {todo.done ? '미완료' : '완료'}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleDeleteTodo(todo)}
+          className={`rounded border border-negative/40 text-negative hover:bg-negative/10 ${
+            small ? 'px-2 py-1 text-[10px]' : 'px-2 py-1 text-[11px]'
+          }`}
+        >
+          삭제
+        </button>
+      </div>
+    ),
+    [handleDeleteTodo, market, onOpenHoldingDetail, onToggleDone],
+  );
+
+  const emptyListMessage =
+    selectedItems.length === 0
+      ? viewTab === 'open'
+        ? '진행중인 계획이 없습니다.'
+        : '완료된 계획이 없습니다.'
+      : '검색 조건에 맞는 계획이 없습니다.';
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
@@ -484,223 +575,351 @@ export function MarketTodoList({
             완료 ({doneItems.length}건)
           </button>
         </div>
+
+        <div
+          className="flex shrink-0 flex-wrap gap-1 rounded-md border border-border bg-background p-0.5"
+          role="tablist"
+          aria-label="To-do 표시 방식"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={displayMode === 'item'}
+            onClick={() => setDisplayMode('item')}
+            className={`rounded px-3 py-1.5 text-[12px] font-medium transition ${
+              displayMode === 'item'
+                ? 'bg-accent text-white'
+                : 'text-textMuted hover:bg-white/5 hover:text-textMain'
+            }`}
+          >
+            건건이 보기
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={displayMode === 'group'}
+            onClick={() => setDisplayMode('group')}
+            className={`rounded px-3 py-1.5 text-[12px] font-medium transition ${
+              displayMode === 'group'
+                ? 'bg-accent text-white'
+                : 'text-textMuted hover:bg-white/5 hover:text-textMain'
+            }`}
+          >
+            종목별 보기
+          </button>
+        </div>
       </div>
 
-      <div className="mt-4 space-y-3 md:hidden">
-        {filteredSelected.length === 0 ? (
-          <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
-            {selectedItems.length === 0
-              ? viewTab === 'open'
-                ? '진행중인 계획이 없습니다.'
-                : '완료된 계획이 없습니다.'
-              : '검색 조건에 맞는 계획이 없습니다.'}
-          </div>
-        ) : (
-          filteredSelected.map((x) => {
-            const displayName = resolveTodoDisplayName(x, market, ledger, trades);
-            const sell = x.action === 'sell';
-            return (
-              <section
-                key={x.id}
-                className={`rounded-lg border border-border/70 px-3 py-2.5 ${
-                  x.done ? 'opacity-60' : ''
-                } ${sell ? 'bg-negative/5' : 'bg-positive/5'}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(x)}
-                      className="block max-w-full text-left"
-                    >
-                      <span className="block truncate text-[15px] font-medium text-textMain underline-offset-2 hover:underline">
-                        {displayName}
-                      </span>
-                      <span className="mt-0.5 block text-[12px] text-textMuted">
-                        {x.ticker} · {todoListDateLabel(x.createdAt)}
-                      </span>
-                    </button>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1 text-right">
-                    <span
-                      className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[11px] font-semibold leading-none ${
-                        sell ? 'text-negative' : 'text-positive'
-                      }`}
-                    >
-                      {sell ? '매도' : '매수'}
-                    </span>
-                    <div className="inline-flex items-center justify-end">
-                      {x.done ? (
-                        <span className="rounded bg-border px-1.5 py-0.5 text-[11px] font-medium leading-none text-textMuted">
-                          완료
-                        </span>
-                      ) : (
-                        <StatusBadge status={getTodoStatus(x, quotes)} />
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-2 grid grid-cols-[auto_1fr_auto_1fr] items-start gap-x-2 gap-y-1 text-[12px]">
-                  <span className="text-textMuted">목표가</span>
-                  <span className="truncate text-right font-semibold tabular-nums text-textMain">
-                    {formatMoney(x.targetPrice, currency)}
-                  </span>
-                  <span className="text-textMuted">수량</span>
-                  <span className="text-right font-semibold tabular-nums text-textMain">
-                    {x.quantity}주
-                  </span>
-                  <span className="self-start text-textMuted">비고</span>
-                  <div className="col-span-3 min-w-0">
-                    <ExpandableText
-                      text={x.note ?? '—'}
-                      maxChars={30}
-                      preserveWhitespace={false}
-                      textClassName="text-[13px] text-textMain"
-                      buttonClassName="text-[10px]"
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-2.5 flex flex-wrap justify-end gap-1">
-                  {onOpenHoldingDetail ? (
-                    <button
-                      type="button"
-                      onClick={() => onOpenHoldingDetail(x.ticker, market)}
-                      className="rounded border border-accent/40 px-2 py-1 text-[10px] font-medium text-accent hover:bg-accent/10"
-                    >
-                      보유 상세
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => onToggleDone(x.id)}
-                    className="rounded border border-border px-2 py-1 text-[10px] text-textMain hover:bg-white/5"
-                  >
-                    {x.done ? '미완료' : '완료'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteTodo(x)}
-                    className="rounded border border-negative/40 px-2 py-1 text-[10px] text-negative hover:bg-negative/10"
-                  >
-                    삭제
-                  </button>
-                </div>
-              </section>
-            );
-          })
-        )}
-      </div>
-
-      <div className="mt-4 hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[720px] border-collapse text-left text-[12px]">
-          <thead>
-            <tr className="border-b border-border text-textMuted">
-              <th className="py-2 pr-3 font-medium">등록일</th>
-              <th className="py-2 pr-3 font-medium">종목코드</th>
-              <th className="py-2 pr-3 font-medium">종목명</th>
-              <th className="py-2 pr-3 font-medium">구분</th>
-              <th className="py-2 pr-3 text-right font-medium tabular-nums">목표가</th>
-              <th className="py-2 pr-3 text-right font-medium tabular-nums">수량</th>
-              <th className="py-2 pr-3 font-medium">상태</th>
-              <th className="min-w-[100px] py-2 pr-3 font-medium">비고</th>
-              <th className="py-2 pr-2 text-right font-medium">동작</th>
-            </tr>
-          </thead>
-          <tbody>
+      {displayMode === 'item' ? (
+        <>
+          <div className="mt-4 max-h-[28rem] space-y-3 overflow-y-auto pr-1 md:hidden">
             {filteredSelected.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="py-8 text-center text-textMuted">
-                  {selectedItems.length === 0
-                    ? viewTab === 'open'
-                      ? '진행중인 계획이 없습니다.'
-                      : '완료된 계획이 없습니다.'
-                    : '검색 조건에 맞는 계획이 없습니다.'}
-                </td>
-              </tr>
+              <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
+                {emptyListMessage}
+              </div>
             ) : (
               filteredSelected.map((x) => {
                 const displayName = resolveTodoDisplayName(x, market, ledger, trades);
                 const sell = x.action === 'sell';
                 return (
-                  <tr
+                  <section
                     key={x.id}
-                    className={`border-b border-border/60 ${
+                    className={`rounded-lg border border-border/70 px-3 py-2.5 ${
                       x.done ? 'opacity-60' : ''
                     } ${sell ? 'bg-negative/5' : 'bg-positive/5'}`}
                   >
-                    <td className="py-2 pr-3 tabular-nums text-textMain">
-                      {todoListDateLabel(x.createdAt)}
-                    </td>
-                    <td className="py-2 pr-3 font-medium text-textMain">{x.ticker}</td>
-                    <td className="max-w-[180px] truncate py-2 pr-3 text-textMain">
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(x)}
-                        className="max-w-full truncate text-left text-textMain underline-offset-2 hover:underline"
-                        title={`${displayName} 수정`}
-                      >
-                        {displayName}
-                      </button>
-                    </td>
-                    <td className="py-2 pr-3">
-                      <span
-                        className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${
-                          sell ? 'text-negative' : 'text-positive'
-                        }`}
-                      >
-                        {sell ? '매도' : '매수'}
-                      </span>
-                    </td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-textMain">
-                      {formatMoney(x.targetPrice, currency)}
-                    </td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-textMain">{x.quantity}</td>
-                    <td className="py-2 pr-3">
-                      {x.done ? (
-                        <span className="text-textMuted">완료</span>
-                      ) : (
-                        <StatusBadge status={getTodoStatus(x, quotes)} />
-                      )}
-                    </td>
-                    <td className="max-w-[140px] truncate py-2 pr-3 text-textMuted" title={x.note}>
-                      {x.note ?? '—'}
-                    </td>
-                    <td className="py-2 pr-0 text-right">
-                      <div className="flex flex-wrap justify-end gap-1">
-                        {onOpenHoldingDetail ? (
-                          <button
-                            type="button"
-                            onClick={() => onOpenHoldingDetail(x.ticker, market)}
-                            className="rounded border border-accent/40 px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent/10"
-                          >
-                            보유 상세
-                          </button>
-                        ) : null}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
                         <button
                           type="button"
-                          onClick={() => onToggleDone(x.id)}
-                          className="rounded border border-border px-2 py-1 text-[11px] text-textMain hover:bg-white/5"
+                          onClick={() => openEditModal(x)}
+                          className="block max-w-full text-left"
                         >
-                          {x.done ? '미완료' : '완료'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteTodo(x)}
-                          className="rounded border border-negative/40 px-2 py-1 text-[11px] text-negative hover:bg-negative/10"
-                        >
-                          삭제
+                          <span className="block truncate text-[15px] font-medium text-textMain underline-offset-2 hover:underline">
+                            {displayName}
+                          </span>
+                          <span className="mt-0.5 block text-[12px] text-textMuted">
+                            {x.ticker} · {todoListDateLabel(x.createdAt)}
+                          </span>
                         </button>
                       </div>
-                    </td>
-                  </tr>
+                      <div className="flex shrink-0 flex-col items-end gap-1 text-right">
+                        <span
+                          className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[11px] font-semibold leading-none ${
+                            sell ? 'text-negative' : 'text-positive'
+                          }`}
+                        >
+                          {sell ? '매도' : '매수'}
+                        </span>
+                        <div className="inline-flex items-center justify-end">
+                          {x.done ? (
+                            <span className="rounded bg-border px-1.5 py-0.5 text-[11px] font-medium leading-none text-textMuted">
+                              완료
+                            </span>
+                          ) : (
+                            <StatusBadge status={getTodoStatus(x, quotes)} />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-2 grid grid-cols-[auto_1fr_auto_1fr] items-start gap-x-2 gap-y-1 text-[12px]">
+                      <span className="text-textMuted">목표가</span>
+                      <span className="truncate text-right font-semibold tabular-nums text-textMain">
+                        {formatMoney(x.targetPrice, currency)}
+                      </span>
+                      <span className="text-textMuted">수량</span>
+                      <span className="text-right font-semibold tabular-nums text-textMain">
+                        {x.quantity}주
+                      </span>
+                      <span className="self-start text-textMuted">비고</span>
+                      <div className="col-span-3 min-w-0">
+                        <ExpandableText
+                          text={x.note ?? '—'}
+                          maxChars={30}
+                          preserveWhitespace={false}
+                          textClassName="text-[13px] text-textMain"
+                          buttonClassName="text-[10px]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-2.5">{renderTodoActions(x, true)}</div>
+                  </section>
                 );
               })
             )}
-          </tbody>
-        </table>
-      </div>
+          </div>
+
+          <div className="mt-4 hidden max-h-[30rem] overflow-auto md:block">
+            <table className="w-full min-w-[720px] border-collapse text-left text-[12px]">
+              <thead className="sticky top-0 z-10 bg-surface">
+                <tr className="border-b border-border text-textMuted">
+                  <th className="py-2 pr-3 font-medium">등록일</th>
+                  <th className="py-2 pr-3 font-medium">종목코드</th>
+                  <th className="py-2 pr-3 font-medium">종목명</th>
+                  <th className="py-2 pr-3 font-medium">구분</th>
+                  <th className="py-2 pr-3 text-right font-medium tabular-nums">목표가</th>
+                  <th className="py-2 pr-3 text-right font-medium tabular-nums">수량</th>
+                  <th className="py-2 pr-3 font-medium">상태</th>
+                  <th className="min-w-[100px] py-2 pr-3 font-medium">비고</th>
+                  <th className="py-2 pr-2 text-right font-medium">동작</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSelected.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-8 text-center text-textMuted">
+                      {emptyListMessage}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredSelected.map((x) => {
+                    const displayName = resolveTodoDisplayName(x, market, ledger, trades);
+                    const sell = x.action === 'sell';
+                    return (
+                      <tr
+                        key={x.id}
+                        className={`border-b border-border/60 ${
+                          x.done ? 'opacity-60' : ''
+                        } ${sell ? 'bg-negative/5' : 'bg-positive/5'}`}
+                      >
+                        <td className="py-2 pr-3 tabular-nums text-textMain">
+                          {todoListDateLabel(x.createdAt)}
+                        </td>
+                        <td className="py-2 pr-3 font-medium text-textMain">{x.ticker}</td>
+                        <td className="max-w-[180px] truncate py-2 pr-3 text-textMain">
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(x)}
+                            className="max-w-full truncate text-left text-textMain underline-offset-2 hover:underline"
+                            title={`${displayName} 수정`}
+                          >
+                            {displayName}
+                          </button>
+                        </td>
+                        <td className="py-2 pr-3">
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                              sell ? 'text-negative' : 'text-positive'
+                            }`}
+                          >
+                            {sell ? '매도' : '매수'}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums text-textMain">
+                          {formatMoney(x.targetPrice, currency)}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums text-textMain">
+                          {x.quantity}
+                        </td>
+                        <td className="py-2 pr-3">
+                          {x.done ? (
+                            <span className="text-textMuted">완료</span>
+                          ) : (
+                            <StatusBadge status={getTodoStatus(x, quotes)} />
+                          )}
+                        </td>
+                        <td className="max-w-[140px] truncate py-2 pr-3 text-textMuted" title={x.note}>
+                          {x.note ?? '—'}
+                        </td>
+                        <td className="py-2 pr-0 text-right">{renderTodoActions(x)}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mt-4 space-y-3 md:hidden">
+            {groupedSelected.length === 0 ? (
+              <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
+                {emptyListMessage}
+              </div>
+            ) : (
+              groupedSelected.map((group) => {
+                const latest = group.latest;
+                const sell = latest.action === 'sell';
+                return (
+                  <section
+                    key={group.ticker}
+                    className={`rounded-lg border border-border/70 px-3 py-2.5 ${
+                      latest.done ? 'opacity-60' : ''
+                    } ${sell ? 'bg-negative/5' : 'bg-positive/5'}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => setGroupModalTicker(group.ticker)}
+                          className="block max-w-full text-left"
+                        >
+                          <span className="block truncate text-[15px] font-medium text-textMain underline-offset-2 hover:underline">
+                            {group.displayName}
+                          </span>
+                          <span className="mt-0.5 block text-[12px] text-textMuted">
+                            {group.ticker} · 최근 등록 {todoListDateLabel(latest.createdAt)} · 총{' '}
+                            {group.items.length}건
+                          </span>
+                        </button>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1 text-right">
+                        <span
+                          className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[11px] font-semibold leading-none ${
+                            sell ? 'text-negative' : 'text-positive'
+                          }`}
+                        >
+                          {sell ? '매도' : '매수'}
+                        </span>
+                        {latest.done ? (
+                          <span className="rounded bg-border px-1.5 py-0.5 text-[11px] font-medium leading-none text-textMuted">
+                            완료
+                          </span>
+                        ) : (
+                          <StatusBadge status={getTodoStatus(latest, quotes)} />
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-2 grid grid-cols-[auto_1fr_auto_1fr] gap-x-2 gap-y-1 text-[12px]">
+                      <span className="text-textMuted">최신 목표가</span>
+                      <span className="text-right font-semibold tabular-nums text-textMain">
+                        {formatMoney(latest.targetPrice, currency)}
+                      </span>
+                      <span className="text-textMuted">최신 수량</span>
+                      <span className="text-right font-semibold tabular-nums text-textMain">
+                        {latest.quantity}주
+                      </span>
+                    </div>
+                  </section>
+                );
+              })
+            )}
+          </div>
+
+          <div className="mt-4 hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[720px] border-collapse text-left text-[12px]">
+              <thead>
+                <tr className="border-b border-border text-textMuted">
+                  <th className="py-2 pr-3 font-medium">종목코드</th>
+                  <th className="py-2 pr-3 font-medium">종목명</th>
+                  <th className="py-2 pr-3 font-medium">최근 등록일</th>
+                  <th className="py-2 pr-3 font-medium">최근 구분</th>
+                  <th className="py-2 pr-3 text-right font-medium tabular-nums">최근 목표가</th>
+                  <th className="py-2 pr-3 text-right font-medium tabular-nums">최근 수량</th>
+                  <th className="py-2 pr-3 font-medium">최근 상태</th>
+                  <th className="py-2 pr-2 text-right font-medium">계획 수</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groupedSelected.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-textMuted">
+                      {emptyListMessage}
+                    </td>
+                  </tr>
+                ) : (
+                  groupedSelected.map((group) => {
+                    const latest = group.latest;
+                    const sell = latest.action === 'sell';
+                    return (
+                      <tr
+                        key={group.ticker}
+                        className="cursor-pointer border-b border-border/60 transition hover:bg-white/[0.04]"
+                        onClick={() => setGroupModalTicker(group.ticker)}
+                      >
+                        <td className="py-2 pr-3 font-medium text-textMain">{group.ticker}</td>
+                        <td className="max-w-[180px] truncate py-2 pr-3 text-textMain">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setGroupModalTicker(group.ticker);
+                            }}
+                            className="max-w-full truncate text-left text-textMain underline-offset-2 hover:underline"
+                          >
+                            {group.displayName}
+                          </button>
+                        </td>
+                        <td className="py-2 pr-3 tabular-nums text-textMain">
+                          {todoListDateLabel(latest.createdAt)}
+                        </td>
+                        <td className="py-2 pr-3">
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                              sell ? 'text-negative' : 'text-positive'
+                            }`}
+                          >
+                            {sell ? '매도' : '매수'}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums text-textMain">
+                          {formatMoney(latest.targetPrice, currency)}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums text-textMain">
+                          {latest.quantity}
+                        </td>
+                        <td className="py-2 pr-3">
+                          {latest.done ? (
+                            <span className="text-textMuted">완료</span>
+                          ) : (
+                            <StatusBadge status={getTodoStatus(latest, quotes)} />
+                          )}
+                        </td>
+                        <td className="py-2 pr-0 text-right tabular-nums text-textMain">
+                          {group.items.length}건
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
       {editingTodo ? (
         <div
           className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4"
@@ -822,6 +1041,104 @@ export function MarketTodoList({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+      {groupModalEntry ? (
+        <div
+          className="fixed inset-0 z-[79] flex items-center justify-center bg-black/60 p-4"
+          role="presentation"
+          onClick={closeGroupModal}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="todo-group-modal-title"
+            className="w-full max-w-2xl rounded-lg border border-border bg-surface p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h4
+                  id="todo-group-modal-title"
+                  className="text-base font-semibold text-textMain"
+                >
+                  종목별 To-do 상세
+                </h4>
+                <p className="mt-1 text-[12px] text-textMuted">
+                  <span className="font-medium text-textMain">{groupModalEntry.ticker}</span>
+                  {' · '}
+                  {groupModalEntry.displayName} · 총 {groupModalEntry.items.length}건
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeGroupModal}
+                className="rounded border border-border px-2 py-1 text-[12px] text-textMain hover:bg-white/5"
+              >
+                닫기
+              </button>
+            </div>
+
+            <div className="mt-4 max-h-[65vh] space-y-3 overflow-y-auto pr-1">
+              {groupModalEntry.items.map((todo) => {
+                const sell = todo.action === 'sell';
+                return (
+                  <section
+                    key={todo.id}
+                    className={`rounded-lg border border-border/70 px-3 py-3 ${
+                      todo.done ? 'opacity-60' : ''
+                    } ${sell ? 'bg-negative/5' : 'bg-positive/5'}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            closeGroupModal();
+                            openEditModal(todo);
+                          }}
+                          className="text-left"
+                        >
+                          <span className="block text-[14px] font-medium text-textMain underline-offset-2 hover:underline">
+                            {todoListDateLabel(todo.createdAt)}
+                          </span>
+                          <span className="mt-0.5 block text-[12px] text-textMuted">
+                            목표가 {formatMoney(todo.targetPrice, currency)} · 수량 {todo.quantity}주
+                          </span>
+                        </button>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span
+                          className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[11px] font-semibold leading-none ${
+                            sell ? 'text-negative' : 'text-positive'
+                          }`}
+                        >
+                          {sell ? '매도' : '매수'}
+                        </span>
+                        {todo.done ? (
+                          <span className="rounded bg-border px-1.5 py-0.5 text-[11px] font-medium leading-none text-textMuted">
+                            완료
+                          </span>
+                        ) : (
+                          <StatusBadge status={getTodoStatus(todo, quotes)} />
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <ExpandableText
+                        text={todo.note ?? '—'}
+                        maxChars={60}
+                        preserveWhitespace={false}
+                        textClassName="text-[13px] text-textMain"
+                        buttonClassName="text-[10px]"
+                      />
+                    </div>
+                    <div className="mt-2.5">{renderTodoActions(todo)}</div>
+                  </section>
+                );
+              })}
+            </div>
           </div>
         </div>
       ) : null}
