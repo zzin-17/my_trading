@@ -39,12 +39,6 @@ const GRANULARITIES: { id: RealizedPeriodGranularity; label: string }[] = [
   { id: 'year', label: '년' },
 ];
 
-function formatMonthFilterLabel(period: string): string {
-  const [y, m] = period.split('-');
-  if (!y || !m) return period;
-  return `${y}년 ${parseInt(m, 10)}월`;
-}
-
 function RealizedPnlConceptTooltip({ taxPctLabel }: { taxPctLabel: string }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -149,9 +143,10 @@ export function RealizedPnlPanel({
 }: RealizedPnlPanelProps) {
   const [granularity, setGranularity] =
     useState<RealizedPeriodGranularity>('month');
-  const [monthFilter, setMonthFilter] = useState('all');
-  const [rangeStart, setRangeStart] = useState('');
-  const [rangeEnd, setRangeEnd] = useState('');
+  const [monthRangeStart, setMonthRangeStart] = useState('');
+  const [monthRangeEnd, setMonthRangeEnd] = useState('');
+  const [dayRangeStart, setDayRangeStart] = useState('');
+  const [dayRangeEnd, setDayRangeEnd] = useState('');
   const [drill, setDrill] = useState<{
     period: string;
     currency: CurrencyCode;
@@ -162,31 +157,24 @@ export function RealizedPnlPanel({
     [trades, krSellCommissionRate],
   );
 
-  const availableMonths = useMemo(
-    () =>
-      [...new Set(events.map((e) => e.date.slice(0, 7)))]
-        .filter(Boolean)
-        .sort((a, b) => b.localeCompare(a)),
-    [events],
-  );
-
   const filteredEvents = useMemo(() => {
     return events.filter((e) => {
-      if (rangeStart && e.date < rangeStart) return false;
-      if (rangeEnd && e.date > rangeEnd) return false;
+      if (granularity === 'month') {
+        const monthKey = e.date.slice(0, 7);
+        if (monthRangeStart && monthKey < monthRangeStart) return false;
+        if (monthRangeEnd && monthKey > monthRangeEnd) return false;
+        return true;
+      }
+      if (dayRangeStart && e.date < dayRangeStart) return false;
+      if (dayRangeEnd && e.date > dayRangeEnd) return false;
       return true;
     });
-  }, [events, rangeEnd, rangeStart]);
+  }, [dayRangeEnd, dayRangeStart, events, granularity, monthRangeEnd, monthRangeStart]);
 
   const periodRows = useMemo(
     () => summarizeRealizedByPeriod(filteredEvents, granularity),
     [filteredEvents, granularity],
   );
-
-  const visiblePeriodRows = useMemo(() => {
-    if (granularity !== 'day' || monthFilter === 'all') return periodRows;
-    return periodRows.filter((row) => row.period.slice(0, 7) === monthFilter);
-  }, [granularity, monthFilter, periodRows]);
 
   const tickerRows = useMemo(() => {
     if (!drill) return [];
@@ -199,31 +187,31 @@ export function RealizedPnlPanel({
   }, [filteredEvents, drill, granularity]);
 
   useEffect(() => {
-    if (monthFilter === 'all') return;
-    if (availableMonths.includes(monthFilter)) return;
-    setMonthFilter('all');
-  }, [availableMonths, monthFilter]);
-
-  useEffect(() => {
     if (!drill) return;
-    if (
-      granularity === 'day' &&
-      monthFilter !== 'all' &&
-      drill.period.slice(0, 7) !== monthFilter
-    ) {
-      setDrill(null);
-      return;
+    if (granularity === 'month') {
+      if (monthRangeStart && drill.period < monthRangeStart) {
+        setDrill(null);
+        return;
+      }
+      if (monthRangeEnd && drill.period > monthRangeEnd) {
+        setDrill(null);
+        return;
+      }
+    } else {
+      if (dayRangeStart && drill.period < dayRangeStart) {
+        setDrill(null);
+        return;
+      }
+      if (dayRangeEnd && drill.period > dayRangeEnd) {
+        setDrill(null);
+      }
     }
-    if (rangeStart && drill.period < rangeStart) {
-      setDrill(null);
-      return;
-    }
-    if (rangeEnd && drill.period > rangeEnd) {
-      setDrill(null);
-    }
-  }, [drill, granularity, monthFilter, rangeEnd, rangeStart]);
+  }, [dayRangeEnd, dayRangeStart, drill, granularity, monthRangeEnd, monthRangeStart]);
 
-  const hasActiveFilter = monthFilter !== 'all' || Boolean(rangeStart) || Boolean(rangeEnd);
+  const hasActiveFilter =
+    granularity === 'month'
+      ? Boolean(monthRangeStart) || Boolean(monthRangeEnd)
+      : Boolean(dayRangeStart) || Boolean(dayRangeEnd);
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4 sm:p-5">
@@ -251,7 +239,6 @@ export function RealizedPnlPanel({
                 aria-selected={active}
                 onClick={() => {
                   setGranularity(id);
-                  if (id !== 'day') setMonthFilter('all');
                   setDrill(null);
                 }}
                 className={`rounded px-2.5 py-1 text-[12px] font-medium transition ${
@@ -269,65 +256,73 @@ export function RealizedPnlPanel({
 
       <div className="mt-3 flex flex-col gap-2 rounded-md border border-border/70 bg-background/40 p-3">
         <div className="flex flex-wrap items-center gap-2">
-          {granularity === 'day' ? (
-            <label className="flex min-w-0 items-center gap-2 text-[12px] text-textMuted">
-              <span className="shrink-0">월 필터</span>
-              <select
-                value={monthFilter}
-                onChange={(e) => {
-                  setMonthFilter(e.target.value);
-                  setDrill(null);
-                }}
-                className="min-w-[9rem] rounded-md border border-border bg-surface px-2 py-1.5 text-[12px] text-textMain outline-none focus:border-accent"
-              >
-                <option value="all">전체 월</option>
-                {availableMonths.map((month) => (
-                  <option key={month} value={month}>
-                    {formatMonthFilterLabel(month)}
-                  </option>
-                ))}
-              </select>
-            </label>
+          {granularity === 'month' ? (
+            <>
+              <label className="flex items-center gap-2 text-[12px] text-textMuted">
+                <span>시작월</span>
+                <input
+                  type="month"
+                  value={monthRangeStart}
+                  max={monthRangeEnd || undefined}
+                  onChange={(e) => {
+                    setMonthRangeStart(e.target.value);
+                    setDrill(null);
+                  }}
+                  className="rounded-md border border-border bg-surface px-2 py-1.5 text-[12px] text-textMain outline-none focus:border-accent"
+                />
+              </label>
+              <label className="flex items-center gap-2 text-[12px] text-textMuted">
+                <span>종료월</span>
+                <input
+                  type="month"
+                  value={monthRangeEnd}
+                  min={monthRangeStart || undefined}
+                  onChange={(e) => {
+                    setMonthRangeEnd(e.target.value);
+                    setDrill(null);
+                  }}
+                  className="rounded-md border border-border bg-surface px-2 py-1.5 text-[12px] text-textMain outline-none focus:border-accent"
+                />
+              </label>
+            </>
           ) : (
-            <p className="text-[12px] text-textMuted">
-              기간 단위를 좁히고 싶다면 아래 시작일/종료일로 범위를 제한할 수 있습니다.
-            </p>
+            <>
+              <label className="flex items-center gap-2 text-[12px] text-textMuted">
+                <span>시작일</span>
+                <input
+                  type="date"
+                  value={dayRangeStart}
+                  max={dayRangeEnd || undefined}
+                  onChange={(e) => {
+                    setDayRangeStart(e.target.value);
+                    setDrill(null);
+                  }}
+                  className="rounded-md border border-border bg-surface px-2 py-1.5 text-[12px] text-textMain outline-none focus:border-accent"
+                />
+              </label>
+              <label className="flex items-center gap-2 text-[12px] text-textMuted">
+                <span>종료일</span>
+                <input
+                  type="date"
+                  value={dayRangeEnd}
+                  min={dayRangeStart || undefined}
+                  onChange={(e) => {
+                    setDayRangeEnd(e.target.value);
+                    setDrill(null);
+                  }}
+                  className="rounded-md border border-border bg-surface px-2 py-1.5 text-[12px] text-textMain outline-none focus:border-accent"
+                />
+              </label>
+            </>
           )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-[12px] text-textMuted">
-            <span>시작일</span>
-            <input
-              type="date"
-              value={rangeStart}
-              max={rangeEnd || undefined}
-              onChange={(e) => {
-                setRangeStart(e.target.value);
-                setDrill(null);
-              }}
-              className="rounded-md border border-border bg-surface px-2 py-1.5 text-[12px] text-textMain outline-none focus:border-accent"
-            />
-          </label>
-          <label className="flex items-center gap-2 text-[12px] text-textMuted">
-            <span>종료일</span>
-            <input
-              type="date"
-              value={rangeEnd}
-              min={rangeStart || undefined}
-              onChange={(e) => {
-                setRangeEnd(e.target.value);
-                setDrill(null);
-              }}
-              className="rounded-md border border-border bg-surface px-2 py-1.5 text-[12px] text-textMain outline-none focus:border-accent"
-            />
-          </label>
           {hasActiveFilter ? (
             <button
               type="button"
               onClick={() => {
-                setMonthFilter('all');
-                setRangeStart('');
-                setRangeEnd('');
+                setMonthRangeStart('');
+                setMonthRangeEnd('');
+                setDayRangeStart('');
+                setDayRangeEnd('');
                 setDrill(null);
               }}
               className="rounded-md border border-border px-2.5 py-1.5 text-[12px] font-medium text-textMain hover:bg-white/5"
@@ -341,14 +336,14 @@ export function RealizedPnlPanel({
       {!drill ? (
         <>
         <div className="mt-4 space-y-3 md:hidden">
-          {visiblePeriodRows.length === 0 ? (
+          {periodRows.length === 0 ? (
             <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
               {hasActiveFilter
                 ? '선택한 조건에 해당하는 실현손익이 없습니다.'
                 : '해당 기간에 실현된 매도가 없습니다.'}
             </div>
           ) : (
-            visiblePeriodRows.map((row) => (
+            periodRows.map((row) => (
               <button
                 key={`${row.period}\t${row.currency}`}
                 type="button"
@@ -420,7 +415,7 @@ export function RealizedPnlPanel({
               </tr>
             </thead>
             <tbody>
-              {visiblePeriodRows.length === 0 ? (
+              {periodRows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={5}
@@ -432,7 +427,7 @@ export function RealizedPnlPanel({
                   </td>
                 </tr>
               ) : (
-                visiblePeriodRows.map((row) => (
+                periodRows.map((row) => (
                   <tr
                     key={`${row.period}\t${row.currency}`}
                     className="cursor-pointer border-b border-border/60 transition hover:bg-white/[0.04]"
