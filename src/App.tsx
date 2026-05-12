@@ -36,7 +36,7 @@ import { computeLedger, ledgerToPositions } from './lib/ledger';
 import {
   savePersisted,
   clearPersisted,
-  hasPersistedPortfolio,
+  getPersistedUpdatedAtMs,
   type PersistedPortfolioV1,
 } from './lib/persistence';
 import {
@@ -172,7 +172,7 @@ function reconcileTradesFromSources(args: {
   liveUpdatedAtMsById: Record<string, number>;
   legacyTrades: Trade[];
   legacyUpdatedAtMs: number;
-  preferFallbackOverLegacy?: boolean;
+  ignoreLegacy?: boolean;
 }): Trade[] {
   const {
     liveTrades,
@@ -180,26 +180,23 @@ function reconcileTradesFromSources(args: {
     liveUpdatedAtMsById,
     legacyTrades,
     legacyUpdatedAtMs,
-    preferFallbackOverLegacy = false,
+    ignoreLegacy = false,
   } = args;
   const map = new Map<string, Trade>();
-  const fallbackIds = new Set(fallbackTrades.map((trade) => trade.id));
 
   for (const trade of fallbackTrades) map.set(trade.id, trade);
   for (const trade of liveTrades) map.set(trade.id, trade);
 
-  if (legacyUpdatedAtMs > 0) {
+  if (!ignoreLegacy && legacyUpdatedAtMs > 0) {
     const legacyIds = new Set(legacyTrades.map((x) => x.id));
     for (const trade of legacyTrades) {
       const liveUpdatedAtMs = liveUpdatedAtMsById[trade.id] ?? 0;
-      if (preferFallbackOverLegacy && fallbackIds.has(trade.id)) continue;
       if (!map.has(trade.id) || legacyUpdatedAtMs > liveUpdatedAtMs) {
         map.set(trade.id, trade);
       }
     }
     for (const trade of liveTrades) {
       const liveUpdatedAtMs = liveUpdatedAtMsById[trade.id] ?? 0;
-      if (preferFallbackOverLegacy && fallbackIds.has(trade.id)) continue;
       if (legacyUpdatedAtMs > liveUpdatedAtMs && !legacyIds.has(trade.id)) {
         map.delete(trade.id);
       }
@@ -218,7 +215,7 @@ function reconcileTodosFromSources(args: {
   liveUpdatedAtMsById: Record<string, number>;
   legacyTodos: TradePlanTodo[];
   legacyUpdatedAtMs: number;
-  preferFallbackOverLegacy?: boolean;
+  ignoreLegacy?: boolean;
 }): TradePlanTodo[] {
   const {
     liveTodos,
@@ -226,26 +223,23 @@ function reconcileTodosFromSources(args: {
     liveUpdatedAtMsById,
     legacyTodos,
     legacyUpdatedAtMs,
-    preferFallbackOverLegacy = false,
+    ignoreLegacy = false,
   } = args;
   const map = new Map<string, TradePlanTodo>();
-  const fallbackIds = new Set(fallbackTodos.map((todo) => todo.id));
 
   for (const todo of fallbackTodos) map.set(todo.id, todo);
   for (const todo of liveTodos) map.set(todo.id, todo);
 
-  if (legacyUpdatedAtMs > 0) {
+  if (!ignoreLegacy && legacyUpdatedAtMs > 0) {
     const legacyIds = new Set(legacyTodos.map((x) => x.id));
     for (const todo of legacyTodos) {
       const liveUpdatedAtMs = liveUpdatedAtMsById[todo.id] ?? 0;
-      if (preferFallbackOverLegacy && fallbackIds.has(todo.id)) continue;
       if (!map.has(todo.id) || legacyUpdatedAtMs > liveUpdatedAtMs) {
         map.set(todo.id, todo);
       }
     }
     for (const todo of liveTodos) {
       const liveUpdatedAtMs = liveUpdatedAtMsById[todo.id] ?? 0;
-      if (preferFallbackOverLegacy && fallbackIds.has(todo.id)) continue;
       if (legacyUpdatedAtMs > liveUpdatedAtMs && !legacyIds.has(todo.id)) {
         map.delete(todo.id);
       }
@@ -262,12 +256,20 @@ function pickMetaValue<T>(args: {
   remote: T | null | undefined;
   legacy: T | undefined;
   local: T;
-  preferLocal: boolean;
+  ignoreLegacy: boolean;
 }): T {
-  const { remote, legacy, local, preferLocal } = args;
+  const { remote, legacy, local, ignoreLegacy } = args;
   if (remote !== null && remote !== undefined) return remote;
-  if (preferLocal) return local;
+  if (ignoreLegacy) return local;
   return legacy ?? local;
+}
+
+function getMaxUpdatedAtMs(input: Record<string, number>): number {
+  let max = 0;
+  for (const value of Object.values(input)) {
+    if (value > max) max = value;
+  }
+  return max;
 }
 
 async function sha256Hex(input: string): Promise<string> {
@@ -518,7 +520,7 @@ export default function App() {
   const cloudTradeFingerprintsRef = useRef<Record<string, string>>({});
   const cloudTodoFingerprintsRef = useRef<Record<string, string>>({});
   const cloudMetaFingerprintRef = useRef('');
-  const [cloudSessionReady, setCloudSessionReady] = useState(true);
+  const [cloudSessionReady, setCloudSessionReady] = useState(false);
   const [cloudBusy, setCloudBusy] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
   const [networkOnline, setNetworkOnline] = useState(
@@ -628,15 +630,30 @@ export default function App() {
           fetchCloudPortfolioMeta(user.uid),
         ]);
         if (cancelled) return;
-        const preferLocalPersisted = hasPersistedPortfolio();
+        const localPersistedAtMs = getPersistedUpdatedAtMs();
         const localPortfolio = portfolioRef.current;
         const normalizedLegacy = legacy
           ? normalizeLoadedPortfolio(legacy.portfolio)
           : null;
-        const fallbackTrades = preferLocalPersisted
+        const maxRemoteTradeUpdatedAtMs = Math.max(
+          legacy?.updatedAtMs ?? 0,
+          getMaxUpdatedAtMs(live.tradeUpdatedAtMsById),
+        );
+        const maxRemoteTodoUpdatedAtMs = Math.max(
+          legacy?.updatedAtMs ?? 0,
+          getMaxUpdatedAtMs(live.todoUpdatedAtMsById),
+        );
+        const maxRemoteMetaUpdatedAtMs = Math.max(
+          legacy?.updatedAtMs ?? 0,
+          meta?.updatedAtMs ?? 0,
+        );
+        const preferLocalTrades = localPersistedAtMs > maxRemoteTradeUpdatedAtMs;
+        const preferLocalTodos = localPersistedAtMs > maxRemoteTodoUpdatedAtMs;
+        const preferLocalMeta = localPersistedAtMs > maxRemoteMetaUpdatedAtMs;
+        const fallbackTrades = preferLocalTrades
           ? localPortfolio.trades
           : (normalizedLegacy?.trades ?? localPortfolio.trades);
-        const fallbackTodos = preferLocalPersisted
+        const fallbackTodos = preferLocalTodos
           ? localPortfolio.todos
           : (normalizedLegacy?.todos ?? localPortfolio.todos);
         const nextTrades = reconcileTradesFromSources({
@@ -645,7 +662,7 @@ export default function App() {
           liveUpdatedAtMsById: live.tradeUpdatedAtMsById,
           legacyTrades: normalizedLegacy?.trades ?? [],
           legacyUpdatedAtMs: legacy?.updatedAtMs ?? 0,
-          preferFallbackOverLegacy: preferLocalPersisted,
+          ignoreLegacy: preferLocalTrades,
         });
         const nextTodos = reconcileTodosFromSources({
           liveTodos: live.todos,
@@ -653,7 +670,7 @@ export default function App() {
           liveUpdatedAtMsById: live.todoUpdatedAtMsById,
           legacyTodos: normalizedLegacy?.todos ?? [],
           legacyUpdatedAtMs: legacy?.updatedAtMs ?? 0,
-          preferFallbackOverLegacy: preferLocalPersisted,
+          ignoreLegacy: preferLocalTodos,
         });
         const liveTradeMap = buildTradeFingerprintMap(live.trades);
         const liveTodoMap = buildTodoFingerprintMap(live.todos);
@@ -677,51 +694,51 @@ export default function App() {
             remote: meta?.quotes,
             legacy: normalizedLegacy?.quotes,
             local: localPortfolio.quotes,
-            preferLocal: preferLocalPersisted,
+            ignoreLegacy: preferLocalMeta,
           });
           const nextPositionIds = pickMetaValue({
             remote: meta?.positionIds,
             legacy: normalizedLegacy?.positionIds,
             local: localPortfolio.positionIds,
-            preferLocal: preferLocalPersisted,
+            ignoreLegacy: preferLocalMeta,
           });
           const nextNotes = pickMetaValue({
             remote: meta?.notes,
             legacy: normalizedLegacy?.notes,
             local: localPortfolio.notes,
-            preferLocal: preferLocalPersisted,
+            ignoreLegacy: preferLocalMeta,
           });
           const nextQuoteUpdatedAt = pickMetaValue({
             remote: meta?.quoteUpdatedAt,
             legacy: normalizedLegacy?.quoteUpdatedAt,
             local: localPortfolio.quoteUpdatedAt,
-            preferLocal: preferLocalPersisted,
+            ignoreLegacy: preferLocalMeta,
           });
           const nextLastKrQuoteBulkAt = pickMetaValue({
             remote: meta?.lastKrQuoteBulkAt,
             legacy: normalizedLegacy?.lastKrQuoteBulkAt,
             local: localPortfolio.lastKrQuoteBulkAt,
-            preferLocal: preferLocalPersisted,
+            ignoreLegacy: preferLocalMeta,
           });
           const nextKrSellCommissionRate = normalizeKrSellCommissionRate(
             pickMetaValue({
               remote: meta?.krSellCommissionRate,
               legacy: normalizedLegacy?.krSellCommissionRate,
               local: localPortfolio.krSellCommissionRate,
-              preferLocal: preferLocalPersisted,
+              ignoreLegacy: preferLocalMeta,
             }),
           );
           const nextKrPreferExtendedQuote = pickMetaValue({
             remote: meta?.krPreferExtendedQuote,
             legacy: normalizedLegacy?.krPreferExtendedQuote,
             local: localPortfolio.krPreferExtendedQuote,
-            preferLocal: preferLocalPersisted,
+            ignoreLegacy: preferLocalMeta,
           });
           const nextKrDayOpenByTicker = pickMetaValue({
             remote: meta?.krDayOpenByTicker,
             legacy: normalizedLegacy?.krDayOpenByTicker,
             local: localPortfolio.krDayOpenByTicker,
-            preferLocal: preferLocalPersisted,
+            ignoreLegacy: preferLocalMeta,
           });
 
           setQuotes((prev) =>

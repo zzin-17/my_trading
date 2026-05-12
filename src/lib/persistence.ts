@@ -2,6 +2,7 @@ import type { Trade } from '../types/trade';
 import type { TradePlanTodo } from '../types/todo';
 
 const STORAGE_KEY = 'traderos-portfolio-v2';
+const STORAGE_UPDATED_AT_KEY = 'traderos-portfolio-v2-updated-at';
 
 export interface PersistedPortfolioV1 {
   trades: Trade[];
@@ -91,11 +92,14 @@ export function loadPersisted(): PersistedPortfolioV1 | null {
   }
 }
 
-export function hasPersistedPortfolio(): boolean {
+export function getPersistedUpdatedAtMs(): number {
   try {
-    return localStorage.getItem(STORAGE_KEY) !== null;
+    const raw = localStorage.getItem(STORAGE_UPDATED_AT_KEY);
+    if (!raw) return 0;
+    const value = Number(raw);
+    return Number.isFinite(value) && value > 0 ? value : 0;
   } catch {
-    return false;
+    return 0;
   }
 }
 
@@ -103,6 +107,7 @@ export function hasPersistedPortfolio(): boolean {
 export function savePersisted(data: PersistedPortfolioV1): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(STORAGE_UPDATED_AT_KEY, String(Date.now()));
     return true;
   } catch {
     return false;
@@ -112,6 +117,7 @@ export function savePersisted(data: PersistedPortfolioV1): boolean {
 export function clearPersisted(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_UPDATED_AT_KEY);
   } catch {
     /* ignore */
   }
