@@ -89,6 +89,34 @@ service cloud.firestore {
         && request.resource.data.updatedAt is timestamp;
     }
 
+    function validMetaDoc(docId) {
+      return docId == 'v1'
+        && request.resource.data.keys().hasOnly([
+          'quotes',
+          'positionIds',
+          'notes',
+          'quoteUpdatedAt',
+          'lastKrQuoteBulkAt',
+          'krSellCommissionRate',
+          'krPreferExtendedQuote',
+          'krDayOpenByTicker',
+          'updatedAt',
+        ])
+        && request.resource.data.quotes is map
+        && request.resource.data.positionIds is map
+        && request.resource.data.notes is map
+        && request.resource.data.quoteUpdatedAt is map
+        && (
+          !('lastKrQuoteBulkAt' in request.resource.data) ||
+          request.resource.data.lastKrQuoteBulkAt is string ||
+          request.resource.data.lastKrQuoteBulkAt == null
+        )
+        && isMoney(request.resource.data.krSellCommissionRate)
+        && request.resource.data.krPreferExtendedQuote is bool
+        && request.resource.data.krDayOpenByTicker is map
+        && request.resource.data.updatedAt is timestamp;
+    }
+
     // 이전 버전 전체 스냅샷 백업: 경로 users/{uid}/traderos/v1
     match /users/{userId}/traderos/{docId} {
       allow get: if request.auth != null
@@ -120,6 +148,13 @@ service cloud.firestore {
       allow read: if isOwner(userId);
       allow create, update: if isOwner(userId) && validTodoDoc(todoId);
       allow delete: if isOwner(userId);
+    }
+
+    // 실시간 동기화용 보조 메타 상태
+    match /users/{userId}/traderos_meta/{docId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && validMetaDoc(docId);
+      allow delete: if false;
     }
 
     // 위에서 허용한 경로 외에는 전부 거부(명시)

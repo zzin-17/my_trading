@@ -50,10 +50,13 @@ import {
 } from './lib/portfolioExport';
 import {
   fetchCloudLivePortfolio,
+  fetchCloudPortfolioMeta,
   fetchCloudPortfolio,
   pushCloudPortfolio,
+  subscribeCloudPortfolioMeta,
   subscribeCloudTodos,
   subscribeCloudTrades,
+  syncCloudPortfolioMeta,
   syncCloudTodos,
   syncCloudTrades,
 } from './lib/cloudPortfolio';
@@ -147,6 +150,19 @@ function sameTradeLists(a: Trade[], b: Trade[]): boolean {
 
 function sameTodoLists(a: TradePlanTodo[], b: TradePlanTodo[]): boolean {
   return sameFingerprintMaps(buildTodoFingerprintMap(a), buildTodoFingerprintMap(b));
+}
+
+function metaFingerprint(input: {
+  quotes: Record<string, number>;
+  positionIds: Record<string, string>;
+  notes: Record<string, string>;
+  quoteUpdatedAt: Record<string, string>;
+  lastKrQuoteBulkAt: string | null;
+  krSellCommissionRate: number;
+  krPreferExtendedQuote: boolean;
+  krDayOpenByTicker: Record<string, number>;
+}): string {
+  return JSON.stringify(input);
 }
 
 function reconcileTradesFromSources(args: {
@@ -466,6 +482,7 @@ export default function App() {
   const hadUserRef = useRef(false);
   const cloudTradeFingerprintsRef = useRef<Record<string, string>>({});
   const cloudTodoFingerprintsRef = useRef<Record<string, string>>({});
+  const cloudMetaFingerprintRef = useRef('');
   const [cloudSessionReady, setCloudSessionReady] = useState(true);
   const [cloudBusy, setCloudBusy] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
@@ -533,6 +550,7 @@ export default function App() {
   const wipePrivatePortfolio = useCallback(() => {
     cloudTradeFingerprintsRef.current = {};
     cloudTodoFingerprintsRef.current = {};
+    cloudMetaFingerprintRef.current = '';
     clearPersisted();
     clearInitialAppStateCache();
     setTrades([]);
@@ -569,9 +587,10 @@ export default function App() {
       setCloudBusy(true);
       setCloudError(null);
       try {
-        const [live, legacy] = await Promise.all([
+        const [live, legacy, meta] = await Promise.all([
           fetchCloudLivePortfolio(user.uid),
           fetchCloudPortfolio(user.uid),
+          fetchCloudPortfolioMeta(user.uid),
         ]);
         if (cancelled) return;
         const normalizedLegacy = legacy
@@ -611,6 +630,59 @@ export default function App() {
         } else {
           setTrades((prev) => (sameTradeLists(prev, nextTrades) ? prev : nextTrades));
           setTodos((prev) => (sameTodoLists(prev, nextTodos) ? prev : nextTodos));
+          const nextQuotes = meta?.quotes ?? normalizedLegacy?.quotes ?? portfolioRef.current.quotes;
+          const nextPositionIds =
+            meta?.positionIds ?? normalizedLegacy?.positionIds ?? portfolioRef.current.positionIds;
+          const nextNotes = meta?.notes ?? normalizedLegacy?.notes ?? portfolioRef.current.notes;
+          const nextQuoteUpdatedAt =
+            meta?.quoteUpdatedAt ??
+            normalizedLegacy?.quoteUpdatedAt ??
+            portfolioRef.current.quoteUpdatedAt;
+          const nextLastKrQuoteBulkAt =
+            meta?.lastKrQuoteBulkAt ??
+            normalizedLegacy?.lastKrQuoteBulkAt ??
+            portfolioRef.current.lastKrQuoteBulkAt;
+          const nextKrSellCommissionRate = normalizeKrSellCommissionRate(
+            meta?.krSellCommissionRate ?? normalizedLegacy?.krSellCommissionRate,
+          );
+          const nextKrPreferExtendedQuote =
+            meta?.krPreferExtendedQuote ??
+            (normalizedLegacy?.krPreferExtendedQuote === true);
+          const nextKrDayOpenByTicker =
+            meta?.krDayOpenByTicker ??
+            normalizedLegacy?.krDayOpenByTicker ??
+            portfolioRef.current.krDayOpenByTicker;
+
+          setQuotes((prev) =>
+            JSON.stringify(prev) === JSON.stringify(nextQuotes)
+              ? prev
+              : nextQuotes,
+          );
+          setPositionIds((prev) =>
+            JSON.stringify(prev) === JSON.stringify(nextPositionIds)
+              ? prev
+              : nextPositionIds,
+          );
+          setNotes((prev) => (JSON.stringify(prev) === JSON.stringify(nextNotes) ? prev : nextNotes));
+          setQuoteUpdatedAt((prev) =>
+            JSON.stringify(prev) === JSON.stringify(nextQuoteUpdatedAt)
+              ? prev
+              : nextQuoteUpdatedAt,
+          );
+          setLastKrQuoteBulkAt((prev) =>
+            prev === nextLastKrQuoteBulkAt ? prev : nextLastKrQuoteBulkAt,
+          );
+          setKrSellCommissionRate((prev) =>
+            prev === nextKrSellCommissionRate ? prev : nextKrSellCommissionRate,
+          );
+          setKrPreferExtendedQuote((prev) =>
+            prev === nextKrPreferExtendedQuote ? prev : nextKrPreferExtendedQuote,
+          );
+          setKrDayOpenByTicker((prev) =>
+            JSON.stringify(prev) === JSON.stringify(nextKrDayOpenByTicker)
+              ? prev
+              : nextKrDayOpenByTicker,
+          );
         }
 
         if (missingTradeDocs.length > 0 || missingTodoDocs.length > 0) {
@@ -622,6 +694,32 @@ export default function App() {
 
         cloudTradeFingerprintsRef.current = buildTradeFingerprintMap(nextTrades);
         cloudTodoFingerprintsRef.current = buildTodoFingerprintMap(nextTodos);
+        cloudMetaFingerprintRef.current = metaFingerprint({
+          quotes: meta?.quotes ?? normalizedLegacy?.quotes ?? portfolioRef.current.quotes,
+          positionIds:
+            meta?.positionIds ??
+            normalizedLegacy?.positionIds ??
+            portfolioRef.current.positionIds,
+          notes: meta?.notes ?? normalizedLegacy?.notes ?? portfolioRef.current.notes,
+          quoteUpdatedAt:
+            meta?.quoteUpdatedAt ??
+            normalizedLegacy?.quoteUpdatedAt ??
+            portfolioRef.current.quoteUpdatedAt,
+          lastKrQuoteBulkAt:
+            meta?.lastKrQuoteBulkAt ??
+            normalizedLegacy?.lastKrQuoteBulkAt ??
+            portfolioRef.current.lastKrQuoteBulkAt,
+          krSellCommissionRate: normalizeKrSellCommissionRate(
+            meta?.krSellCommissionRate ?? normalizedLegacy?.krSellCommissionRate,
+          ),
+          krPreferExtendedQuote:
+            meta?.krPreferExtendedQuote ??
+            (normalizedLegacy?.krPreferExtendedQuote === true),
+          krDayOpenByTicker:
+            meta?.krDayOpenByTicker ??
+            normalizedLegacy?.krDayOpenByTicker ??
+            portfolioRef.current.krDayOpenByTicker,
+        });
 
         cleanupFns.push(
           subscribeCloudTrades(
@@ -643,6 +741,63 @@ export default function App() {
               cloudTodoFingerprintsRef.current = buildTodoFingerprintMap(remoteTodos);
               setTodos((prev) =>
                 sameTodoLists(prev, remoteTodos) ? prev : remoteTodos,
+              );
+            },
+            (e) => setCloudError(humanizeCloudError(e)),
+          ),
+        );
+        cleanupFns.push(
+          subscribeCloudPortfolioMeta(
+            user.uid,
+            (remoteMeta) => {
+              if (!remoteMeta) return;
+              cloudMetaFingerprintRef.current = metaFingerprint({
+                quotes: remoteMeta.quotes,
+                positionIds: remoteMeta.positionIds,
+                notes: remoteMeta.notes,
+                quoteUpdatedAt: remoteMeta.quoteUpdatedAt,
+                lastKrQuoteBulkAt: remoteMeta.lastKrQuoteBulkAt,
+                krSellCommissionRate: remoteMeta.krSellCommissionRate,
+                krPreferExtendedQuote: remoteMeta.krPreferExtendedQuote,
+                krDayOpenByTicker: remoteMeta.krDayOpenByTicker,
+              });
+              setQuotes((prev) =>
+                JSON.stringify(prev) === JSON.stringify(remoteMeta.quotes)
+                  ? prev
+                  : remoteMeta.quotes,
+              );
+              setPositionIds((prev) =>
+                JSON.stringify(prev) === JSON.stringify(remoteMeta.positionIds)
+                  ? prev
+                  : remoteMeta.positionIds,
+              );
+              setNotes((prev) =>
+                JSON.stringify(prev) === JSON.stringify(remoteMeta.notes)
+                  ? prev
+                  : remoteMeta.notes,
+              );
+              setQuoteUpdatedAt((prev) =>
+                JSON.stringify(prev) === JSON.stringify(remoteMeta.quoteUpdatedAt)
+                  ? prev
+                  : remoteMeta.quoteUpdatedAt,
+              );
+              setLastKrQuoteBulkAt((prev) =>
+                prev === remoteMeta.lastKrQuoteBulkAt ? prev : remoteMeta.lastKrQuoteBulkAt,
+              );
+              setKrSellCommissionRate((prev) =>
+                prev === remoteMeta.krSellCommissionRate
+                  ? prev
+                  : remoteMeta.krSellCommissionRate,
+              );
+              setKrPreferExtendedQuote((prev) =>
+                prev === remoteMeta.krPreferExtendedQuote
+                  ? prev
+                  : remoteMeta.krPreferExtendedQuote,
+              );
+              setKrDayOpenByTicker((prev) =>
+                JSON.stringify(prev) === JSON.stringify(remoteMeta.krDayOpenByTicker)
+                  ? prev
+                  : remoteMeta.krDayOpenByTicker,
               );
             },
             (e) => setCloudError(humanizeCloudError(e)),
@@ -724,6 +879,46 @@ export default function App() {
     cloudSessionReady,
     todos,
     networkOnline,
+  ]);
+
+  useEffect(() => {
+    if (!firebaseConfigured || !user || !cloudSessionReady || !networkOnline) return;
+    const localMeta = {
+      quotes,
+      positionIds,
+      notes,
+      quoteUpdatedAt,
+      lastKrQuoteBulkAt,
+      krSellCommissionRate,
+      krPreferExtendedQuote,
+      krDayOpenByTicker,
+    };
+    const localFingerprint = metaFingerprint(localMeta);
+    if (cloudMetaFingerprintRef.current === localFingerprint) return;
+    let cancelled = false;
+    void syncCloudPortfolioMeta(user.uid, localMeta)
+      .then(() => {
+        if (!cancelled) setCloudError(null);
+      })
+      .catch((e) => {
+        if (!cancelled) setCloudError(humanizeCloudError(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    firebaseConfigured,
+    user?.uid,
+    cloudSessionReady,
+    networkOnline,
+    quotes,
+    positionIds,
+    notes,
+    quoteUpdatedAt,
+    lastKrQuoteBulkAt,
+    krSellCommissionRate,
+    krPreferExtendedQuote,
+    krDayOpenByTicker,
   ]);
 
   const handleExportPortfolio = useCallback(() => {

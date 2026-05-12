@@ -11,11 +11,12 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import type { PersistedPortfolioV1 } from './persistence';
-import { coercePersistedPortfolio } from './persistence';
+import { coercePersistedPortfolio, sanitizeKrDayOpenByTicker } from './persistence';
 import { getFirebaseDb } from './firebase/client';
 import type { Trade } from '../types/trade';
 import type { TradePlanTodo } from '../types/todo';
 import type { CurrencyCode, Market } from '../types/portfolio';
+import { normalizeKrSellCommissionRate } from './krTradingAssumptions';
 
 function portfolioDocRef(uid: string) {
   return doc(getFirebaseDb(), 'users', uid, 'traderos', 'v1');
@@ -37,6 +38,10 @@ function todoDocRef(uid: string, todoId: string) {
   return doc(getFirebaseDb(), 'users', uid, 'todos', todoId);
 }
 
+function metaDocRef(uid: string) {
+  return doc(getFirebaseDb(), 'users', uid, 'traderos_meta', 'v1');
+}
+
 export interface CloudPortfolioSnapshot {
   portfolio: PersistedPortfolioV1;
   /** 밀리초 (표시용) */
@@ -48,6 +53,18 @@ export interface CloudLivePortfolio {
   todos: TradePlanTodo[];
   tradeUpdatedAtMsById: Record<string, number>;
   todoUpdatedAtMsById: Record<string, number>;
+}
+
+export interface CloudPortfolioMeta {
+  quotes: Record<string, number>;
+  positionIds: Record<string, string>;
+  notes: Record<string, string>;
+  quoteUpdatedAt: Record<string, string>;
+  lastKrQuoteBulkAt: string | null;
+  krSellCommissionRate: number;
+  krPreferExtendedQuote: boolean;
+  krDayOpenByTicker: Record<string, number>;
+  updatedAtMs: number;
 }
 
 function isRecord(input: unknown): input is Record<string, unknown> {
@@ -179,6 +196,36 @@ function updatedAtToMillis(input: unknown): number {
   return input instanceof Timestamp ? input.toMillis() : 0;
 }
 
+function isStringRecord(input: unknown): input is Record<string, string> {
+  if (!isRecord(input)) return false;
+  return Object.values(input).every((x) => typeof x === 'string');
+}
+
+function isNumberRecord(input: unknown): input is Record<string, number> {
+  if (!isRecord(input)) return false;
+  return Object.values(input).every((x) => typeof x === 'number' && Number.isFinite(x));
+}
+
+function coerceCloudPortfolioMeta(input: unknown, updatedAtMs: number): CloudPortfolioMeta | null {
+  if (!isRecord(input)) return null;
+  if (!isNumberRecord(input.quotes)) return null;
+  if (!isStringRecord(input.positionIds)) return null;
+  if (!isStringRecord(input.notes ?? {})) return null;
+  if (!isStringRecord(input.quoteUpdatedAt ?? {})) return null;
+  return {
+    quotes: input.quotes,
+    positionIds: input.positionIds,
+    notes: isStringRecord(input.notes) ? input.notes : {},
+    quoteUpdatedAt: isStringRecord(input.quoteUpdatedAt) ? input.quoteUpdatedAt : {},
+    lastKrQuoteBulkAt:
+      typeof input.lastKrQuoteBulkAt === 'string' ? input.lastKrQuoteBulkAt : null,
+    krSellCommissionRate: normalizeKrSellCommissionRate(input.krSellCommissionRate),
+    krPreferExtendedQuote: input.krPreferExtendedQuote === true,
+    krDayOpenByTicker: sanitizeKrDayOpenByTicker(input.krDayOpenByTicker),
+    updatedAtMs,
+  };
+}
+
 export async function fetchCloudPortfolio(
   uid: string,
 ): Promise<CloudPortfolioSnapshot | null> {
@@ -210,6 +257,15 @@ export async function pushCloudPortfolio(
     body,
     updatedAt: serverTimestamp(),
   });
+}
+
+export async function fetchCloudPortfolioMeta(
+  uid: string,
+): Promise<CloudPortfolioMeta | null> {
+  const snap = await getDoc(metaDocRef(uid));
+  if (!snap.exists()) return null;
+  const updatedAtMs = updatedAtToMillis(snap.data().updatedAt);
+  return coerceCloudPortfolioMeta(snap.data(), updatedAtMs);
 }
 
 export async function fetchCloudLivePortfolio(
@@ -272,6 +328,25 @@ export function subscribeCloudTodos(
         .map((x) => parseCloudTodo(x.data(), x.id))
         .filter((x): x is TradePlanTodo => x !== null);
       onValue(sortTodosForCloud(todos));
+    },
+    onError,
+  );
+}
+
+export function subscribeCloudPortfolioMeta(
+  uid: string,
+  onValue: (meta: CloudPortfolioMeta | null) => void,
+  onError?: (error: unknown) => void,
+): Unsubscribe {
+  return onSnapshot(
+    metaDocRef(uid),
+    (snap) => {
+      if (!snap.exists()) {
+        onValue(null);
+        return;
+      }
+      const updatedAtMs = updatedAtToMillis(snap.data().updatedAt);
+      onValue(coerceCloudPortfolioMeta(snap.data(), updatedAtMs));
     },
     onError,
   );
@@ -347,4 +422,14 @@ export async function syncCloudTodos(
 ): Promise<void> {
   if (upserts.length === 0 && deletes.length === 0) return;
   await commitTodoChanges(uid, upserts, deletes);
+}
+
+export async function syncCloudPortfolioMeta(
+  uid: string,
+  meta: Omit<CloudPortfolioMeta, 'updatedAtMs'>,
+): Promise<void> {
+  await setDoc(metaDocRef(uid), {
+    ...meta,
+    updatedAt: serverTimestamp(),
+  });
 }
