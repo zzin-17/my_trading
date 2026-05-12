@@ -3,7 +3,10 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   onSnapshot,
+  orderBy,
+  query,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -42,6 +45,26 @@ function metaDocRef(uid: string) {
   return doc(getFirebaseDb(), 'users', uid, 'traderos_meta', 'v1');
 }
 
+function snapshotCollectionRef(uid: string) {
+  return collection(getFirebaseDb(), 'users', uid, 'portfolio_snapshots');
+}
+
+function snapshotDocRef(uid: string, snapshotId: string) {
+  return doc(getFirebaseDb(), 'users', uid, 'portfolio_snapshots', snapshotId);
+}
+
+function tradeTrashCollectionRef(uid: string) {
+  return collection(getFirebaseDb(), 'users', uid, 'trade_trash');
+}
+
+function todoTrashCollectionRef(uid: string) {
+  return collection(getFirebaseDb(), 'users', uid, 'todo_trash');
+}
+
+function eventCollectionRef(uid: string) {
+  return collection(getFirebaseDb(), 'users', uid, 'portfolio_events');
+}
+
 export interface CloudPortfolioSnapshot {
   portfolio: PersistedPortfolioV1;
   /** 밀리초 (표시용) */
@@ -65,6 +88,44 @@ export interface CloudPortfolioMeta {
   krPreferExtendedQuote: boolean;
   krDayOpenByTicker: Record<string, number>;
   updatedAtMs: number;
+}
+
+export interface CloudPortfolioSnapshotSummary {
+  id: string;
+  createdAtMs: number;
+  reason: string | null;
+  sourceDeviceId: string | null;
+  tradeCount: number;
+  todoCount: number;
+  latestTradeDate: string | null;
+}
+
+export interface CloudDeletedTradeRecord {
+  trashId: string;
+  itemId: string;
+  deletedAtMs: number;
+  reason: string | null;
+  sourceDeviceId: string | null;
+  trade: Trade;
+}
+
+export interface CloudDeletedTodoRecord {
+  trashId: string;
+  itemId: string;
+  deletedAtMs: number;
+  reason: string | null;
+  sourceDeviceId: string | null;
+  todo: TradePlanTodo;
+}
+
+type EventEntityType = 'trade' | 'todo' | 'meta' | 'snapshot';
+
+interface EventLogInput {
+  action: string;
+  entityType: EventEntityType;
+  entityId: string;
+  sourceDeviceId?: string | null;
+  summary?: string | null;
 }
 
 function isRecord(input: unknown): input is Record<string, unknown> {
@@ -196,6 +257,129 @@ function updatedAtToMillis(input: unknown): number {
   return input instanceof Timestamp ? input.toMillis() : 0;
 }
 
+function createDocId(prefix: string): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function serializePortfolioBody(portfolio: PersistedPortfolioV1): string {
+  return JSON.stringify(portfolio);
+}
+
+function parsePortfolioBody(body: unknown): PersistedPortfolioV1 | null {
+  if (typeof body !== 'string' || !body.trim()) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body) as unknown;
+  } catch {
+    return null;
+  }
+  return coercePersistedPortfolio(parsed);
+}
+
+function summarizePortfolio(portfolio: PersistedPortfolioV1): {
+  tradeCount: number;
+  todoCount: number;
+  latestTradeDate: string | null;
+} {
+  const trades = portfolio.trades.filter((trade) => trade.date !== '1900-01-01');
+  const latestTradeDate = trades.reduce<string | null>(
+    (latest, trade) => (!latest || trade.date > latest ? trade.date : latest),
+    null,
+  );
+  return {
+    tradeCount: trades.length,
+    todoCount: portfolio.todos.length,
+    latestTradeDate,
+  };
+}
+
+function buildEventSummary(input: EventLogInput): string {
+  return input.summary?.trim() || `${input.entityType}:${input.action}:${input.entityId}`;
+}
+
+function parseSnapshotSummary(input: Record<string, unknown>, snapshotId: string): CloudPortfolioSnapshotSummary {
+  return {
+    id: snapshotId,
+    createdAtMs: updatedAtToMillis(input.createdAt),
+    reason: typeof input.reason === 'string' ? input.reason : null,
+    sourceDeviceId:
+      typeof input.sourceDeviceId === 'string' ? input.sourceDeviceId : null,
+    tradeCount:
+      typeof input.tradeCount === 'number' && Number.isFinite(input.tradeCount)
+        ? input.tradeCount
+        : 0,
+    todoCount:
+      typeof input.todoCount === 'number' && Number.isFinite(input.todoCount)
+        ? input.todoCount
+        : 0,
+    latestTradeDate:
+      typeof input.latestTradeDate === 'string' ? input.latestTradeDate : null,
+  };
+}
+
+function buildSingleTradeBody(trade: Trade): string {
+  return JSON.stringify(trade);
+}
+
+function parseSingleTradeBody(body: unknown): Trade | null {
+  if (typeof body !== 'string' || !body.trim()) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body) as unknown;
+  } catch {
+    return null;
+  }
+  return parseCloudTrade(parsed, '');
+}
+
+function buildSingleTodoBody(todo: TradePlanTodo): string {
+  return JSON.stringify(todo);
+}
+
+function parseSingleTodoBody(body: unknown): TradePlanTodo | null {
+  if (typeof body !== 'string' || !body.trim()) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body) as unknown;
+  } catch {
+    return null;
+  }
+  return parseCloudTodo(parsed, '');
+}
+
+function parseTradeTrashRecord(input: unknown, trashId: string): CloudDeletedTradeRecord | null {
+  if (!isRecord(input)) return null;
+  const trade = parseSingleTradeBody(input.body);
+  if (!trade) return null;
+  return {
+    trashId,
+    itemId: typeof input.itemId === 'string' ? input.itemId : trade.id,
+    deletedAtMs: updatedAtToMillis(input.deletedAt),
+    reason: typeof input.reason === 'string' ? input.reason : null,
+    sourceDeviceId:
+      typeof input.sourceDeviceId === 'string' ? input.sourceDeviceId : null,
+    trade,
+  };
+}
+
+function parseTodoTrashRecord(input: unknown, trashId: string): CloudDeletedTodoRecord | null {
+  if (!isRecord(input)) return null;
+  const todo = parseSingleTodoBody(input.body);
+  if (!todo) return null;
+  return {
+    trashId,
+    itemId: typeof input.itemId === 'string' ? input.itemId : todo.id,
+    deletedAtMs: updatedAtToMillis(input.deletedAt),
+    reason: typeof input.reason === 'string' ? input.reason : null,
+    sourceDeviceId:
+      typeof input.sourceDeviceId === 'string' ? input.sourceDeviceId : null,
+    todo,
+  };
+}
+
 function isStringRecord(input: unknown): input is Record<string, string> {
   if (!isRecord(input)) return false;
   return Object.values(input).every((x) => typeof x === 'string');
@@ -252,7 +436,7 @@ export async function pushCloudPortfolio(
   uid: string,
   portfolio: PersistedPortfolioV1,
 ): Promise<void> {
-  const body = JSON.stringify(portfolio);
+  const body = serializePortfolioBody(portfolio);
   await setDoc(portfolioDocRef(uid), {
     body,
     updatedAt: serverTimestamp(),
@@ -297,6 +481,142 @@ export async function fetchCloudLivePortfolio(
     tradeUpdatedAtMsById,
     todoUpdatedAtMsById,
   };
+}
+
+export async function createCloudPortfolioSnapshot(
+  uid: string,
+  portfolio: PersistedPortfolioV1,
+  reason: string,
+  sourceDeviceId?: string | null,
+): Promise<string> {
+  const snapshotId = createDocId('snapshot');
+  const summary = summarizePortfolio(portfolio);
+  await setDoc(snapshotDocRef(uid, snapshotId), {
+    body: serializePortfolioBody(portfolio),
+    reason,
+    sourceDeviceId: sourceDeviceId ?? null,
+    ...summary,
+    createdAt: serverTimestamp(),
+  });
+  await appendCloudEvent(uid, {
+    action: 'snapshot.created',
+    entityType: 'snapshot',
+    entityId: snapshotId,
+    sourceDeviceId,
+    summary: `${reason} · 거래 ${summary.tradeCount}건`,
+  });
+  return snapshotId;
+}
+
+export async function listCloudPortfolioSnapshots(
+  uid: string,
+  maxItems = 12,
+): Promise<CloudPortfolioSnapshotSummary[]> {
+  const snap = await getDocs(
+    query(snapshotCollectionRef(uid), orderBy('createdAt', 'desc'), limit(maxItems)),
+  );
+  return snap.docs
+    .map((x) => parseSnapshotSummary(x.data(), x.id))
+    .sort((a, b) => b.createdAtMs - a.createdAtMs);
+}
+
+export async function fetchCloudPortfolioSnapshot(
+  uid: string,
+  snapshotId: string,
+): Promise<PersistedPortfolioV1 | null> {
+  const snap = await getDoc(snapshotDocRef(uid, snapshotId));
+  if (!snap.exists()) return null;
+  return parsePortfolioBody(snap.data().body);
+}
+
+async function appendCloudEvent(uid: string, input: EventLogInput): Promise<void> {
+  const ref = doc(eventCollectionRef(uid), createDocId('event'));
+  await setDoc(ref, {
+    action: input.action,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    sourceDeviceId: input.sourceDeviceId ?? null,
+    summary: buildEventSummary(input),
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function listCloudDeletedTrades(
+  uid: string,
+  maxItems = 20,
+): Promise<CloudDeletedTradeRecord[]> {
+  const snap = await getDocs(
+    query(tradeTrashCollectionRef(uid), orderBy('deletedAt', 'desc'), limit(maxItems)),
+  );
+  return snap.docs
+    .map((x) => parseTradeTrashRecord(x.data(), x.id))
+    .filter((x): x is CloudDeletedTradeRecord => x !== null)
+    .sort((a, b) => b.deletedAtMs - a.deletedAtMs);
+}
+
+export async function listCloudDeletedTodos(
+  uid: string,
+  maxItems = 20,
+): Promise<CloudDeletedTodoRecord[]> {
+  const snap = await getDocs(
+    query(todoTrashCollectionRef(uid), orderBy('deletedAt', 'desc'), limit(maxItems)),
+  );
+  return snap.docs
+    .map((x) => parseTodoTrashRecord(x.data(), x.id))
+    .filter((x): x is CloudDeletedTodoRecord => x !== null)
+    .sort((a, b) => b.deletedAtMs - a.deletedAtMs);
+}
+
+export async function restoreCloudDeletedTrade(
+  uid: string,
+  trashId: string,
+  sourceDeviceId?: string | null,
+): Promise<Trade | null> {
+  const snap = await getDoc(doc(tradeTrashCollectionRef(uid), trashId));
+  if (!snap.exists()) return null;
+  const record = parseTradeTrashRecord(snap.data(), trashId);
+  if (!record) return null;
+  const batch = writeBatch(getFirebaseDb());
+  batch.set(tradeDocRef(uid, record.trade.id), {
+    ...record.trade,
+    updatedAt: serverTimestamp(),
+  });
+  batch.delete(doc(tradeTrashCollectionRef(uid), trashId));
+  await batch.commit();
+  await appendCloudEvent(uid, {
+    action: 'trade.restored',
+    entityType: 'trade',
+    entityId: record.trade.id,
+    sourceDeviceId,
+    summary: `${record.trade.date} ${record.trade.ticker} ${record.trade.name} 복구`,
+  });
+  return record.trade;
+}
+
+export async function restoreCloudDeletedTodo(
+  uid: string,
+  trashId: string,
+  sourceDeviceId?: string | null,
+): Promise<TradePlanTodo | null> {
+  const snap = await getDoc(doc(todoTrashCollectionRef(uid), trashId));
+  if (!snap.exists()) return null;
+  const record = parseTodoTrashRecord(snap.data(), trashId);
+  if (!record) return null;
+  const batch = writeBatch(getFirebaseDb());
+  batch.set(todoDocRef(uid, record.todo.id), {
+    ...record.todo,
+    updatedAt: serverTimestamp(),
+  });
+  batch.delete(doc(todoTrashCollectionRef(uid), trashId));
+  await batch.commit();
+  await appendCloudEvent(uid, {
+    action: 'todo.restored',
+    entityType: 'todo',
+    entityId: record.todo.id,
+    sourceDeviceId,
+    summary: `${record.todo.ticker} ${record.todo.action} 계획 복구`,
+  });
+  return record.todo;
 }
 
 export function subscribeCloudTrades(
@@ -355,12 +675,13 @@ export function subscribeCloudPortfolioMeta(
 async function commitTradeChanges(
   uid: string,
   upserts: Trade[],
-  deletes: string[],
+  deletes: Trade[],
+  sourceDeviceId?: string | null,
 ): Promise<void> {
   const db = getFirebaseDb();
-  const ops: Array<{ type: 'set'; value: Trade } | { type: 'delete'; id: string }> = [
+  const ops: Array<{ type: 'set'; value: Trade } | { type: 'trash'; value: Trade }> = [
     ...upserts.map((value) => ({ type: 'set' as const, value })),
-    ...deletes.map((id) => ({ type: 'delete' as const, id })),
+    ...deletes.map((value) => ({ type: 'trash' as const, value })),
   ];
   for (let i = 0; i < ops.length; i += 400) {
     const batch = writeBatch(db);
@@ -371,24 +692,47 @@ async function commitTradeChanges(
           updatedAt: serverTimestamp(),
         });
       } else {
-        batch.delete(tradeDocRef(uid, op.id));
+        const trashRef = doc(tradeTrashCollectionRef(uid), createDocId('trade-trash'));
+        batch.set(trashRef, {
+          itemId: op.value.id,
+          ticker: op.value.ticker,
+          name: op.value.name,
+          date: op.value.date,
+          body: buildSingleTradeBody(op.value),
+          reason: 'user-delete',
+          sourceDeviceId: sourceDeviceId ?? null,
+          deletedAt: serverTimestamp(),
+        });
+        batch.delete(tradeDocRef(uid, op.value.id));
       }
     }
     await batch.commit();
   }
+  await Promise.all(
+    deletes.map((trade) =>
+      appendCloudEvent(uid, {
+        action: 'trade.softDeleted',
+        entityType: 'trade',
+        entityId: trade.id,
+        sourceDeviceId,
+        summary: `${trade.date} ${trade.ticker} ${trade.name} 삭제`,
+      }),
+    ),
+  );
 }
 
 async function commitTodoChanges(
   uid: string,
   upserts: TradePlanTodo[],
-  deletes: string[],
+  deletes: TradePlanTodo[],
+  sourceDeviceId?: string | null,
 ): Promise<void> {
   const db = getFirebaseDb();
   const ops: Array<
-    { type: 'set'; value: TradePlanTodo } | { type: 'delete'; id: string }
+    { type: 'set'; value: TradePlanTodo } | { type: 'trash'; value: TradePlanTodo }
   > = [
     ...upserts.map((value) => ({ type: 'set' as const, value })),
-    ...deletes.map((id) => ({ type: 'delete' as const, id })),
+    ...deletes.map((value) => ({ type: 'trash' as const, value })),
   ];
   for (let i = 0; i < ops.length; i += 400) {
     const batch = writeBatch(db);
@@ -399,29 +743,53 @@ async function commitTodoChanges(
           updatedAt: serverTimestamp(),
         });
       } else {
-        batch.delete(todoDocRef(uid, op.id));
+        const trashRef = doc(todoTrashCollectionRef(uid), createDocId('todo-trash'));
+        batch.set(trashRef, {
+          itemId: op.value.id,
+          ticker: op.value.ticker,
+          name: op.value.name ?? '',
+          createdAtValue: op.value.createdAt,
+          body: buildSingleTodoBody(op.value),
+          reason: 'user-delete',
+          sourceDeviceId: sourceDeviceId ?? null,
+          deletedAt: serverTimestamp(),
+        });
+        batch.delete(todoDocRef(uid, op.value.id));
       }
     }
     await batch.commit();
   }
+  await Promise.all(
+    deletes.map((todo) =>
+      appendCloudEvent(uid, {
+        action: 'todo.softDeleted',
+        entityType: 'todo',
+        entityId: todo.id,
+        sourceDeviceId,
+        summary: `${todo.ticker} ${todo.action} 계획 삭제`,
+      }),
+    ),
+  );
 }
 
 export async function syncCloudTrades(
   uid: string,
   upserts: Trade[],
-  deletes: string[],
+  deletes: Trade[],
+  sourceDeviceId?: string | null,
 ): Promise<void> {
   if (upserts.length === 0 && deletes.length === 0) return;
-  await commitTradeChanges(uid, upserts, deletes);
+  await commitTradeChanges(uid, upserts, deletes, sourceDeviceId);
 }
 
 export async function syncCloudTodos(
   uid: string,
   upserts: TradePlanTodo[],
-  deletes: string[],
+  deletes: TradePlanTodo[],
+  sourceDeviceId?: string | null,
 ): Promise<void> {
   if (upserts.length === 0 && deletes.length === 0) return;
-  await commitTodoChanges(uid, upserts, deletes);
+  await commitTodoChanges(uid, upserts, deletes, sourceDeviceId);
 }
 
 export async function syncCloudPortfolioMeta(

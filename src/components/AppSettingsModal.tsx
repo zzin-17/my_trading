@@ -1,5 +1,39 @@
 import { useEffect } from 'react';
 
+interface SnapshotRecoveryItem {
+  id: string;
+  createdAtMs: number;
+  reason: string | null;
+  tradeCount: number;
+  todoCount: number;
+  latestTradeDate: string | null;
+}
+
+interface DeletedTradeRecoveryItem {
+  trashId: string;
+  deletedAtMs: number;
+  reason: string | null;
+  trade: {
+    date: string;
+    ticker: string;
+    name: string;
+    side: 'buy' | 'sell';
+    quantity: number;
+  };
+}
+
+interface DeletedTodoRecoveryItem {
+  trashId: string;
+  deletedAtMs: number;
+  reason: string | null;
+  todo: {
+    ticker: string;
+    name?: string;
+    action: 'buy' | 'sell';
+    quantity: number;
+  };
+}
+
 interface AppSettingsModalProps {
   open: boolean;
   onClose: () => void;
@@ -24,6 +58,13 @@ interface AppSettingsModalProps {
   onCloudPushNow?: () => void | Promise<void>;
   onExportPortfolio?: () => void;
   onImportPortfolioPick?: () => void;
+  recoveryBusy?: boolean;
+  snapshotItems?: SnapshotRecoveryItem[];
+  deletedTradeItems?: DeletedTradeRecoveryItem[];
+  deletedTodoItems?: DeletedTodoRecoveryItem[];
+  onRestoreSnapshot?: (snapshotId: string) => void | Promise<void>;
+  onRestoreDeletedTrade?: (trashId: string) => void | Promise<void>;
+  onRestoreDeletedTodo?: (trashId: string) => void | Promise<void>;
   onOpenTutorial?: () => void;
   themeMode?: 'dark' | 'light';
   onThemeModeChange?: (mode: 'dark' | 'light') => void;
@@ -52,6 +93,13 @@ export function AppSettingsModal({
   onCloudPushNow,
   onExportPortfolio,
   onImportPortfolioPick,
+  recoveryBusy = false,
+  snapshotItems = [],
+  deletedTradeItems = [],
+  deletedTodoItems = [],
+  onRestoreSnapshot,
+  onRestoreDeletedTrade,
+  onRestoreDeletedTodo,
   onOpenTutorial,
   themeMode = 'dark',
   onThemeModeChange,
@@ -70,6 +118,16 @@ export function AppSettingsModal({
   }, [open, onClose]);
 
   if (!open) return null;
+
+  const formatDateTime = (valueMs: number) => {
+    if (!Number.isFinite(valueMs) || valueMs <= 0) return '-';
+    return new Date(valueMs).toLocaleString('ko-KR', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
 
   return (
     <div
@@ -192,6 +250,117 @@ export function AppSettingsModal({
                     로그아웃
                   </button>
                 </>
+              )}
+            </div>
+          </section>
+        ) : null}
+
+        {firebaseCloudEnabled && cloudUserEmail ? (
+          <section className="mt-5 border-t border-border/60 pt-4">
+            <h3 className="text-[12px] font-semibold text-textMain">복구 센터</h3>
+            <p className="mt-1 text-[12px] leading-relaxed text-textMuted">
+              자동 스냅샷과 삭제 보관함을 확인하고 필요한 항목을 복구할 수 있습니다.
+            </p>
+            {recoveryBusy ? (
+              <p className="mt-2 text-[12px] text-textMuted">복구 목록을 불러오는 중…</p>
+            ) : null}
+
+            <div className="mt-3 rounded-md border border-border/70 bg-background/40 p-3">
+              <p className="text-[12px] font-medium text-textMain">최근 스냅샷</p>
+              {snapshotItems.length === 0 ? (
+                <p className="mt-2 text-[12px] text-textMuted">저장된 스냅샷이 없습니다.</p>
+              ) : (
+                <div className="mt-2 space-y-2">
+                  {snapshotItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="rounded border border-border/60 bg-surface/70 p-2 text-[12px] text-textMain"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium">{item.reason ?? '자동 백업'}</p>
+                          <p className="mt-1 text-textMuted">
+                            {formatDateTime(item.createdAtMs)} · 거래 {item.tradeCount}건 · To-do{' '}
+                            {item.todoCount}건
+                          </p>
+                          <p className="mt-1 text-textMuted">
+                            최신 거래일: {item.latestTradeDate ?? '-'}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={recoveryBusy}
+                          onClick={() => void onRestoreSnapshot?.(item.id)}
+                          className="shrink-0 rounded border border-border px-2 py-1 text-[11px] font-medium text-textMain hover:bg-white/5 disabled:opacity-50"
+                        >
+                          복구
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 rounded-md border border-border/70 bg-background/40 p-3">
+              <p className="text-[12px] font-medium text-textMain">삭제 보관함</p>
+              {deletedTradeItems.length === 0 && deletedTodoItems.length === 0 ? (
+                <p className="mt-2 text-[12px] text-textMuted">삭제 보관함이 비어 있습니다.</p>
+              ) : (
+                <div className="mt-2 space-y-2">
+                  {deletedTradeItems.map((item) => (
+                    <div
+                      key={item.trashId}
+                      className="rounded border border-border/60 bg-surface/70 p-2 text-[12px] text-textMain"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium">
+                            거래 · {item.trade.date} · {item.trade.ticker} {item.trade.name}
+                          </p>
+                          <p className="mt-1 text-textMuted">
+                            {item.trade.side === 'buy' ? '매수' : '매도'} {item.trade.quantity}주 ·{' '}
+                            {formatDateTime(item.deletedAtMs)}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={recoveryBusy}
+                          onClick={() => void onRestoreDeletedTrade?.(item.trashId)}
+                          className="shrink-0 rounded border border-border px-2 py-1 text-[11px] font-medium text-textMain hover:bg-white/5 disabled:opacity-50"
+                        >
+                          복구
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {deletedTodoItems.map((item) => (
+                    <div
+                      key={item.trashId}
+                      className="rounded border border-border/60 bg-surface/70 p-2 text-[12px] text-textMain"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium">
+                            계획 · {item.todo.ticker} {item.todo.name ?? ''}
+                          </p>
+                          <p className="mt-1 text-textMuted">
+                            {item.todo.action === 'buy' ? '매수' : '매도'} {item.todo.quantity}주 ·{' '}
+                            {formatDateTime(item.deletedAtMs)}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={recoveryBusy}
+                          onClick={() => void onRestoreDeletedTodo?.(item.trashId)}
+                          className="shrink-0 rounded border border-border px-2 py-1 text-[11px] font-medium text-textMain hover:bg-white/5 disabled:opacity-50"
+                        >
+                          복구
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </section>

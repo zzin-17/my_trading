@@ -3,6 +3,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -37,6 +38,7 @@ import {
   savePersisted,
   clearPersisted,
   getPersistedUpdatedAtMs,
+  getOrCreateDeviceId,
   type PersistedPortfolioV1,
 } from './lib/persistence';
 import {
@@ -50,17 +52,20 @@ import {
   parsePortfolioImportJson,
 } from './lib/portfolioExport';
 import {
-  fetchCloudLivePortfolio,
-  fetchCloudPortfolioMeta,
-  fetchCloudPortfolio,
-  pushCloudPortfolio,
-  subscribeCloudPortfolioMeta,
-  subscribeCloudTodos,
-  subscribeCloudTrades,
-  syncCloudPortfolioMeta,
-  syncCloudTodos,
-  syncCloudTrades,
-} from './lib/cloudPortfolio';
+  buildCloudPortfolioMetaInput,
+  buildTodoRecordMap,
+  buildTodoFingerprintMap,
+  buildTradeRecordMap,
+  buildTradeFingerprintMap,
+  metaFingerprint,
+  portfolioGuardFingerprint,
+  sameTodoLists,
+  sameTradeLists,
+  cloudPortfolioStore,
+  type CloudDeletedTodoRecord,
+  type CloudDeletedTradeRecord,
+  type CloudPortfolioSnapshotSummary,
+} from './lib/cloudPortfolioStore';
 import { useAuth } from './auth/AuthContext';
 import { MixedCurrencyBanner } from './components/MixedCurrencyBanner';
 import { KrPnlAssumptionsCard } from './components/KrPnlAssumptionsCard';
@@ -85,192 +90,11 @@ const APP_PIN_MAX_FAILS = 5;
 const APP_PIN_LOCKOUT_MS = 30 * 1000;
 const THEME_MODE_KEY = 'traderos-theme-mode-v1';
 const ONBOARDING_DONE_KEY = 'traderos-onboarding-done-v1';
+const PERSISTENCE_WARNING_MESSAGE =
+  '브라우저에 저장하지 못했습니다. 저장 공간 부족·비공개 모드일 수 있습니다. 이 사이트의 저장 용량을 줄인 뒤 다시 시도해 주세요.';
 
 type ThemeMode = 'dark' | 'light';
 type MobileHomeTab = 'portfolio' | 'journal' | 'settings';
-
-function tradeFingerprint(trade: Trade): string {
-  return JSON.stringify([
-    trade.date,
-    trade.ticker,
-    trade.name,
-    trade.sector,
-    trade.market,
-    trade.side,
-    trade.quantity,
-    trade.price,
-    trade.currency,
-    trade.note ?? null,
-    trade.excludeFromJournal === true,
-    trade.executionStatus ?? null,
-  ]);
-}
-
-function todoFingerprint(todo: TradePlanTodo): string {
-  return JSON.stringify([
-    todo.market,
-    todo.ticker,
-    todo.name ?? null,
-    todo.action,
-    todo.targetPrice,
-    todo.quantity,
-    todo.note ?? null,
-    todo.done,
-    todo.createdAt,
-  ]);
-}
-
-function buildTradeFingerprintMap(trades: Trade[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const trade of trades) out[trade.id] = tradeFingerprint(trade);
-  return out;
-}
-
-function buildTodoFingerprintMap(todos: TradePlanTodo[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const todo of todos) out[todo.id] = todoFingerprint(todo);
-  return out;
-}
-
-function sameFingerprintMaps(
-  a: Record<string, string>,
-  b: Record<string, string>,
-): boolean {
-  const aKeys = Object.keys(a);
-  const bKeys = Object.keys(b);
-  if (aKeys.length !== bKeys.length) return false;
-  for (const key of aKeys) {
-    if (a[key] !== b[key]) return false;
-  }
-  return true;
-}
-
-function sameTradeLists(a: Trade[], b: Trade[]): boolean {
-  return sameFingerprintMaps(buildTradeFingerprintMap(a), buildTradeFingerprintMap(b));
-}
-
-function sameTodoLists(a: TradePlanTodo[], b: TradePlanTodo[]): boolean {
-  return sameFingerprintMaps(buildTodoFingerprintMap(a), buildTodoFingerprintMap(b));
-}
-
-function metaFingerprint(input: {
-  quotes: Record<string, number>;
-  positionIds: Record<string, string>;
-  notes: Record<string, string>;
-  quoteUpdatedAt: Record<string, string>;
-  lastKrQuoteBulkAt: string | null;
-  krSellCommissionRate: number;
-  krPreferExtendedQuote: boolean;
-  krDayOpenByTicker: Record<string, number>;
-}): string {
-  return JSON.stringify(input);
-}
-
-function reconcileTradesFromSources(args: {
-  liveTrades: Trade[];
-  fallbackTrades: Trade[];
-  liveUpdatedAtMsById: Record<string, number>;
-  legacyTrades: Trade[];
-  legacyUpdatedAtMs: number;
-  ignoreLegacy?: boolean;
-}): Trade[] {
-  const {
-    liveTrades,
-    fallbackTrades,
-    liveUpdatedAtMsById,
-    legacyTrades,
-    legacyUpdatedAtMs,
-    ignoreLegacy = false,
-  } = args;
-  const map = new Map<string, Trade>();
-
-  for (const trade of fallbackTrades) map.set(trade.id, trade);
-  for (const trade of liveTrades) map.set(trade.id, trade);
-
-  if (!ignoreLegacy && legacyUpdatedAtMs > 0) {
-    const legacyIds = new Set(legacyTrades.map((x) => x.id));
-    for (const trade of legacyTrades) {
-      const liveUpdatedAtMs = liveUpdatedAtMsById[trade.id] ?? 0;
-      if (!map.has(trade.id) || legacyUpdatedAtMs > liveUpdatedAtMs) {
-        map.set(trade.id, trade);
-      }
-    }
-    for (const trade of liveTrades) {
-      const liveUpdatedAtMs = liveUpdatedAtMsById[trade.id] ?? 0;
-      if (legacyUpdatedAtMs > liveUpdatedAtMs && !legacyIds.has(trade.id)) {
-        map.delete(trade.id);
-      }
-    }
-  }
-
-  return [...map.values()].sort((a, b) => {
-    const d = a.date.localeCompare(b.date);
-    return d !== 0 ? d : a.id.localeCompare(b.id);
-  });
-}
-
-function reconcileTodosFromSources(args: {
-  liveTodos: TradePlanTodo[];
-  fallbackTodos: TradePlanTodo[];
-  liveUpdatedAtMsById: Record<string, number>;
-  legacyTodos: TradePlanTodo[];
-  legacyUpdatedAtMs: number;
-  ignoreLegacy?: boolean;
-}): TradePlanTodo[] {
-  const {
-    liveTodos,
-    fallbackTodos,
-    liveUpdatedAtMsById,
-    legacyTodos,
-    legacyUpdatedAtMs,
-    ignoreLegacy = false,
-  } = args;
-  const map = new Map<string, TradePlanTodo>();
-
-  for (const todo of fallbackTodos) map.set(todo.id, todo);
-  for (const todo of liveTodos) map.set(todo.id, todo);
-
-  if (!ignoreLegacy && legacyUpdatedAtMs > 0) {
-    const legacyIds = new Set(legacyTodos.map((x) => x.id));
-    for (const todo of legacyTodos) {
-      const liveUpdatedAtMs = liveUpdatedAtMsById[todo.id] ?? 0;
-      if (!map.has(todo.id) || legacyUpdatedAtMs > liveUpdatedAtMs) {
-        map.set(todo.id, todo);
-      }
-    }
-    for (const todo of liveTodos) {
-      const liveUpdatedAtMs = liveUpdatedAtMsById[todo.id] ?? 0;
-      if (legacyUpdatedAtMs > liveUpdatedAtMs && !legacyIds.has(todo.id)) {
-        map.delete(todo.id);
-      }
-    }
-  }
-
-  return [...map.values()].sort((a, b) => {
-    const d = a.createdAt.localeCompare(b.createdAt);
-    return d !== 0 ? d : a.id.localeCompare(b.id);
-  });
-}
-
-function pickMetaValue<T>(args: {
-  remote: T | null | undefined;
-  legacy: T | undefined;
-  local: T;
-  ignoreLegacy: boolean;
-}): T {
-  const { remote, legacy, local, ignoreLegacy } = args;
-  if (remote !== null && remote !== undefined) return remote;
-  if (ignoreLegacy) return local;
-  return legacy ?? local;
-}
-
-function getMaxUpdatedAtMs(input: Record<string, number>): number {
-  let max = 0;
-  for (const value of Object.values(input)) {
-    if (value > max) max = value;
-  }
-  return max;
-}
 
 async function sha256Hex(input: string): Promise<string> {
   const bytes = new TextEncoder().encode(input);
@@ -519,15 +343,33 @@ export default function App() {
   const hadUserRef = useRef(false);
   const cloudTradeFingerprintsRef = useRef<Record<string, string>>({});
   const cloudTodoFingerprintsRef = useRef<Record<string, string>>({});
+  const cloudTradeRecordsRef = useRef<Record<string, Trade>>({});
+  const cloudTodoRecordsRef = useRef<Record<string, TradePlanTodo>>({});
   const cloudMetaFingerprintRef = useRef('');
+  const autoSnapshotTimerRef = useRef<number | null>(null);
+  const lastAutoSnapshotAtRef = useRef(0);
+  const lastAutoSnapshotFingerprintRef = useRef('');
+  const deviceIdRef = useRef(getOrCreateDeviceId());
   const [cloudSessionReady, setCloudSessionReady] = useState(false);
   const [cloudBusy, setCloudBusy] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
+  const [snapshotItems, setSnapshotItems] = useState<CloudPortfolioSnapshotSummary[]>([]);
+  const [deletedTradeItems, setDeletedTradeItems] = useState<CloudDeletedTradeRecord[]>([]);
+  const [deletedTodoItems, setDeletedTodoItems] = useState<CloudDeletedTodoRecord[]>([]);
   const [networkOnline, setNetworkOnline] = useState(
     () => typeof navigator !== 'undefined' && navigator.onLine,
   );
 
-  useEffect(() => {
+  const flushPortfolioToLocalStorage = useCallback((updateWarning = true) => {
+    const ok = savePersisted(portfolioRef.current);
+    if (updateWarning) {
+      setPersistenceWarning(ok ? null : PERSISTENCE_WARNING_MESSAGE);
+    }
+    return ok;
+  }, []);
+
+  useLayoutEffect(() => {
     portfolioRef.current = {
       trades,
       quotes,
@@ -540,6 +382,7 @@ export default function App() {
       krPreferExtendedQuote,
       krDayOpenByTicker,
     };
+    flushPortfolioToLocalStorage();
   }, [
     trades,
     quotes,
@@ -551,6 +394,7 @@ export default function App() {
     krSellCommissionRate,
     krPreferExtendedQuote,
     krDayOpenByTicker,
+    flushPortfolioToLocalStorage,
   ]);
 
   useEffect(() => {
@@ -587,7 +431,14 @@ export default function App() {
   const wipePrivatePortfolio = useCallback(() => {
     cloudTradeFingerprintsRef.current = {};
     cloudTodoFingerprintsRef.current = {};
+    cloudTradeRecordsRef.current = {};
+    cloudTodoRecordsRef.current = {};
     cloudMetaFingerprintRef.current = '';
+    lastAutoSnapshotFingerprintRef.current = '';
+    if (autoSnapshotTimerRef.current) {
+      window.clearTimeout(autoSnapshotTimerRef.current);
+      autoSnapshotTimerRef.current = null;
+    }
     clearPersisted();
     clearInitialAppStateCache();
     setTrades([]);
@@ -601,7 +452,37 @@ export default function App() {
     setKrSellCommissionRate(normalizeKrSellCommissionRate(undefined));
     setKrPreferExtendedQuote(false);
     setKrDayOpenByTicker({});
+    setSnapshotItems([]);
+    setDeletedTradeItems([]);
+    setDeletedTodoItems([]);
   }, []);
+
+  const refreshRecoveryItems = useCallback(async () => {
+    if (!firebaseConfigured || !user) return;
+    const recovery = await cloudPortfolioStore.listRecoveryItems(user.uid);
+    setSnapshotItems(recovery.snapshots);
+    setDeletedTradeItems(recovery.deletedTrades);
+    setDeletedTodoItems(recovery.deletedTodos);
+  }, [firebaseConfigured, user]);
+
+  const createGuardSnapshot = useCallback(
+    async (reason: string) => {
+      if (!firebaseConfigured || !user || !networkOnline) return null;
+      const snapshotId = await cloudPortfolioStore.createSnapshot(
+        user.uid,
+        portfolioRef.current,
+        reason,
+        deviceIdRef.current,
+      );
+      if (settingsOpen) {
+        await refreshRecoveryItems().catch(() => undefined);
+      }
+      lastAutoSnapshotAtRef.current = Date.now();
+      lastAutoSnapshotFingerprintRef.current = portfolioGuardFingerprint(portfolioRef.current);
+      return snapshotId;
+    },
+    [firebaseConfigured, networkOnline, refreshRecoveryItems, settingsOpen, user],
+  );
 
   useEffect(() => {
     if (!firebaseConfigured || !authReady) return;
@@ -616,6 +497,22 @@ export default function App() {
   }, [firebaseConfigured, authReady, user, wipePrivatePortfolio]);
 
   useEffect(() => {
+    if (!settingsOpen || !firebaseConfigured || !user) return;
+    let cancelled = false;
+    setRecoveryBusy(true);
+    void refreshRecoveryItems()
+      .catch((e) => {
+        if (!cancelled) setCloudError(humanizeCloudError(e));
+      })
+      .finally(() => {
+        if (!cancelled) setRecoveryBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [firebaseConfigured, refreshRecoveryItems, settingsOpen, user]);
+
+  useEffect(() => {
     if (!firebaseConfigured || !user || !authReady) return;
     setCloudSessionReady(false);
     let cancelled = false;
@@ -624,183 +521,97 @@ export default function App() {
       setCloudBusy(true);
       setCloudError(null);
       try {
-        const [live, legacy, meta] = await Promise.all([
-          fetchCloudLivePortfolio(user.uid),
-          fetchCloudPortfolio(user.uid),
-          fetchCloudPortfolioMeta(user.uid),
-        ]);
-        if (cancelled) return;
         const localPersistedAtMs = getPersistedUpdatedAtMs();
         const localPortfolio = portfolioRef.current;
-        const normalizedLegacy = legacy
-          ? normalizeLoadedPortfolio(legacy.portfolio)
-          : null;
-        const maxRemoteTradeUpdatedAtMs = Math.max(
-          legacy?.updatedAtMs ?? 0,
-          getMaxUpdatedAtMs(live.tradeUpdatedAtMsById),
-        );
-        const maxRemoteTodoUpdatedAtMs = Math.max(
-          legacy?.updatedAtMs ?? 0,
-          getMaxUpdatedAtMs(live.todoUpdatedAtMsById),
-        );
-        const maxRemoteMetaUpdatedAtMs = Math.max(
-          legacy?.updatedAtMs ?? 0,
-          meta?.updatedAtMs ?? 0,
-        );
-        const preferLocalTrades = localPersistedAtMs > maxRemoteTradeUpdatedAtMs;
-        const preferLocalTodos = localPersistedAtMs > maxRemoteTodoUpdatedAtMs;
-        const preferLocalMeta = localPersistedAtMs > maxRemoteMetaUpdatedAtMs;
-        const fallbackTrades = preferLocalTrades
-          ? localPortfolio.trades
-          : (normalizedLegacy?.trades ?? localPortfolio.trades);
-        const fallbackTodos = preferLocalTodos
-          ? localPortfolio.todos
-          : (normalizedLegacy?.todos ?? localPortfolio.todos);
-        const nextTrades = reconcileTradesFromSources({
-          liveTrades: live.trades,
-          fallbackTrades,
-          liveUpdatedAtMsById: live.tradeUpdatedAtMsById,
-          legacyTrades: normalizedLegacy?.trades ?? [],
-          legacyUpdatedAtMs: legacy?.updatedAtMs ?? 0,
-          ignoreLegacy: preferLocalTrades,
+        const bootstrap = await cloudPortfolioStore.loadBootstrap({
+          uid: user.uid,
+          localPortfolio,
+          localPersistedAtMs,
         });
-        const nextTodos = reconcileTodosFromSources({
-          liveTodos: live.todos,
-          fallbackTodos,
-          liveUpdatedAtMsById: live.todoUpdatedAtMsById,
-          legacyTodos: normalizedLegacy?.todos ?? [],
-          legacyUpdatedAtMs: legacy?.updatedAtMs ?? 0,
-          ignoreLegacy: preferLocalTodos,
-        });
-        const liveTradeMap = buildTradeFingerprintMap(live.trades);
-        const liveTodoMap = buildTodoFingerprintMap(live.todos);
-        const nextTradeMap = buildTradeFingerprintMap(nextTrades);
-        const nextTodoMap = buildTodoFingerprintMap(nextTodos);
-        const staleTradeDeletes = Object.keys(liveTradeMap).filter((id) => !(id in nextTradeMap));
-        const staleTodoDeletes = Object.keys(liveTodoMap).filter((id) => !(id in nextTodoMap));
-        const missingTradeDocs = nextTrades.filter((x) => liveTradeMap[x.id] !== nextTradeMap[x.id]);
-        const missingTodoDocs = nextTodos.filter((x) => liveTodoMap[x.id] !== nextTodoMap[x.id]);
+        if (cancelled) return;
+        const nextPortfolio = bootstrap.portfolio;
+        const nextMetaState = buildCloudPortfolioMetaInput(nextPortfolio);
+        cloudTradeRecordsRef.current = bootstrap.remoteTradeRecords;
+        cloudTodoRecordsRef.current = bootstrap.remoteTodoRecords;
 
-        if (normalizedLegacy && live.trades.length === 0 && live.todos.length === 0) {
-          applyNormalizedPortfolio({
-            ...normalizedLegacy,
-            trades: nextTrades,
-            todos: nextTodos,
-          });
+        if (bootstrap.shouldApplyPortfolio) {
+          applyNormalizedPortfolio(nextPortfolio);
         } else {
-          setTrades((prev) => (sameTradeLists(prev, nextTrades) ? prev : nextTrades));
-          setTodos((prev) => (sameTodoLists(prev, nextTodos) ? prev : nextTodos));
-          const nextQuotes = pickMetaValue({
-            remote: meta?.quotes,
-            legacy: normalizedLegacy?.quotes,
-            local: localPortfolio.quotes,
-            ignoreLegacy: preferLocalMeta,
-          });
-          const nextPositionIds = pickMetaValue({
-            remote: meta?.positionIds,
-            legacy: normalizedLegacy?.positionIds,
-            local: localPortfolio.positionIds,
-            ignoreLegacy: preferLocalMeta,
-          });
-          const nextNotes = pickMetaValue({
-            remote: meta?.notes,
-            legacy: normalizedLegacy?.notes,
-            local: localPortfolio.notes,
-            ignoreLegacy: preferLocalMeta,
-          });
-          const nextQuoteUpdatedAt = pickMetaValue({
-            remote: meta?.quoteUpdatedAt,
-            legacy: normalizedLegacy?.quoteUpdatedAt,
-            local: localPortfolio.quoteUpdatedAt,
-            ignoreLegacy: preferLocalMeta,
-          });
-          const nextLastKrQuoteBulkAt = pickMetaValue({
-            remote: meta?.lastKrQuoteBulkAt,
-            legacy: normalizedLegacy?.lastKrQuoteBulkAt,
-            local: localPortfolio.lastKrQuoteBulkAt,
-            ignoreLegacy: preferLocalMeta,
-          });
-          const nextKrSellCommissionRate = normalizeKrSellCommissionRate(
-            pickMetaValue({
-              remote: meta?.krSellCommissionRate,
-              legacy: normalizedLegacy?.krSellCommissionRate,
-              local: localPortfolio.krSellCommissionRate,
-              ignoreLegacy: preferLocalMeta,
-            }),
-          );
-          const nextKrPreferExtendedQuote = pickMetaValue({
-            remote: meta?.krPreferExtendedQuote,
-            legacy: normalizedLegacy?.krPreferExtendedQuote,
-            local: localPortfolio.krPreferExtendedQuote,
-            ignoreLegacy: preferLocalMeta,
-          });
-          const nextKrDayOpenByTicker = pickMetaValue({
-            remote: meta?.krDayOpenByTicker,
-            legacy: normalizedLegacy?.krDayOpenByTicker,
-            local: localPortfolio.krDayOpenByTicker,
-            ignoreLegacy: preferLocalMeta,
-          });
-
           setQuotes((prev) =>
-            JSON.stringify(prev) === JSON.stringify(nextQuotes)
+            JSON.stringify(prev) === JSON.stringify(nextPortfolio.quotes)
               ? prev
-              : nextQuotes,
+              : nextPortfolio.quotes,
           );
           setPositionIds((prev) =>
-            JSON.stringify(prev) === JSON.stringify(nextPositionIds)
+            JSON.stringify(prev) === JSON.stringify(nextPortfolio.positionIds)
               ? prev
-              : nextPositionIds,
+              : nextPortfolio.positionIds,
           );
-          setNotes((prev) => (JSON.stringify(prev) === JSON.stringify(nextNotes) ? prev : nextNotes));
-          setQuoteUpdatedAt((prev) =>
-            JSON.stringify(prev) === JSON.stringify(nextQuoteUpdatedAt)
+          setNotes((prev) =>
+            JSON.stringify(prev) === JSON.stringify(nextPortfolio.notes)
               ? prev
-              : nextQuoteUpdatedAt,
+              : nextPortfolio.notes,
+          );
+          setQuoteUpdatedAt((prev) =>
+            JSON.stringify(prev) === JSON.stringify(nextPortfolio.quoteUpdatedAt)
+              ? prev
+              : nextPortfolio.quoteUpdatedAt,
           );
           setLastKrQuoteBulkAt((prev) =>
-            prev === nextLastKrQuoteBulkAt ? prev : nextLastKrQuoteBulkAt,
+            prev === nextMetaState.lastKrQuoteBulkAt ? prev : nextMetaState.lastKrQuoteBulkAt,
           );
           setKrSellCommissionRate((prev) =>
-            prev === nextKrSellCommissionRate ? prev : nextKrSellCommissionRate,
+            prev === nextMetaState.krSellCommissionRate
+              ? prev
+              : nextMetaState.krSellCommissionRate,
           );
           setKrPreferExtendedQuote((prev) =>
-            prev === nextKrPreferExtendedQuote ? prev : nextKrPreferExtendedQuote,
+            prev === nextMetaState.krPreferExtendedQuote
+              ? prev
+              : nextMetaState.krPreferExtendedQuote,
           );
           setKrDayOpenByTicker((prev) =>
-            JSON.stringify(prev) === JSON.stringify(nextKrDayOpenByTicker)
+            JSON.stringify(prev) === JSON.stringify(nextMetaState.krDayOpenByTicker)
               ? prev
-              : nextKrDayOpenByTicker,
+              : nextMetaState.krDayOpenByTicker,
+          );
+          setTrades((prev) =>
+            sameTradeLists(prev, nextPortfolio.trades) ? prev : nextPortfolio.trades,
+          );
+          setTodos((prev) =>
+            sameTodoLists(prev, nextPortfolio.todos) ? prev : nextPortfolio.todos,
           );
         }
 
-        if (missingTradeDocs.length > 0 || missingTodoDocs.length > 0) {
+        if (bootstrap.missingTradeDocs.length > 0 || bootstrap.missingTodoDocs.length > 0) {
           await Promise.all([
-            syncCloudTrades(user.uid, missingTradeDocs, staleTradeDeletes),
-            syncCloudTodos(user.uid, missingTodoDocs, staleTodoDeletes),
+            cloudPortfolioStore.syncTrades(
+              user.uid,
+              bootstrap.missingTradeDocs,
+              bootstrap.staleTradeDeletes,
+              deviceIdRef.current,
+            ),
+            cloudPortfolioStore.syncTodos(
+              user.uid,
+              bootstrap.missingTodoDocs,
+              bootstrap.staleTodoDeletes,
+              deviceIdRef.current,
+            ),
           ]);
         }
 
-        cloudTradeFingerprintsRef.current = buildTradeFingerprintMap(nextTrades);
-        cloudTodoFingerprintsRef.current = buildTodoFingerprintMap(nextTodos);
-        cloudMetaFingerprintRef.current = meta
-          ? metaFingerprint({
-              quotes: meta.quotes,
-              positionIds: meta.positionIds,
-              notes: meta.notes,
-              quoteUpdatedAt: meta.quoteUpdatedAt,
-              lastKrQuoteBulkAt: meta.lastKrQuoteBulkAt,
-              krSellCommissionRate: meta.krSellCommissionRate,
-              krPreferExtendedQuote: meta.krPreferExtendedQuote,
-              krDayOpenByTicker: meta.krDayOpenByTicker,
-            })
-          : '';
+        cloudTradeFingerprintsRef.current = bootstrap.nextTradeFingerprints;
+        cloudTodoFingerprintsRef.current = bootstrap.nextTodoFingerprints;
+        lastAutoSnapshotFingerprintRef.current = portfolioGuardFingerprint(nextPortfolio);
+        cloudMetaFingerprintRef.current = bootstrap.remoteMetaFingerprint;
 
         cleanupFns.push(
-          subscribeCloudTrades(
+          cloudPortfolioStore.subscribeTrades(
             user.uid,
             (remoteTrades) => {
               cloudTradeFingerprintsRef.current =
                 buildTradeFingerprintMap(remoteTrades);
+              cloudTradeRecordsRef.current = buildTradeRecordMap(remoteTrades);
               setTrades((prev) =>
                 sameTradeLists(prev, remoteTrades) ? prev : remoteTrades,
               );
@@ -809,10 +620,11 @@ export default function App() {
           ),
         );
         cleanupFns.push(
-          subscribeCloudTodos(
+          cloudPortfolioStore.subscribeTodos(
             user.uid,
             (remoteTodos) => {
               cloudTodoFingerprintsRef.current = buildTodoFingerprintMap(remoteTodos);
+              cloudTodoRecordsRef.current = buildTodoRecordMap(remoteTodos);
               setTodos((prev) =>
                 sameTodoLists(prev, remoteTodos) ? prev : remoteTodos,
               );
@@ -821,7 +633,7 @@ export default function App() {
           ),
         );
         cleanupFns.push(
-          subscribeCloudPortfolioMeta(
+          cloudPortfolioStore.subscribeMeta(
             user.uid,
             (remoteMeta) => {
               if (!remoteMeta) return;
@@ -908,10 +720,13 @@ export default function App() {
     const localMap = buildTradeFingerprintMap(trades);
     const remoteMap = cloudTradeFingerprintsRef.current;
     const upserts = trades.filter((trade) => remoteMap[trade.id] !== localMap[trade.id]);
-    const deletes = Object.keys(remoteMap).filter((id) => !(id in localMap));
+    const deletes = Object.keys(remoteMap)
+      .filter((id) => !(id in localMap))
+      .map((id) => cloudTradeRecordsRef.current[id])
+      .filter((trade): trade is Trade => Boolean(trade));
     if (upserts.length === 0 && deletes.length === 0) return;
     let cancelled = false;
-    void syncCloudTrades(user.uid, upserts, deletes)
+    void cloudPortfolioStore.syncTrades(user.uid, upserts, deletes, deviceIdRef.current)
       .then(() => {
         if (!cancelled) setCloudError(null);
       })
@@ -934,10 +749,13 @@ export default function App() {
     const localMap = buildTodoFingerprintMap(todos);
     const remoteMap = cloudTodoFingerprintsRef.current;
     const upserts = todos.filter((todo) => remoteMap[todo.id] !== localMap[todo.id]);
-    const deletes = Object.keys(remoteMap).filter((id) => !(id in localMap));
+    const deletes = Object.keys(remoteMap)
+      .filter((id) => !(id in localMap))
+      .map((id) => cloudTodoRecordsRef.current[id])
+      .filter((todo): todo is TradePlanTodo => Boolean(todo));
     if (upserts.length === 0 && deletes.length === 0) return;
     let cancelled = false;
-    void syncCloudTodos(user.uid, upserts, deletes)
+    void cloudPortfolioStore.syncTodos(user.uid, upserts, deletes, deviceIdRef.current)
       .then(() => {
         if (!cancelled) setCloudError(null);
       })
@@ -957,20 +775,11 @@ export default function App() {
 
   useEffect(() => {
     if (!firebaseConfigured || !user || !cloudSessionReady || !networkOnline) return;
-    const localMeta = {
-      quotes,
-      positionIds,
-      notes,
-      quoteUpdatedAt,
-      lastKrQuoteBulkAt,
-      krSellCommissionRate,
-      krPreferExtendedQuote,
-      krDayOpenByTicker,
-    };
+    const localMeta = buildCloudPortfolioMetaInput(portfolioRef.current);
     const localFingerprint = metaFingerprint(localMeta);
     if (cloudMetaFingerprintRef.current === localFingerprint) return;
     let cancelled = false;
-    void syncCloudPortfolioMeta(user.uid, localMeta)
+    void cloudPortfolioStore.syncMeta(user.uid, localMeta)
       .then(() => {
         if (!cancelled) setCloudError(null);
       })
@@ -994,6 +803,127 @@ export default function App() {
     krPreferExtendedQuote,
     krDayOpenByTicker,
   ]);
+
+  useEffect(() => {
+    if (!firebaseConfigured || !user || !cloudSessionReady || !networkOnline) return;
+    const nextFingerprint = portfolioGuardFingerprint(portfolioRef.current);
+    if (lastAutoSnapshotFingerprintRef.current === nextFingerprint) return;
+    if (autoSnapshotTimerRef.current) {
+      window.clearTimeout(autoSnapshotTimerRef.current);
+      autoSnapshotTimerRef.current = null;
+    }
+    autoSnapshotTimerRef.current = window.setTimeout(() => {
+      autoSnapshotTimerRef.current = null;
+      const now = Date.now();
+      if (now - lastAutoSnapshotAtRef.current < 5 * 60 * 1000) {
+        lastAutoSnapshotFingerprintRef.current = nextFingerprint;
+        return;
+      }
+      void createGuardSnapshot('auto-guard')
+        .then(() => setCloudError(null))
+        .catch((e) => setCloudError(humanizeCloudError(e)));
+    }, 4000);
+    return () => {
+      if (autoSnapshotTimerRef.current) {
+        window.clearTimeout(autoSnapshotTimerRef.current);
+        autoSnapshotTimerRef.current = null;
+      }
+    };
+  }, [
+    firebaseConfigured,
+    user?.uid,
+    cloudSessionReady,
+    networkOnline,
+    trades,
+    todos,
+    quotes,
+    positionIds,
+    notes,
+    quoteUpdatedAt,
+    lastKrQuoteBulkAt,
+    krSellCommissionRate,
+    krPreferExtendedQuote,
+    krDayOpenByTicker,
+    createGuardSnapshot,
+  ]);
+
+  const handleRestoreSnapshot = useCallback(
+    async (snapshotId: string) => {
+      if (!user) return;
+      const ok = window.confirm(
+        '선택한 백업 시점으로 현재 포트폴리오를 되돌립니다. 현재 상태는 복구용 스냅샷으로 한 번 더 저장됩니다. 계속할까요?',
+      );
+      if (!ok) return;
+      setRecoveryBusy(true);
+      try {
+        await createGuardSnapshot('restore-before-apply');
+        const portfolio = await cloudPortfolioStore.fetchSnapshot(user.uid, snapshotId);
+        if (!portfolio) {
+          window.alert('선택한 스냅샷을 읽을 수 없습니다.');
+          return;
+        }
+        applyNormalizedPortfolio(normalizeLoadedPortfolio(portfolio));
+        await refreshRecoveryItems();
+        setCloudError(null);
+        window.alert('백업 시점으로 복구했습니다.');
+      } catch (e) {
+        setCloudError(humanizeCloudError(e));
+      } finally {
+        setRecoveryBusy(false);
+      }
+    },
+    [applyNormalizedPortfolio, createGuardSnapshot, refreshRecoveryItems, user],
+  );
+
+  const handleRestoreDeletedTrade = useCallback(
+    async (trashId: string) => {
+      if (!user) return;
+      setRecoveryBusy(true);
+      try {
+        const restored = await cloudPortfolioStore.restoreDeletedTrade(
+          user.uid,
+          trashId,
+          deviceIdRef.current,
+        );
+        if (!restored) {
+          window.alert('삭제 보관함에서 거래를 복구하지 못했습니다.');
+          return;
+        }
+        await refreshRecoveryItems();
+        setCloudError(null);
+      } catch (e) {
+        setCloudError(humanizeCloudError(e));
+      } finally {
+        setRecoveryBusy(false);
+      }
+    },
+    [refreshRecoveryItems, user],
+  );
+
+  const handleRestoreDeletedTodo = useCallback(
+    async (trashId: string) => {
+      if (!user) return;
+      setRecoveryBusy(true);
+      try {
+        const restored = await cloudPortfolioStore.restoreDeletedTodo(
+          user.uid,
+          trashId,
+          deviceIdRef.current,
+        );
+        if (!restored) {
+          window.alert('삭제 보관함에서 계획을 복구하지 못했습니다.');
+          return;
+        }
+        await refreshRecoveryItems();
+        setCloudError(null);
+      } catch (e) {
+        setCloudError(humanizeCloudError(e));
+      } finally {
+        setRecoveryBusy(false);
+      }
+    },
+    [refreshRecoveryItems, user],
+  );
 
   const handleExportPortfolio = useCallback(() => {
     const file = buildExportFile(portfolioRef.current);
@@ -1021,11 +951,15 @@ export default function App() {
         ) {
           return;
         }
+        if (user && networkOnline) {
+          await createGuardSnapshot('import-before-apply');
+        }
         applyNormalizedPortfolio(normalizeLoadedPortfolio(parsed));
+        await refreshRecoveryItems().catch(() => undefined);
         window.alert('가져오기를 완료했습니다.');
       })();
     },
-    [applyNormalizedPortfolio],
+    [applyNormalizedPortfolio, createGuardSnapshot, networkOnline, refreshRecoveryItems, user],
   );
 
   const handleCloudPushNow = useCallback(async () => {
@@ -1039,14 +973,15 @@ export default function App() {
     setCloudBusy(true);
     setCloudError(null);
     try {
-      await pushCloudPortfolio(user.uid, portfolioRef.current);
+      await cloudPortfolioStore.pushLegacyBackup(user.uid, portfolioRef.current);
+      await createGuardSnapshot('manual-backup');
       window.alert('현재 상태를 클라우드 스냅샷으로 백업했습니다.');
     } catch (e) {
       setCloudError(humanizeCloudError(e));
     } finally {
       setCloudBusy(false);
     }
-  }, [user]);
+  }, [createGuardSnapshot, user]);
 
   const handleCloudSignIn = useCallback(async () => {
     setCloudError(null);
@@ -1069,7 +1004,7 @@ export default function App() {
     try {
       if (user) {
         if (typeof navigator !== 'undefined' && navigator.onLine) {
-          await pushCloudPortfolio(user.uid, portfolioRef.current);
+          await cloudPortfolioStore.pushLegacyBackup(user.uid, portfolioRef.current);
         } else {
           const ok = window.confirm(
             '지금 오프라인이라 클라우드에 마지막 저장을 할 수 없습니다. 로그아웃하면 이 브라우저의 포트폴리오 데이터가 삭제됩니다. 계속할까요?\n\n(권장: 연결 복구 후 다시 시도하거나, 설정에서 「백업 파일 보내기」)',
@@ -1317,35 +1252,23 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const ok = savePersisted({
-      trades,
-      quotes,
-      positionIds,
-      todos,
-      notes,
-      quoteUpdatedAt,
-      lastKrQuoteBulkAt,
-      krSellCommissionRate,
-      krPreferExtendedQuote,
-      krDayOpenByTicker,
-    });
-    setPersistenceWarning(
-      ok
-        ? null
-        : '브라우저에 저장하지 못했습니다. 저장 공간 부족·비공개 모드일 수 있습니다. 이 사이트의 저장 용량을 줄인 뒤 다시 시도해 주세요.',
-    );
-  }, [
-    trades,
-    quotes,
-    positionIds,
-    todos,
-    notes,
-    quoteUpdatedAt,
-    lastKrQuoteBulkAt,
-    krSellCommissionRate,
-    krPreferExtendedQuote,
-    krDayOpenByTicker,
-  ]);
+    const flushOnHide = () => {
+      flushPortfolioToLocalStorage(false);
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        flushPortfolioToLocalStorage(false);
+      }
+    };
+    window.addEventListener('pagehide', flushOnHide);
+    window.addEventListener('beforeunload', flushOnHide);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('pagehide', flushOnHide);
+      window.removeEventListener('beforeunload', flushOnHide);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [flushPortfolioToLocalStorage]);
 
   useEffect(() => {
     const on = () => setNetworkOnline(true);
@@ -1500,6 +1423,17 @@ export default function App() {
     return true;
   }, [tradeToEdit?.id]);
 
+  const handleDeleteTodo = useCallback((id: string): boolean => {
+    const target = todos.find((todo) => todo.id === id);
+    if (!target) return false;
+    const ok = window.confirm(
+      `${target.ticker} ${target.name ?? ''} ${target.action === 'buy' ? '매수' : '매도'} 계획을 삭제할까요?`,
+    );
+    if (!ok) return false;
+    setTodos((prev) => prev.filter((todo) => todo.id !== id));
+    return true;
+  }, [todos]);
+
   const handleOpenAddTrade = useCallback(() => {
     setTradeToEdit(null);
     setAddTradeOpen(true);
@@ -1611,7 +1545,10 @@ export default function App() {
     window.alert(doneMsg);
   }, []);
 
-  const handleResetData = useCallback(() => {
+  const handleResetData = useCallback(async () => {
+    if (user && networkOnline) {
+      await createGuardSnapshot('reset-to-sample-before-apply');
+    }
     clearPersisted();
     clearInitialAppStateCache();
     setTrades([...tradeSeed.trades]);
@@ -1624,10 +1561,13 @@ export default function App() {
     setKrSellCommissionRate(normalizeKrSellCommissionRate(undefined));
     setKrPreferExtendedQuote(false);
     setKrDayOpenByTicker({});
-  }, []);
+  }, [createGuardSnapshot, networkOnline, user]);
 
   /** 매매·보유·시세 등 전부 비움 (샘플 아님) */
-  const handleClearHoldings = useCallback(() => {
+  const handleClearHoldings = useCallback(async () => {
+    if (user && networkOnline) {
+      await createGuardSnapshot('clear-holdings-before-apply');
+    }
     clearInitialAppStateCache();
     setTrades([]);
     setQuotes({});
@@ -1637,7 +1577,7 @@ export default function App() {
     setQuoteUpdatedAt({});
     setLastKrQuoteBulkAt(null);
     setKrDayOpenByTicker({});
-  }, []);
+  }, [createGuardSnapshot, networkOnline, user]);
 
   const refreshKrQuotes = useCallback(async () => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -2092,7 +2032,7 @@ export default function App() {
                 )
               }
               onDelete={(id) =>
-                setTodos((prev) => prev.filter((x) => x.id !== id))
+                handleDeleteTodo(id)
               }
               onUpdate={(id, updates) =>
                 setTodos((prev) =>
@@ -2216,6 +2156,13 @@ export default function App() {
         onCloudPushNow={handleCloudPushNow}
         onExportPortfolio={handleExportPortfolio}
         onImportPortfolioPick={() => importFileRef.current?.click()}
+        recoveryBusy={recoveryBusy}
+        snapshotItems={snapshotItems}
+        deletedTradeItems={deletedTradeItems}
+        deletedTodoItems={deletedTodoItems}
+        onRestoreSnapshot={handleRestoreSnapshot}
+        onRestoreDeletedTrade={handleRestoreDeletedTrade}
+        onRestoreDeletedTodo={handleRestoreDeletedTodo}
         onOpenTutorial={() => {
           markOnboardingDone(false);
           setSettingsOpen(false);

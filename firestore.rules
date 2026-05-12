@@ -117,6 +117,116 @@ service cloud.firestore {
         && request.resource.data.updatedAt is timestamp;
     }
 
+    function validSnapshotDoc(docId) {
+      return docId is string
+        && request.resource.data.keys().hasOnly([
+          'body',
+          'reason',
+          'sourceDeviceId',
+          'tradeCount',
+          'todoCount',
+          'latestTradeDate',
+          'createdAt',
+        ])
+        && request.resource.data.body is string
+        && request.resource.data.body.size() > 0
+        && request.resource.data.body.size() <= 1000000
+        && request.resource.data.reason is string
+        && (
+          !('sourceDeviceId' in request.resource.data) ||
+          request.resource.data.sourceDeviceId is string ||
+          request.resource.data.sourceDeviceId == null
+        )
+        && request.resource.data.tradeCount is int
+        && request.resource.data.tradeCount >= 0
+        && request.resource.data.todoCount is int
+        && request.resource.data.todoCount >= 0
+        && (
+          !('latestTradeDate' in request.resource.data) ||
+          request.resource.data.latestTradeDate is string ||
+          request.resource.data.latestTradeDate == null
+        )
+        && request.resource.data.createdAt is timestamp;
+    }
+
+    function validTradeTrashDoc(docId) {
+      return docId is string
+        && request.resource.data.keys().hasOnly([
+          'itemId',
+          'ticker',
+          'name',
+          'date',
+          'body',
+          'reason',
+          'sourceDeviceId',
+          'deletedAt',
+        ])
+        && request.resource.data.itemId is string
+        && request.resource.data.ticker is string
+        && request.resource.data.name is string
+        && request.resource.data.date is string
+        && request.resource.data.body is string
+        && request.resource.data.body.size() > 0
+        && request.resource.data.body.size() <= 200000
+        && request.resource.data.reason is string
+        && (
+          !('sourceDeviceId' in request.resource.data) ||
+          request.resource.data.sourceDeviceId is string ||
+          request.resource.data.sourceDeviceId == null
+        )
+        && request.resource.data.deletedAt is timestamp;
+    }
+
+    function validTodoTrashDoc(docId) {
+      return docId is string
+        && request.resource.data.keys().hasOnly([
+          'itemId',
+          'ticker',
+          'name',
+          'createdAtValue',
+          'body',
+          'reason',
+          'sourceDeviceId',
+          'deletedAt',
+        ])
+        && request.resource.data.itemId is string
+        && request.resource.data.ticker is string
+        && request.resource.data.name is string
+        && request.resource.data.createdAtValue is string
+        && request.resource.data.body is string
+        && request.resource.data.body.size() > 0
+        && request.resource.data.body.size() <= 200000
+        && request.resource.data.reason is string
+        && (
+          !('sourceDeviceId' in request.resource.data) ||
+          request.resource.data.sourceDeviceId is string ||
+          request.resource.data.sourceDeviceId == null
+        )
+        && request.resource.data.deletedAt is timestamp;
+    }
+
+    function validEventDoc(docId) {
+      return docId is string
+        && request.resource.data.keys().hasOnly([
+          'action',
+          'entityType',
+          'entityId',
+          'sourceDeviceId',
+          'summary',
+          'createdAt',
+        ])
+        && request.resource.data.action is string
+        && request.resource.data.entityType is string
+        && request.resource.data.entityId is string
+        && (
+          !('sourceDeviceId' in request.resource.data) ||
+          request.resource.data.sourceDeviceId is string ||
+          request.resource.data.sourceDeviceId == null
+        )
+        && request.resource.data.summary is string
+        && request.resource.data.createdAt is timestamp;
+    }
+
     // 이전 버전 전체 스냅샷 백업: 경로 users/{uid}/traderos/v1
     match /users/{userId}/traderos/{docId} {
       allow get: if request.auth != null
@@ -154,6 +264,30 @@ service cloud.firestore {
     match /users/{userId}/traderos_meta/{docId} {
       allow read: if isOwner(userId);
       allow create, update: if isOwner(userId) && validMetaDoc(docId);
+      allow delete: if false;
+    }
+
+    match /users/{userId}/portfolio_snapshots/{docId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && validSnapshotDoc(docId);
+      allow delete: if false;
+    }
+
+    match /users/{userId}/trade_trash/{docId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && validTradeTrashDoc(docId);
+      allow delete: if isOwner(userId);
+    }
+
+    match /users/{userId}/todo_trash/{docId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && validTodoTrashDoc(docId);
+      allow delete: if isOwner(userId);
+    }
+
+    match /users/{userId}/portfolio_events/{docId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && validEventDoc(docId);
       allow delete: if false;
     }
 

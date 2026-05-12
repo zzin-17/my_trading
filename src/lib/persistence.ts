@@ -3,6 +3,7 @@ import type { TradePlanTodo } from '../types/todo';
 
 const STORAGE_KEY = 'traderos-portfolio-v2';
 const STORAGE_UPDATED_AT_KEY = 'traderos-portfolio-v2-updated-at';
+const DEVICE_ID_KEY = 'traderos-device-id-v1';
 
 export interface PersistedPortfolioV1 {
   trades: Trade[];
@@ -100,6 +101,25 @@ export function getPersistedUpdatedAtMs(): number {
     return Number.isFinite(value) && value > 0 ? value : 0;
   } catch {
     return 0;
+  }
+}
+
+function createDeviceId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `device-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function getOrCreateDeviceId(): string {
+  try {
+    const existing = localStorage.getItem(DEVICE_ID_KEY);
+    if (existing && existing.trim()) return existing;
+    const created = createDeviceId();
+    localStorage.setItem(DEVICE_ID_KEY, created);
+    return created;
+  } catch {
+    return createDeviceId();
   }
 }
 
