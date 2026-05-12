@@ -149,20 +149,70 @@ function sameTodoLists(a: TradePlanTodo[], b: TradePlanTodo[]): boolean {
   return sameFingerprintMaps(buildTodoFingerprintMap(a), buildTodoFingerprintMap(b));
 }
 
-function mergeTradesById(preferred: Trade[], fallback: Trade[]): Trade[] {
+function reconcileTradesFromSources(args: {
+  liveTrades: Trade[];
+  fallbackTrades: Trade[];
+  liveUpdatedAtMsById: Record<string, number>;
+  legacyTrades: Trade[];
+  legacyUpdatedAtMs: number;
+}): Trade[] {
+  const { liveTrades, fallbackTrades, liveUpdatedAtMsById, legacyTrades, legacyUpdatedAtMs } = args;
   const map = new Map<string, Trade>();
-  for (const trade of fallback) map.set(trade.id, trade);
-  for (const trade of preferred) map.set(trade.id, trade);
+
+  for (const trade of fallbackTrades) map.set(trade.id, trade);
+  for (const trade of liveTrades) map.set(trade.id, trade);
+
+  if (legacyUpdatedAtMs > 0) {
+    const legacyIds = new Set(legacyTrades.map((x) => x.id));
+    for (const trade of legacyTrades) {
+      const liveUpdatedAtMs = liveUpdatedAtMsById[trade.id] ?? 0;
+      if (!map.has(trade.id) || legacyUpdatedAtMs > liveUpdatedAtMs) {
+        map.set(trade.id, trade);
+      }
+    }
+    for (const trade of liveTrades) {
+      const liveUpdatedAtMs = liveUpdatedAtMsById[trade.id] ?? 0;
+      if (legacyUpdatedAtMs > liveUpdatedAtMs && !legacyIds.has(trade.id)) {
+        map.delete(trade.id);
+      }
+    }
+  }
+
   return [...map.values()].sort((a, b) => {
     const d = a.date.localeCompare(b.date);
     return d !== 0 ? d : a.id.localeCompare(b.id);
   });
 }
 
-function mergeTodosById(preferred: TradePlanTodo[], fallback: TradePlanTodo[]): TradePlanTodo[] {
+function reconcileTodosFromSources(args: {
+  liveTodos: TradePlanTodo[];
+  fallbackTodos: TradePlanTodo[];
+  liveUpdatedAtMsById: Record<string, number>;
+  legacyTodos: TradePlanTodo[];
+  legacyUpdatedAtMs: number;
+}): TradePlanTodo[] {
+  const { liveTodos, fallbackTodos, liveUpdatedAtMsById, legacyTodos, legacyUpdatedAtMs } = args;
   const map = new Map<string, TradePlanTodo>();
-  for (const todo of fallback) map.set(todo.id, todo);
-  for (const todo of preferred) map.set(todo.id, todo);
+
+  for (const todo of fallbackTodos) map.set(todo.id, todo);
+  for (const todo of liveTodos) map.set(todo.id, todo);
+
+  if (legacyUpdatedAtMs > 0) {
+    const legacyIds = new Set(legacyTodos.map((x) => x.id));
+    for (const todo of legacyTodos) {
+      const liveUpdatedAtMs = liveUpdatedAtMsById[todo.id] ?? 0;
+      if (!map.has(todo.id) || legacyUpdatedAtMs > liveUpdatedAtMs) {
+        map.set(todo.id, todo);
+      }
+    }
+    for (const todo of liveTodos) {
+      const liveUpdatedAtMs = liveUpdatedAtMsById[todo.id] ?? 0;
+      if (legacyUpdatedAtMs > liveUpdatedAtMs && !legacyIds.has(todo.id)) {
+        map.delete(todo.id);
+      }
+    }
+  }
+
   return [...map.values()].sort((a, b) => {
     const d = a.createdAt.localeCompare(b.createdAt);
     return d !== 0 ? d : a.id.localeCompare(b.id);
@@ -529,12 +579,28 @@ export default function App() {
           : null;
         const fallbackTrades = normalizedLegacy?.trades ?? portfolioRef.current.trades;
         const fallbackTodos = normalizedLegacy?.todos ?? portfolioRef.current.todos;
-        const nextTrades = mergeTradesById(live.trades, fallbackTrades);
-        const nextTodos = mergeTodosById(live.todos, fallbackTodos);
-        const liveTradeIds = new Set(live.trades.map((x) => x.id));
-        const liveTodoIds = new Set(live.todos.map((x) => x.id));
-        const missingTradeDocs = nextTrades.filter((x) => !liveTradeIds.has(x.id));
-        const missingTodoDocs = nextTodos.filter((x) => !liveTodoIds.has(x.id));
+        const nextTrades = reconcileTradesFromSources({
+          liveTrades: live.trades,
+          fallbackTrades,
+          liveUpdatedAtMsById: live.tradeUpdatedAtMsById,
+          legacyTrades: normalizedLegacy?.trades ?? [],
+          legacyUpdatedAtMs: legacy?.updatedAtMs ?? 0,
+        });
+        const nextTodos = reconcileTodosFromSources({
+          liveTodos: live.todos,
+          fallbackTodos,
+          liveUpdatedAtMsById: live.todoUpdatedAtMsById,
+          legacyTodos: normalizedLegacy?.todos ?? [],
+          legacyUpdatedAtMs: legacy?.updatedAtMs ?? 0,
+        });
+        const liveTradeMap = buildTradeFingerprintMap(live.trades);
+        const liveTodoMap = buildTodoFingerprintMap(live.todos);
+        const nextTradeMap = buildTradeFingerprintMap(nextTrades);
+        const nextTodoMap = buildTodoFingerprintMap(nextTodos);
+        const staleTradeDeletes = Object.keys(liveTradeMap).filter((id) => !(id in nextTradeMap));
+        const staleTodoDeletes = Object.keys(liveTodoMap).filter((id) => !(id in nextTodoMap));
+        const missingTradeDocs = nextTrades.filter((x) => liveTradeMap[x.id] !== nextTradeMap[x.id]);
+        const missingTodoDocs = nextTodos.filter((x) => liveTodoMap[x.id] !== nextTodoMap[x.id]);
 
         if (normalizedLegacy && live.trades.length === 0 && live.todos.length === 0) {
           applyNormalizedPortfolio({
@@ -549,8 +615,8 @@ export default function App() {
 
         if (missingTradeDocs.length > 0 || missingTodoDocs.length > 0) {
           await Promise.all([
-            syncCloudTrades(user.uid, missingTradeDocs, []),
-            syncCloudTodos(user.uid, missingTodoDocs, []),
+            syncCloudTrades(user.uid, missingTradeDocs, staleTradeDeletes),
+            syncCloudTodos(user.uid, missingTodoDocs, staleTodoDeletes),
           ]);
         }
 

@@ -46,6 +46,8 @@ export interface CloudPortfolioSnapshot {
 export interface CloudLivePortfolio {
   trades: Trade[];
   todos: TradePlanTodo[];
+  tradeUpdatedAtMsById: Record<string, number>;
+  todoUpdatedAtMsById: Record<string, number>;
 }
 
 function isRecord(input: unknown): input is Record<string, unknown> {
@@ -173,6 +175,10 @@ function sortTodosForCloud(todos: TradePlanTodo[]): TradePlanTodo[] {
   });
 }
 
+function updatedAtToMillis(input: unknown): number {
+  return input instanceof Timestamp ? input.toMillis() : 0;
+}
+
 export async function fetchCloudPortfolio(
   uid: string,
 ): Promise<CloudPortfolioSnapshot | null> {
@@ -213,15 +219,27 @@ export async function fetchCloudLivePortfolio(
     getDocs(tradeCollectionRef(uid)),
     getDocs(todoCollectionRef(uid)),
   ]);
+  const tradeUpdatedAtMsById: Record<string, number> = {};
+  const todoUpdatedAtMsById: Record<string, number> = {};
   const trades = tradeSnap.docs
-    .map((x) => parseCloudTrade(x.data(), x.id))
+    .map((x) => {
+      const parsed = parseCloudTrade(x.data(), x.id);
+      if (parsed) tradeUpdatedAtMsById[parsed.id] = updatedAtToMillis(x.data().updatedAt);
+      return parsed;
+    })
     .filter((x): x is Trade => x !== null);
   const todos = todoSnap.docs
-    .map((x) => parseCloudTodo(x.data(), x.id))
+    .map((x) => {
+      const parsed = parseCloudTodo(x.data(), x.id);
+      if (parsed) todoUpdatedAtMsById[parsed.id] = updatedAtToMillis(x.data().updatedAt);
+      return parsed;
+    })
     .filter((x): x is TradePlanTodo => x !== null);
   return {
     trades: sortTradesForCloud(trades),
     todos: sortTodosForCloud(todos),
+    tradeUpdatedAtMsById,
+    todoUpdatedAtMsById,
   };
 }
 

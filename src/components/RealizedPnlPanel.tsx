@@ -39,6 +39,20 @@ const GRANULARITIES: { id: RealizedPeriodGranularity; label: string }[] = [
   { id: 'year', label: '년' },
 ];
 
+function todayIso(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function firstDayOfMonth(dateIso: string): string {
+  const [y, m] = dateIso.split('-');
+  if (!y || !m) return '';
+  return `${y}-${m}-01`;
+}
+
 function RealizedPnlConceptTooltip({ taxPctLabel }: { taxPctLabel: string }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -141,11 +155,12 @@ export function RealizedPnlPanel({
   trades,
   krSellCommissionRate,
 }: RealizedPnlPanelProps) {
+  const defaultDayRangeStart = useMemo(() => firstDayOfMonth(todayIso()), []);
   const [granularity, setGranularity] =
     useState<RealizedPeriodGranularity>('month');
   const [monthRangeStart, setMonthRangeStart] = useState('');
   const [monthRangeEnd, setMonthRangeEnd] = useState('');
-  const [dayRangeStart, setDayRangeStart] = useState('');
+  const [dayRangeStart, setDayRangeStart] = useState(defaultDayRangeStart);
   const [dayRangeEnd, setDayRangeEnd] = useState('');
   const [drill, setDrill] = useState<{
     period: string;
@@ -185,6 +200,12 @@ export function RealizedPnlPanel({
       granularity,
     );
   }, [filteredEvents, drill, granularity]);
+
+  useEffect(() => {
+    if (granularity !== 'day') return;
+    if (dayRangeStart) return;
+    setDayRangeStart(defaultDayRangeStart);
+  }, [dayRangeStart, defaultDayRangeStart, granularity]);
 
   useEffect(() => {
     if (!drill) return;
@@ -321,7 +342,7 @@ export function RealizedPnlPanel({
               onClick={() => {
                 setMonthRangeStart('');
                 setMonthRangeEnd('');
-                setDayRangeStart('');
+                setDayRangeStart(defaultDayRangeStart);
                 setDayRangeEnd('');
                 setDrill(null);
               }}
