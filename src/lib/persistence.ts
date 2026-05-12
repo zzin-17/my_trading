@@ -91,6 +91,14 @@ export function loadPersisted(): PersistedPortfolioV1 | null {
   }
 }
 
+export function hasPersistedPortfolio(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
 /** 저장 성공 여부(용량 초과·비공개 모드 등 시 false) */
 export function savePersisted(data: PersistedPortfolioV1): boolean {
   try {

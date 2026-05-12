@@ -36,6 +36,7 @@ import { computeLedger, ledgerToPositions } from './lib/ledger';
 import {
   savePersisted,
   clearPersisted,
+  hasPersistedPortfolio,
   type PersistedPortfolioV1,
 } from './lib/persistence';
 import {
@@ -171,9 +172,18 @@ function reconcileTradesFromSources(args: {
   liveUpdatedAtMsById: Record<string, number>;
   legacyTrades: Trade[];
   legacyUpdatedAtMs: number;
+  preferFallbackOverLegacy?: boolean;
 }): Trade[] {
-  const { liveTrades, fallbackTrades, liveUpdatedAtMsById, legacyTrades, legacyUpdatedAtMs } = args;
+  const {
+    liveTrades,
+    fallbackTrades,
+    liveUpdatedAtMsById,
+    legacyTrades,
+    legacyUpdatedAtMs,
+    preferFallbackOverLegacy = false,
+  } = args;
   const map = new Map<string, Trade>();
+  const fallbackIds = new Set(fallbackTrades.map((trade) => trade.id));
 
   for (const trade of fallbackTrades) map.set(trade.id, trade);
   for (const trade of liveTrades) map.set(trade.id, trade);
@@ -182,12 +192,14 @@ function reconcileTradesFromSources(args: {
     const legacyIds = new Set(legacyTrades.map((x) => x.id));
     for (const trade of legacyTrades) {
       const liveUpdatedAtMs = liveUpdatedAtMsById[trade.id] ?? 0;
+      if (preferFallbackOverLegacy && fallbackIds.has(trade.id)) continue;
       if (!map.has(trade.id) || legacyUpdatedAtMs > liveUpdatedAtMs) {
         map.set(trade.id, trade);
       }
     }
     for (const trade of liveTrades) {
       const liveUpdatedAtMs = liveUpdatedAtMsById[trade.id] ?? 0;
+      if (preferFallbackOverLegacy && fallbackIds.has(trade.id)) continue;
       if (legacyUpdatedAtMs > liveUpdatedAtMs && !legacyIds.has(trade.id)) {
         map.delete(trade.id);
       }
@@ -206,9 +218,18 @@ function reconcileTodosFromSources(args: {
   liveUpdatedAtMsById: Record<string, number>;
   legacyTodos: TradePlanTodo[];
   legacyUpdatedAtMs: number;
+  preferFallbackOverLegacy?: boolean;
 }): TradePlanTodo[] {
-  const { liveTodos, fallbackTodos, liveUpdatedAtMsById, legacyTodos, legacyUpdatedAtMs } = args;
+  const {
+    liveTodos,
+    fallbackTodos,
+    liveUpdatedAtMsById,
+    legacyTodos,
+    legacyUpdatedAtMs,
+    preferFallbackOverLegacy = false,
+  } = args;
   const map = new Map<string, TradePlanTodo>();
+  const fallbackIds = new Set(fallbackTodos.map((todo) => todo.id));
 
   for (const todo of fallbackTodos) map.set(todo.id, todo);
   for (const todo of liveTodos) map.set(todo.id, todo);
@@ -217,12 +238,14 @@ function reconcileTodosFromSources(args: {
     const legacyIds = new Set(legacyTodos.map((x) => x.id));
     for (const todo of legacyTodos) {
       const liveUpdatedAtMs = liveUpdatedAtMsById[todo.id] ?? 0;
+      if (preferFallbackOverLegacy && fallbackIds.has(todo.id)) continue;
       if (!map.has(todo.id) || legacyUpdatedAtMs > liveUpdatedAtMs) {
         map.set(todo.id, todo);
       }
     }
     for (const todo of liveTodos) {
       const liveUpdatedAtMs = liveUpdatedAtMsById[todo.id] ?? 0;
+      if (preferFallbackOverLegacy && fallbackIds.has(todo.id)) continue;
       if (legacyUpdatedAtMs > liveUpdatedAtMs && !legacyIds.has(todo.id)) {
         map.delete(todo.id);
       }
@@ -233,6 +256,18 @@ function reconcileTodosFromSources(args: {
     const d = a.createdAt.localeCompare(b.createdAt);
     return d !== 0 ? d : a.id.localeCompare(b.id);
   });
+}
+
+function pickMetaValue<T>(args: {
+  remote: T | null | undefined;
+  legacy: T | undefined;
+  local: T;
+  preferLocal: boolean;
+}): T {
+  const { remote, legacy, local, preferLocal } = args;
+  if (remote !== null && remote !== undefined) return remote;
+  if (preferLocal) return local;
+  return legacy ?? local;
 }
 
 async function sha256Hex(input: string): Promise<string> {
@@ -593,17 +628,24 @@ export default function App() {
           fetchCloudPortfolioMeta(user.uid),
         ]);
         if (cancelled) return;
+        const preferLocalPersisted = hasPersistedPortfolio();
+        const localPortfolio = portfolioRef.current;
         const normalizedLegacy = legacy
           ? normalizeLoadedPortfolio(legacy.portfolio)
           : null;
-        const fallbackTrades = normalizedLegacy?.trades ?? portfolioRef.current.trades;
-        const fallbackTodos = normalizedLegacy?.todos ?? portfolioRef.current.todos;
+        const fallbackTrades = preferLocalPersisted
+          ? localPortfolio.trades
+          : (normalizedLegacy?.trades ?? localPortfolio.trades);
+        const fallbackTodos = preferLocalPersisted
+          ? localPortfolio.todos
+          : (normalizedLegacy?.todos ?? localPortfolio.todos);
         const nextTrades = reconcileTradesFromSources({
           liveTrades: live.trades,
           fallbackTrades,
           liveUpdatedAtMsById: live.tradeUpdatedAtMsById,
           legacyTrades: normalizedLegacy?.trades ?? [],
           legacyUpdatedAtMs: legacy?.updatedAtMs ?? 0,
+          preferFallbackOverLegacy: preferLocalPersisted,
         });
         const nextTodos = reconcileTodosFromSources({
           liveTodos: live.todos,
@@ -611,6 +653,7 @@ export default function App() {
           liveUpdatedAtMsById: live.todoUpdatedAtMsById,
           legacyTodos: normalizedLegacy?.todos ?? [],
           legacyUpdatedAtMs: legacy?.updatedAtMs ?? 0,
+          preferFallbackOverLegacy: preferLocalPersisted,
         });
         const liveTradeMap = buildTradeFingerprintMap(live.trades);
         const liveTodoMap = buildTodoFingerprintMap(live.todos);
@@ -630,28 +673,56 @@ export default function App() {
         } else {
           setTrades((prev) => (sameTradeLists(prev, nextTrades) ? prev : nextTrades));
           setTodos((prev) => (sameTodoLists(prev, nextTodos) ? prev : nextTodos));
-          const nextQuotes = meta?.quotes ?? normalizedLegacy?.quotes ?? portfolioRef.current.quotes;
-          const nextPositionIds =
-            meta?.positionIds ?? normalizedLegacy?.positionIds ?? portfolioRef.current.positionIds;
-          const nextNotes = meta?.notes ?? normalizedLegacy?.notes ?? portfolioRef.current.notes;
-          const nextQuoteUpdatedAt =
-            meta?.quoteUpdatedAt ??
-            normalizedLegacy?.quoteUpdatedAt ??
-            portfolioRef.current.quoteUpdatedAt;
-          const nextLastKrQuoteBulkAt =
-            meta?.lastKrQuoteBulkAt ??
-            normalizedLegacy?.lastKrQuoteBulkAt ??
-            portfolioRef.current.lastKrQuoteBulkAt;
+          const nextQuotes = pickMetaValue({
+            remote: meta?.quotes,
+            legacy: normalizedLegacy?.quotes,
+            local: localPortfolio.quotes,
+            preferLocal: preferLocalPersisted,
+          });
+          const nextPositionIds = pickMetaValue({
+            remote: meta?.positionIds,
+            legacy: normalizedLegacy?.positionIds,
+            local: localPortfolio.positionIds,
+            preferLocal: preferLocalPersisted,
+          });
+          const nextNotes = pickMetaValue({
+            remote: meta?.notes,
+            legacy: normalizedLegacy?.notes,
+            local: localPortfolio.notes,
+            preferLocal: preferLocalPersisted,
+          });
+          const nextQuoteUpdatedAt = pickMetaValue({
+            remote: meta?.quoteUpdatedAt,
+            legacy: normalizedLegacy?.quoteUpdatedAt,
+            local: localPortfolio.quoteUpdatedAt,
+            preferLocal: preferLocalPersisted,
+          });
+          const nextLastKrQuoteBulkAt = pickMetaValue({
+            remote: meta?.lastKrQuoteBulkAt,
+            legacy: normalizedLegacy?.lastKrQuoteBulkAt,
+            local: localPortfolio.lastKrQuoteBulkAt,
+            preferLocal: preferLocalPersisted,
+          });
           const nextKrSellCommissionRate = normalizeKrSellCommissionRate(
-            meta?.krSellCommissionRate ?? normalizedLegacy?.krSellCommissionRate,
+            pickMetaValue({
+              remote: meta?.krSellCommissionRate,
+              legacy: normalizedLegacy?.krSellCommissionRate,
+              local: localPortfolio.krSellCommissionRate,
+              preferLocal: preferLocalPersisted,
+            }),
           );
-          const nextKrPreferExtendedQuote =
-            meta?.krPreferExtendedQuote ??
-            (normalizedLegacy?.krPreferExtendedQuote === true);
-          const nextKrDayOpenByTicker =
-            meta?.krDayOpenByTicker ??
-            normalizedLegacy?.krDayOpenByTicker ??
-            portfolioRef.current.krDayOpenByTicker;
+          const nextKrPreferExtendedQuote = pickMetaValue({
+            remote: meta?.krPreferExtendedQuote,
+            legacy: normalizedLegacy?.krPreferExtendedQuote,
+            local: localPortfolio.krPreferExtendedQuote,
+            preferLocal: preferLocalPersisted,
+          });
+          const nextKrDayOpenByTicker = pickMetaValue({
+            remote: meta?.krDayOpenByTicker,
+            legacy: normalizedLegacy?.krDayOpenByTicker,
+            local: localPortfolio.krDayOpenByTicker,
+            preferLocal: preferLocalPersisted,
+          });
 
           setQuotes((prev) =>
             JSON.stringify(prev) === JSON.stringify(nextQuotes)
@@ -694,32 +765,18 @@ export default function App() {
 
         cloudTradeFingerprintsRef.current = buildTradeFingerprintMap(nextTrades);
         cloudTodoFingerprintsRef.current = buildTodoFingerprintMap(nextTodos);
-        cloudMetaFingerprintRef.current = metaFingerprint({
-          quotes: meta?.quotes ?? normalizedLegacy?.quotes ?? portfolioRef.current.quotes,
-          positionIds:
-            meta?.positionIds ??
-            normalizedLegacy?.positionIds ??
-            portfolioRef.current.positionIds,
-          notes: meta?.notes ?? normalizedLegacy?.notes ?? portfolioRef.current.notes,
-          quoteUpdatedAt:
-            meta?.quoteUpdatedAt ??
-            normalizedLegacy?.quoteUpdatedAt ??
-            portfolioRef.current.quoteUpdatedAt,
-          lastKrQuoteBulkAt:
-            meta?.lastKrQuoteBulkAt ??
-            normalizedLegacy?.lastKrQuoteBulkAt ??
-            portfolioRef.current.lastKrQuoteBulkAt,
-          krSellCommissionRate: normalizeKrSellCommissionRate(
-            meta?.krSellCommissionRate ?? normalizedLegacy?.krSellCommissionRate,
-          ),
-          krPreferExtendedQuote:
-            meta?.krPreferExtendedQuote ??
-            (normalizedLegacy?.krPreferExtendedQuote === true),
-          krDayOpenByTicker:
-            meta?.krDayOpenByTicker ??
-            normalizedLegacy?.krDayOpenByTicker ??
-            portfolioRef.current.krDayOpenByTicker,
-        });
+        cloudMetaFingerprintRef.current = meta
+          ? metaFingerprint({
+              quotes: meta.quotes,
+              positionIds: meta.positionIds,
+              notes: meta.notes,
+              quoteUpdatedAt: meta.quoteUpdatedAt,
+              lastKrQuoteBulkAt: meta.lastKrQuoteBulkAt,
+              krSellCommissionRate: meta.krSellCommissionRate,
+              krPreferExtendedQuote: meta.krPreferExtendedQuote,
+              krDayOpenByTicker: meta.krDayOpenByTicker,
+            })
+          : '';
 
         cleanupFns.push(
           subscribeCloudTrades(
