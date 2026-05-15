@@ -2,7 +2,11 @@ import { useEffect, useState, type FormEvent } from 'react';
 import type { Market } from '../types/portfolio';
 import { defaultCurrencyForMarket } from '../lib/market';
 import { roundMoney } from '../lib/portfolioMath';
-import { lookupKrStockName, searchKrStocksByName } from '../lib/krxLookup';
+import {
+  lookupKrStockName,
+  normalizeKrTicker,
+  searchKrStocksByName,
+} from '../lib/krxLookup';
 
 export interface AddHoldingPayload {
   market: Market;
@@ -57,7 +61,7 @@ export function AddHoldingModal({
 
   useEffect(() => {
     if (!open || market !== 'KR') return;
-    const q = name.trim();
+    const q = name.trim() || ticker.trim();
     if (!q || q.length < 1) {
       setNameSuggestions([]);
       return;
@@ -79,7 +83,7 @@ export function AddHoldingModal({
     return () => {
       cancelled = true;
     };
-  }, [open, market, name]);
+  }, [open, market, name, ticker]);
 
   if (!open) return null;
 
@@ -126,18 +130,13 @@ export function AddHoldingModal({
     if (market !== 'KR') return;
     const fromTicker = (primaryOverride ?? ticker).trim();
     const fromName = name.trim();
-    const codeFromPrimary = fromTicker.replace(/\s/g, '');
-    const codeFromName = fromName.replace(/\s/g, '');
-    const sixDigit =
-      /^\d{6}$/.test(codeFromPrimary) ? codeFromPrimary
-      : /^\d{6}$/.test(codeFromName) ? codeFromName
-      : '';
+    const code = normalizeKrTicker(fromTicker) || normalizeKrTicker(fromName);
 
-    if (sixDigit) {
+    if (code) {
       try {
         setLookupLoading(true);
         setLookupMessage(null);
-        const found = await lookupKrStockName(sixDigit);
+        const found = await lookupKrStockName(code);
         if (!found) {
           setLookupMessage('조회 결과가 없습니다. 종목명 검색을 시도해 보세요.');
           return;
@@ -159,7 +158,7 @@ export function AddHoldingModal({
     const q = fromTicker || fromName;
     if (!q) {
       setLookupMessage(
-        '종목코드(6자리) 또는 종목명을 입력한 뒤 조회해 주세요.',
+        '종목코드(예: 005930, 00680K) 또는 종목명을 입력한 뒤 조회해 주세요.',
       );
       return;
     }
@@ -221,7 +220,7 @@ export function AddHoldingModal({
                 onBlur={(e) => {
                   if (market !== 'KR') return;
                   const t = e.target.value.trim().replace(/\s/g, '');
-                  if (/^\d{6}$/.test(t) && !name.trim()) void handleLookup(e.target.value);
+                  if (normalizeKrTicker(t) && !name.trim()) void handleLookup(e.target.value);
                 }}
                 className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
                 required

@@ -13,7 +13,11 @@ import {
 } from '../lib/market';
 import { roundMoney } from '../lib/portfolioMath';
 import { useFocusTrap } from '../hooks/useFocusTrap';
-import { lookupKrStockName, searchKrStocksByName } from '../lib/krxLookup';
+import {
+  lookupKrStockName,
+  normalizeKrTicker,
+  searchKrStocksByName,
+} from '../lib/krxLookup';
 
 interface AddTradeModalProps {
   open: boolean;
@@ -67,7 +71,7 @@ export function AddTradeModal({
     if (marketManual === 'KR') return true;
     const t = ticker.trim();
     const tDigits = t.replace(/\s/g, '');
-    if (/^\d{6}$/.test(tDigits)) return true;
+    if (normalizeKrTicker(tDigits)) return true;
     if (/[가-힣]/.test(t)) return true;
     if (/[가-힣]/.test(name.trim())) return true;
     return false;
@@ -125,7 +129,7 @@ export function AddTradeModal({
       setNameSuggestions([]);
       return;
     }
-    const q = name.trim();
+    const q = name.trim() || ticker.trim();
     if (!q) {
       setNameSuggestions([]);
       return;
@@ -147,7 +151,7 @@ export function AddTradeModal({
     return () => {
       cancelled = true;
     };
-  }, [open, krLookupActive, name]);
+  }, [open, krLookupActive, name, ticker]);
 
   const market: Market = krMarketMode
     ? 'KR'
@@ -160,7 +164,7 @@ export function AddTradeModal({
     e.preventDefault();
     setError(null);
     const rawTk = ticker.trim();
-    const tk = /^\d{6}$/.test(rawTk) ? rawTk : rawTk.toUpperCase();
+    const tk = market === 'KR' ? rawTk.replace(/\s/g, '').toUpperCase() : rawTk.toUpperCase();
     if (!tk) {
       setError('종목코드를 입력하세요.');
       return;
@@ -235,7 +239,7 @@ export function AddTradeModal({
   const inferredLabel = krMarketMode
     ? '한국장 탭(고정)'
     : inferMarketFromTicker(ticker.trim()) === 'KR'
-      ? '한국(6자리 숫자)'
+      ? '한국(6자리 코드)'
       : '미국';
 
   /** @param primaryOverride 첫 번째 입력칸 값 (onBlur 시 최신 DOM 값 반영용) */
@@ -243,18 +247,13 @@ export function AddTradeModal({
     if (!showKrLookupButton) return;
     const fromTicker = (primaryOverride ?? ticker).trim();
     const fromName = name.trim();
-    const codeFromPrimary = fromTicker.replace(/\s/g, '');
-    const codeFromName = fromName.replace(/\s/g, '');
-    const sixDigit =
-      /^\d{6}$/.test(codeFromPrimary) ? codeFromPrimary
-      : /^\d{6}$/.test(codeFromName) ? codeFromName
-      : '';
+    const code = normalizeKrTicker(fromTicker) || normalizeKrTicker(fromName);
 
-    if (sixDigit) {
+    if (code) {
       try {
         setLookupLoading(true);
         setLookupMessage(null);
-        const found = await lookupKrStockName(sixDigit);
+        const found = await lookupKrStockName(code);
         if (!found) {
           setLookupMessage('조회 결과가 없습니다. 종목명 검색을 시도해 보세요.');
           return;
@@ -276,7 +275,7 @@ export function AddTradeModal({
     const q = fromTicker || fromName;
     if (!q) {
       setLookupMessage(
-        '종목코드(6자리) 또는 종목명을 입력한 뒤 조회해 주세요.',
+        '종목코드(예: 005930, 00680K) 또는 종목명을 입력한 뒤 조회해 주세요.',
       );
       return;
     }
@@ -373,7 +372,7 @@ export function AddTradeModal({
                 onBlur={(e) => {
                   if (!krLookupActive) return;
                   const t = e.target.value.trim().replace(/\s/g, '');
-                  if (/^\d{6}$/.test(t) && !name.trim()) void handleLookup(e.target.value);
+                  if (normalizeKrTicker(t) && !name.trim()) void handleLookup(e.target.value);
                 }}
                 placeholder="예: AAPL, 005930, 삼성"
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"

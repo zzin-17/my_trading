@@ -10,6 +10,7 @@ describe('inferMarketFromTicker', () => {
   it('6자리 숫자면 한국', () => {
     expect(inferMarketFromTicker('005930')).toBe('KR');
     expect(inferMarketFromTicker('000660')).toBe('KR');
+    expect(inferMarketFromTicker('00680K')).toBe('KR');
   });
 
   it('그 외는 미국', () => {

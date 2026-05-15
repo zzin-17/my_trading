@@ -4,6 +4,16 @@
 
 const decoder = new TextDecoder('euc-kr');
 
+// KRX KIND 일괄 상장목록에서 누락되는 우선주/영문 접미 코드 보정.
+const MANUAL_KR_STOCK_SUPPLEMENTS = [
+  {
+    ticker: '00680K',
+    name: '미래에셋증권2우B',
+    sector: '증권',
+    board: '코스피',
+  },
+];
+
 /**
  * @returns {Promise<{ ticker: string, name: string, sector: string, board: string }[]>}
  */
@@ -64,6 +74,9 @@ export function mergeStockAndFunds(stockItems, fundItems) {
   const by = new Map(stockItems.map((x) => [x.ticker, x]));
   for (const f of fundItems) {
     if (!by.has(f.ticker)) by.set(f.ticker, f);
+  }
+  for (const item of MANUAL_KR_STOCK_SUPPLEMENTS) {
+    if (!by.has(item.ticker)) by.set(item.ticker, item);
   }
   return [...by.values()];
 }

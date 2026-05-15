@@ -17,6 +17,11 @@ export interface KrxListedStock {
 
 let krxListCache: KrxListedStock[] | null = null;
 
+export function normalizeKrTicker(input: string): string {
+  const code = input.trim().replace(/\s/g, '').toUpperCase();
+  return /^[A-Z0-9]{6}$/.test(code) ? code : '';
+}
+
 /** 서버·캐시 값이 '유가' 등으로 올 때 코스피로 통일 (api/krx-kind.js와 동일 규칙) */
 function normalizeKrxBoardLabel(raw: string): string {
   const s = raw.trim();
@@ -34,8 +39,8 @@ function normalizeKrxBoardLabel(raw: string): string {
 export async function lookupKrStockName(
   ticker: string,
 ): Promise<KrxLookupResult | null> {
-  const code = ticker.trim().replace(/\s/g, '').toUpperCase();
-  if (!/^[A-Z0-9]{6}$/.test(code)) return null;
+  const code = normalizeKrTicker(ticker);
+  if (!code) return null;
 
   const list = await getKrxList();
   const row = list.find((x) => x.ticker === code);
@@ -51,14 +56,38 @@ export async function searchKrStocksByName(
   if (!q) return [];
   const list = await getKrxList();
   const lower = q.toLowerCase();
+  const code = normalizeKrTicker(q);
+  const seen = new Set<string>();
+  const out: KrxListedStock[] = [];
+  const push = (items: KrxListedStock[]) => {
+    for (const item of items) {
+      if (seen.has(item.ticker)) continue;
+      seen.add(item.ticker);
+      out.push(item);
+      if (out.length >= limit) return;
+    }
+  };
 
-  const starts = list.filter((x) => x.name.toLowerCase().startsWith(lower));
-  const includes = list.filter(
-    (x) =>
-      !x.name.toLowerCase().startsWith(lower) &&
-      x.name.toLowerCase().includes(lower),
+  if (code) {
+    push(list.filter((x) => x.ticker === code));
+  }
+  push(list.filter((x) => x.name.toLowerCase().startsWith(lower)));
+  push(list.filter((x) => x.ticker.startsWith(code || q.toUpperCase())));
+  push(
+    list.filter(
+      (x) =>
+        !x.name.toLowerCase().startsWith(lower) &&
+        x.name.toLowerCase().includes(lower),
+    ),
   );
-  return [...starts, ...includes].slice(0, limit);
+  push(
+    list.filter((x) =>
+      code
+        ? x.ticker.includes(code)
+        : x.ticker.toLowerCase().includes(lower),
+    ),
+  );
+  return out.slice(0, limit);
 }
 
 /** 한국장 매매 건에 대해 KRX 목록으로 종목명·섹터(업종)를 덮어씀 (목록에 있을 때만) */

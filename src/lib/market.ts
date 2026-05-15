@@ -2,8 +2,8 @@ import type { CurrencyCode, Market, Position } from '../types/portfolio';
 
 /** JSON 등에서 `market` 생략 시 티커로 추론: 6자리 숫자 → 한국, 그 외 → 미국 */
 export function inferMarketFromTicker(ticker: string): Market {
-  const t = ticker.trim();
-  if (/^\d{6}$/.test(t)) return 'KR';
+  const t = ticker.trim().toUpperCase();
+  if (/^\d{6}$/.test(t) || /^\d{5}[A-Z]$/.test(t)) return 'KR';
   return 'US';
 }
 

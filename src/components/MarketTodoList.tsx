@@ -6,7 +6,11 @@ import type { LedgerRow } from '../lib/ledger';
 import { defaultCurrencyForMarket } from '../lib/market';
 import { formatMoney } from '../lib/format';
 import { roundMoney } from '../lib/portfolioMath';
-import { lookupKrStockName, searchKrStocksByName } from '../lib/krxLookup';
+import {
+  lookupKrStockName,
+  normalizeKrTicker,
+  searchKrStocksByName,
+} from '../lib/krxLookup';
 import { ExpandableText } from './ExpandableText';
 
 interface MarketTodoListProps {
@@ -211,8 +215,6 @@ export function MarketTodoList({
 
   const trimmedSymbol = symbolField.trim();
   const krDigitsOnly = market === 'KR' && /^\d+$/.test(trimmedSymbol.replace(/\s/g, ''));
-  const krSixDigit =
-    market === 'KR' && /^\d{6}$/.test(trimmedSymbol.replace(/\s/g, ''));
 
   useEffect(() => {
     if (market !== 'KR') {
@@ -245,7 +247,7 @@ export function MarketTodoList({
     async (tk: string): Promise<string | undefined> => {
       const fromPick = pickedKrName.trim();
       if (fromPick) return fromPick;
-      if (market === 'KR' && /^\d{6}$/.test(tk)) {
+      if (market === 'KR' && normalizeKrTicker(tk)) {
         const looked = await lookupKrStockName(tk);
         if (looked?.name) return looked.name;
       }
@@ -265,11 +267,12 @@ export function MarketTodoList({
   const handleKrBlurLookup = useCallback(() => {
     if (market !== 'KR') return;
     const raw = symbolField.trim().replace(/\s/g, '');
-    if (!/^\d{6}$/.test(raw)) return;
-    void lookupKrStockName(raw).then((r) => {
+    const code = normalizeKrTicker(raw);
+    if (!code) return;
+    void lookupKrStockName(code).then((r) => {
       const nm = r?.name ?? '';
       setPickedKrName(nm);
-      lastKrPickRef.current = nm ? { ticker: raw, name: nm } : null;
+      lastKrPickRef.current = nm ? { ticker: code, name: nm } : null;
     });
   }, [market, symbolField]);
 
@@ -284,8 +287,10 @@ export function MarketTodoList({
     if (!tk || !Number.isFinite(p) || p <= 0 || !Number.isFinite(q) || q <= 0) {
       return;
     }
-    if (market === 'KR' && !/^\d{6}$/.test(tk)) {
-      window.alert('한국장은 6자리 종목코드를 입력하거나, 아래 목록에서 종목을 선택해 주세요.');
+    if (market === 'KR' && !normalizeKrTicker(tk)) {
+      window.alert(
+        '한국장은 6자리 종목코드(예: 005930, 00680K)를 입력하거나, 아래 목록에서 종목을 선택해 주세요.',
+      );
       return;
     }
     setAddSubmitting(true);
@@ -458,7 +463,7 @@ export function MarketTodoList({
               autoComplete="off"
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
             />
-            {market === 'KR' && krSuggestions.length > 0 && !krSixDigit ? (
+            {market === 'KR' && krSuggestions.length > 0 && !normalizeKrTicker(trimmedSymbol) ? (
               <ul className="absolute z-20 mt-1 max-h-40 w-full overflow-auto rounded-md border border-border bg-surface py-1 shadow-lg">
                 {krSuggestions.map((item) => (
                   <li key={item.ticker}>
