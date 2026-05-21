@@ -1,4 +1,8 @@
-import { fetchNaverEtfEtnRows, mergeStockAndFunds } from './mergeListedFunds.js';
+import {
+  fetchNaverEtfEtnRows,
+  fetchNaverPreferredStockRows,
+  mergeStockAndFunds,
+} from './mergeListedFunds.js';
 import { enforceRateLimit } from './_rateLimit.js';
 
 export default async function handler(req, res) {
@@ -39,8 +43,11 @@ export default async function handler(req, res) {
     if (stockItems.length === 0) {
       return res.status(502).json({ message: 'Failed to parse KRX listing' });
     }
-    const fundItems = await fetchNaverEtfEtnRows();
-    const items = mergeStockAndFunds(stockItems, fundItems);
+    const [fundItems, preferredItems] = await Promise.all([
+      fetchNaverEtfEtnRows(),
+      fetchNaverPreferredStockRows(stockItems),
+    ]);
+    const items = mergeStockAndFunds(stockItems, fundItems, preferredItems);
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
     return res.status(200).json({ items });

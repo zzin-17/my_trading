@@ -85,11 +85,31 @@ export default defineConfig({
             const body = await r.arrayBuffer();
             const html = new TextDecoder('euc-kr').decode(body);
             const stockItems = parseKrxCorpList(html);
-            const { fetchNaverEtfEtnRows, mergeStockAndFunds } = await import(
+            const mergeListedFundsModule = (await import(
               './api/mergeListedFunds.js'
-            );
-            const fundItems = await fetchNaverEtfEtnRows();
-            const items = mergeStockAndFunds(stockItems, fundItems);
+            )) as unknown as {
+              fetchNaverEtfEtnRows: () => Promise<
+                { ticker: string; name: string; sector: string; board: string }[]
+              >;
+              fetchNaverPreferredStockRows: (
+                stockItems: { ticker: string; name: string; sector: string; board: string }[],
+              ) => Promise<{ ticker: string; name: string; sector: string; board: string }[]>;
+              mergeStockAndFunds: (
+                stockItems: { ticker: string; name: string; sector: string; board: string }[],
+                fundItems: { ticker: string; name: string; sector: string; board: string }[],
+                preferredItems?: { ticker: string; name: string; sector: string; board: string }[],
+              ) => { ticker: string; name: string; sector: string; board: string }[];
+            };
+            const {
+              fetchNaverEtfEtnRows,
+              fetchNaverPreferredStockRows,
+              mergeStockAndFunds,
+            } = mergeListedFundsModule;
+            const [fundItems, preferredItems] = await Promise.all([
+              fetchNaverEtfEtnRows(),
+              fetchNaverPreferredStockRows(stockItems),
+            ]);
+            const items = mergeStockAndFunds(stockItems, fundItems, preferredItems);
             res.statusCode = 200;
             res.setHeader('Content-Type', 'application/json; charset=utf-8');
             res.end(JSON.stringify({ items }));
