@@ -345,6 +345,8 @@ export default function App() {
   const cloudTodoFingerprintsRef = useRef<Record<string, string>>({});
   const cloudTradeRecordsRef = useRef<Record<string, Trade>>({});
   const cloudTodoRecordsRef = useRef<Record<string, TradePlanTodo>>({});
+  const pendingTradeSyncRef = useRef(false);
+  const pendingTodoSyncRef = useRef(false);
   const cloudMetaFingerprintRef = useRef('');
   const autoSnapshotTimerRef = useRef<number | null>(null);
   const lastAutoSnapshotAtRef = useRef(0);
@@ -433,6 +435,8 @@ export default function App() {
     cloudTodoFingerprintsRef.current = {};
     cloudTradeRecordsRef.current = {};
     cloudTodoRecordsRef.current = {};
+    pendingTradeSyncRef.current = false;
+    pendingTodoSyncRef.current = false;
     cloudMetaFingerprintRef.current = '';
     lastAutoSnapshotFingerprintRef.current = '';
     if (autoSnapshotTimerRef.current) {
@@ -602,6 +606,8 @@ export default function App() {
 
         cloudTradeFingerprintsRef.current = bootstrap.nextTradeFingerprints;
         cloudTodoFingerprintsRef.current = bootstrap.nextTodoFingerprints;
+        pendingTradeSyncRef.current = false;
+        pendingTodoSyncRef.current = false;
         lastAutoSnapshotFingerprintRef.current = portfolioGuardFingerprint(nextPortfolio);
         cloudMetaFingerprintRef.current = bootstrap.remoteMetaFingerprint;
 
@@ -609,6 +615,13 @@ export default function App() {
           cloudPortfolioStore.subscribeTrades(
             user.uid,
             (remoteTrades) => {
+              if (
+                pendingTradeSyncRef.current &&
+                !sameTradeLists(portfolioRef.current.trades, remoteTrades)
+              ) {
+                return;
+              }
+              pendingTradeSyncRef.current = false;
               cloudTradeFingerprintsRef.current =
                 buildTradeFingerprintMap(remoteTrades);
               cloudTradeRecordsRef.current = buildTradeRecordMap(remoteTrades);
@@ -623,6 +636,13 @@ export default function App() {
           cloudPortfolioStore.subscribeTodos(
             user.uid,
             (remoteTodos) => {
+              if (
+                pendingTodoSyncRef.current &&
+                !sameTodoLists(portfolioRef.current.todos, remoteTodos)
+              ) {
+                return;
+              }
+              pendingTodoSyncRef.current = false;
               cloudTodoFingerprintsRef.current = buildTodoFingerprintMap(remoteTodos);
               cloudTodoRecordsRef.current = buildTodoRecordMap(remoteTodos);
               setTodos((prev) =>
@@ -725,6 +745,7 @@ export default function App() {
       .map((id) => cloudTradeRecordsRef.current[id])
       .filter((trade): trade is Trade => Boolean(trade));
     if (upserts.length === 0 && deletes.length === 0) return;
+    pendingTradeSyncRef.current = true;
     let cancelled = false;
     void cloudPortfolioStore.syncTrades(user.uid, upserts, deletes, deviceIdRef.current)
       .then(() => {
@@ -754,6 +775,7 @@ export default function App() {
       .map((id) => cloudTodoRecordsRef.current[id])
       .filter((todo): todo is TradePlanTodo => Boolean(todo));
     if (upserts.length === 0 && deletes.length === 0) return;
+    pendingTodoSyncRef.current = true;
     let cancelled = false;
     void cloudPortfolioStore.syncTodos(user.uid, upserts, deletes, deviceIdRef.current)
       .then(() => {
