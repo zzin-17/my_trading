@@ -138,8 +138,15 @@ export function metaFingerprint(input: CloudPortfolioMetaInput): string {
 function reconcileTradesFromSources(args: {
   liveTrades: Trade[];
   fallbackTrades: Trade[];
+  preferFallback?: boolean;
 }): Trade[] {
-  const { liveTrades, fallbackTrades } = args;
+  const { liveTrades, fallbackTrades, preferFallback = false } = args;
+  if (preferFallback) {
+    return [...fallbackTrades].sort((a, b) => {
+      const d = a.date.localeCompare(b.date);
+      return d !== 0 ? d : a.id.localeCompare(b.id);
+    });
+  }
   const map = new Map<string, Trade>();
   for (const trade of fallbackTrades) map.set(trade.id, trade);
   for (const trade of liveTrades) map.set(trade.id, trade);
@@ -152,8 +159,15 @@ function reconcileTradesFromSources(args: {
 function reconcileTodosFromSources(args: {
   liveTodos: TradePlanTodo[];
   fallbackTodos: TradePlanTodo[];
+  preferFallback?: boolean;
 }): TradePlanTodo[] {
-  const { liveTodos, fallbackTodos } = args;
+  const { liveTodos, fallbackTodos, preferFallback = false } = args;
+  if (preferFallback) {
+    return [...fallbackTodos].sort((a, b) => {
+      const d = a.createdAt.localeCompare(b.createdAt);
+      return d !== 0 ? d : a.id.localeCompare(b.id);
+    });
+  }
   const map = new Map<string, TradePlanTodo>();
   for (const todo of fallbackTodos) map.set(todo.id, todo);
   for (const todo of liveTodos) map.set(todo.id, todo);
@@ -241,10 +255,12 @@ async function loadBootstrap(args: {
   const nextTrades = reconcileTradesFromSources({
     liveTrades: live.trades,
     fallbackTrades,
+    preferFallback: preferLocalTrades,
   });
   const nextTodos = reconcileTodosFromSources({
     liveTodos: live.todos,
     fallbackTodos,
+    preferFallback: preferLocalTodos,
   });
 
   const nextMeta: CloudPortfolioMetaInput = {
