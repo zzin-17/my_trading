@@ -10,6 +10,14 @@ service cloud.firestore {
       return value is int || value is float;
     }
 
+    function tradeTrashDocPath(userId, tradeId) {
+      return /databases/$(database)/documents/users/$(userId)/trade_trash/$(tradeId);
+    }
+
+    function todoTrashDocPath(userId, todoId) {
+      return /databases/$(database)/documents/users/$(userId)/todo_trash/$(todoId);
+    }
+
     function validTradeDoc(tradeId) {
       return request.resource.data.keys().hasOnly([
           'id',
@@ -56,6 +64,10 @@ service cloud.firestore {
         && request.resource.data.updatedAt is timestamp;
     }
 
+    function canWriteTradeDoc(userId, tradeId) {
+      return !existsAfter(tradeTrashDocPath(userId, tradeId));
+    }
+
     function validTodoDoc(todoId) {
       return request.resource.data.keys().hasOnly([
           'id',
@@ -87,6 +99,10 @@ service cloud.firestore {
         && request.resource.data.done is bool
         && request.resource.data.createdAt is string
         && request.resource.data.updatedAt is timestamp;
+    }
+
+    function canWriteTodoDoc(userId, todoId) {
+      return !existsAfter(todoTrashDocPath(userId, todoId));
     }
 
     function validMetaDoc(docId) {
@@ -162,6 +178,7 @@ service cloud.firestore {
           'deletedAt',
         ])
         && request.resource.data.itemId is string
+        && request.resource.data.itemId == docId
         && request.resource.data.ticker is string
         && request.resource.data.name is string
         && request.resource.data.date is string
@@ -190,6 +207,7 @@ service cloud.firestore {
           'deletedAt',
         ])
         && request.resource.data.itemId is string
+        && request.resource.data.itemId == docId
         && request.resource.data.ticker is string
         && request.resource.data.name is string
         && request.resource.data.createdAtValue is string
@@ -249,14 +267,18 @@ service cloud.firestore {
     // 실시간 동기화용 거래 컬렉션
     match /users/{userId}/trades/{tradeId} {
       allow read: if isOwner(userId);
-      allow create, update: if isOwner(userId) && validTradeDoc(tradeId);
+      allow create, update: if isOwner(userId)
+        && validTradeDoc(tradeId)
+        && canWriteTradeDoc(userId, tradeId);
       allow delete: if isOwner(userId);
     }
 
     // 실시간 동기화용 To-do 컬렉션
     match /users/{userId}/todos/{todoId} {
       allow read: if isOwner(userId);
-      allow create, update: if isOwner(userId) && validTodoDoc(todoId);
+      allow create, update: if isOwner(userId)
+        && validTodoDoc(todoId)
+        && canWriteTodoDoc(userId, todoId);
       allow delete: if isOwner(userId);
     }
 

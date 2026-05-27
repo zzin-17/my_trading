@@ -692,7 +692,7 @@ async function commitTradeChanges(
           updatedAt: serverTimestamp(),
         });
       } else {
-        const trashRef = doc(tradeTrashCollectionRef(uid), createDocId('trade-trash'));
+        const trashRef = doc(tradeTrashCollectionRef(uid), op.value.id);
         batch.set(trashRef, {
           itemId: op.value.id,
           ticker: op.value.ticker,
@@ -743,7 +743,7 @@ async function commitTodoChanges(
           updatedAt: serverTimestamp(),
         });
       } else {
-        const trashRef = doc(todoTrashCollectionRef(uid), createDocId('todo-trash'));
+        const trashRef = doc(todoTrashCollectionRef(uid), op.value.id);
         batch.set(trashRef, {
           itemId: op.value.id,
           ticker: op.value.ticker,
