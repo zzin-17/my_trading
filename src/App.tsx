@@ -351,6 +351,7 @@ export default function App() {
   const autoSnapshotTimerRef = useRef<number | null>(null);
   const lastAutoSnapshotAtRef = useRef(0);
   const lastAutoSnapshotFingerprintRef = useRef('');
+  const lastTodoDeleteRequestRef = useRef<{ id: string; at: number } | null>(null);
   const deviceIdRef = useRef(getOrCreateDeviceId());
   const [cloudSessionReady, setCloudSessionReady] = useState(false);
   const [cloudBusy, setCloudBusy] = useState(false);
@@ -1448,6 +1449,14 @@ export default function App() {
   const handleDeleteTodo = useCallback((id: string): boolean => {
     const target = todos.find((todo) => todo.id === id);
     if (!target) return false;
+    const now = Date.now();
+    if (
+      lastTodoDeleteRequestRef.current?.id === id &&
+      now - lastTodoDeleteRequestRef.current.at < 1500
+    ) {
+      return false;
+    }
+    lastTodoDeleteRequestRef.current = { id, at: now };
     const ok = window.confirm(
       `${target.ticker} ${target.name ?? ''} ${target.action === 'buy' ? '매수' : '매도'} 계획을 삭제할까요?`,
     );
