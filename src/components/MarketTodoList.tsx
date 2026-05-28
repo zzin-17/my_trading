@@ -368,15 +368,9 @@ export function MarketTodoList({
 
   const handleDeleteTodo = useCallback(
     (todo: TradePlanTodo) => {
-      const displayName = resolveTodoDisplayName(todo, market, ledger, trades);
-      const actionLabel = todo.action === 'buy' ? '매수' : '매도';
-      const ok = window.confirm(
-        `${displayName} (${todo.ticker}) ${actionLabel} 계획을 삭제할까요?`,
-      );
-      if (!ok) return;
       onDelete(todo.id);
     },
-    [market, ledger, trades, onDelete],
+    [onDelete],
   );
 
   const renderTodoActions = useCallback(
