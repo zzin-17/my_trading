@@ -352,11 +352,15 @@ export default function App() {
   const lastAutoSnapshotAtRef = useRef(0);
   const lastAutoSnapshotFingerprintRef = useRef('');
   const lastTodoDeleteRequestRef = useRef<{ id: string; at: number } | null>(null);
+  const lastNetworkOnlineRef = useRef(
+    typeof navigator !== 'undefined' ? navigator.onLine : false,
+  );
   const deviceIdRef = useRef(getOrCreateDeviceId());
   const [cloudSessionReady, setCloudSessionReady] = useState(false);
   const [cloudBusy, setCloudBusy] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
   const [recoveryBusy, setRecoveryBusy] = useState(false);
+  const [cloudBootstrapRevision, setCloudBootstrapRevision] = useState(0);
   const [snapshotItems, setSnapshotItems] = useState<CloudPortfolioSnapshotSummary[]>([]);
   const [deletedTradeItems, setDeletedTradeItems] = useState<CloudDeletedTradeRecord[]>([]);
   const [deletedTodoItems, setDeletedTodoItems] = useState<CloudDeletedTodoRecord[]>([]);
@@ -734,6 +738,7 @@ export default function App() {
     user?.uid,
     authReady,
     applyNormalizedPortfolio,
+    cloudBootstrapRevision,
   ]);
 
   useEffect(() => {
@@ -1303,6 +1308,16 @@ export default function App() {
       window.removeEventListener('offline', off);
     };
   }, []);
+
+  useEffect(() => {
+    const wasOnline = lastNetworkOnlineRef.current;
+    lastNetworkOnlineRef.current = networkOnline;
+    if (!firebaseConfigured || !user || !authReady) return;
+    if (!wasOnline && networkOnline) {
+      setCloudSessionReady(false);
+      setCloudBootstrapRevision((prev) => prev + 1);
+    }
+  }, [authReady, firebaseConfigured, networkOnline, user]);
 
   const ledger = useMemo(() => computeLedger(trades), [trades]);
   const positions = useMemo(
