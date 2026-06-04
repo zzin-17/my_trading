@@ -347,10 +347,12 @@ export default function App() {
   const cloudTodoRecordsRef = useRef<Record<string, TradePlanTodo>>({});
   const pendingTradeSyncRef = useRef(false);
   const pendingTodoSyncRef = useRef(false);
+  const pendingMetaSyncRef = useRef<string | null>(null);
   const cloudMetaFingerprintRef = useRef('');
   const autoSnapshotTimerRef = useRef<number | null>(null);
   const lastAutoSnapshotAtRef = useRef(0);
   const lastAutoSnapshotFingerprintRef = useRef('');
+  const lastForegroundBootstrapAtRef = useRef(0);
   const lastTodoDeleteRequestRef = useRef<{ id: string; at: number } | null>(null);
   const lastNetworkOnlineRef = useRef(
     typeof navigator !== 'undefined' ? navigator.onLine : false,
@@ -442,6 +444,7 @@ export default function App() {
     cloudTodoRecordsRef.current = {};
     pendingTradeSyncRef.current = false;
     pendingTodoSyncRef.current = false;
+    pendingMetaSyncRef.current = null;
     cloudMetaFingerprintRef.current = '';
     lastAutoSnapshotFingerprintRef.current = '';
     if (autoSnapshotTimerRef.current) {
@@ -613,6 +616,7 @@ export default function App() {
         cloudTodoFingerprintsRef.current = bootstrap.nextTodoFingerprints;
         pendingTradeSyncRef.current = false;
         pendingTodoSyncRef.current = false;
+        pendingMetaSyncRef.current = null;
         lastAutoSnapshotFingerprintRef.current = portfolioGuardFingerprint(nextPortfolio);
         cloudMetaFingerprintRef.current = bootstrap.remoteMetaFingerprint;
 
@@ -662,7 +666,7 @@ export default function App() {
             user.uid,
             (remoteMeta) => {
               if (!remoteMeta) return;
-              cloudMetaFingerprintRef.current = metaFingerprint({
+              const remoteFingerprint = metaFingerprint({
                 quotes: remoteMeta.quotes,
                 positionIds: remoteMeta.positionIds,
                 notes: remoteMeta.notes,
@@ -672,6 +676,14 @@ export default function App() {
                 krPreferExtendedQuote: remoteMeta.krPreferExtendedQuote,
                 krDayOpenByTicker: remoteMeta.krDayOpenByTicker,
               });
+              if (
+                pendingMetaSyncRef.current &&
+                pendingMetaSyncRef.current !== remoteFingerprint
+              ) {
+                return;
+              }
+              pendingMetaSyncRef.current = null;
+              cloudMetaFingerprintRef.current = remoteFingerprint;
               setQuotes((prev) =>
                 JSON.stringify(prev) === JSON.stringify(remoteMeta.quotes)
                   ? prev
@@ -806,13 +818,17 @@ export default function App() {
     const localMeta = buildCloudPortfolioMetaInput(portfolioRef.current);
     const localFingerprint = metaFingerprint(localMeta);
     if (cloudMetaFingerprintRef.current === localFingerprint) return;
+    pendingMetaSyncRef.current = localFingerprint;
     let cancelled = false;
     void cloudPortfolioStore.syncMeta(user.uid, localMeta)
       .then(() => {
         if (!cancelled) setCloudError(null);
       })
       .catch((e) => {
-        if (!cancelled) setCloudError(humanizeCloudError(e));
+        if (!cancelled) {
+          pendingMetaSyncRef.current = null;
+          setCloudError(humanizeCloudError(e));
+        }
       });
     return () => {
       cancelled = true;
@@ -1317,6 +1333,30 @@ export default function App() {
       setCloudSessionReady(false);
       setCloudBootstrapRevision((prev) => prev + 1);
     }
+  }, [authReady, firebaseConfigured, networkOnline, user]);
+
+  useEffect(() => {
+    if (!firebaseConfigured || !user || !authReady) return;
+    const requestBootstrapRefresh = () => {
+      if (!networkOnline) return;
+      const now = Date.now();
+      if (now - lastForegroundBootstrapAtRef.current < 15_000) return;
+      lastForegroundBootstrapAtRef.current = now;
+      setCloudSessionReady(false);
+      setCloudBootstrapRevision((prev) => prev + 1);
+    };
+    const onFocus = () => requestBootstrapRefresh();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        requestBootstrapRefresh();
+      }
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [authReady, firebaseConfigured, networkOnline, user]);
 
   const ledger = useMemo(() => computeLedger(trades), [trades]);
