@@ -138,6 +138,37 @@ export function PositionDetailModal({
   const adjustmentDisplayDate = hasAdjustment
     ? formatAdjustmentDisplayDate(adjustmentTrades)
     : null;
+  const activityRows = useMemo(() => {
+    const rows: Array<
+      | {
+          kind: 'adjustment';
+          id: string;
+          date: string;
+        }
+      | {
+          kind: 'trade';
+          id: string;
+          date: string;
+          trade: Trade;
+        }
+    > = journalTrades.map((trade) => ({
+      kind: 'trade',
+      id: trade.id,
+      date: trade.date,
+      trade,
+    }));
+    if (hasAdjustment && adjustmentDisplayDate) {
+      rows.push({
+        kind: 'adjustment',
+        id: 'adjustment-row',
+        date: adjustmentDisplayDate,
+      });
+    }
+    return rows.sort((a, b) => {
+      const d = b.date.localeCompare(a.date);
+      return d !== 0 ? d : a.id.localeCompare(b.id);
+    });
+  }, [adjustmentDisplayDate, hasAdjustment, journalTrades]);
 
   return (
     <div
@@ -308,48 +339,49 @@ export function PositionDetailModal({
               「조정」으로 따로 표시되며, 아래 목록에는 미체결 주문도 함께 표시됩니다.
             </p>
             <ul className="mt-2 max-h-48 space-y-1 overflow-auto text-[12px]">
-              {journalTrades.length === 0 && !hasAdjustment ? (
+              {activityRows.length === 0 ? (
                 <li className="text-textMuted">내역 없음</li>
               ) : (
                 <>
-                  {hasAdjustment ? (
-                    <li key="adjustment-row" className="space-y-1">
-                      <div className="grid grid-cols-[96px_minmax(0,1fr)_132px] items-center gap-x-2 gap-y-1">
-                        <span className="text-textMuted">
-                          {adjustmentDisplayDate ?? '조정일'}
-                        </span>
-                        <span
-                          className={`whitespace-nowrap ${
-                            hasStoredAdjustmentDelta
-                              ? adjustmentDeltaQty >= 0
-                                ? 'text-positive'
-                                : 'text-negative'
-                              : adjustmentSummary.qty >= 0
-                                ? 'text-positive'
-                                : 'text-negative'
-                          }`}
-                        >
-                          {hasStoredAdjustmentDelta ? (
-                            <>
-                              조정 {adjustmentDeltaQty > 0 ? '+' : ''}
-                              {adjustmentDeltaQty}주 {'->'} 현재 {position.quantity}주
-                            </>
-                          ) : (
-                            <>
-                              조정원본 {Math.abs(adjustmentSummary.qty)}주 {'->'} 현재 {position.quantity}주
-                            </>
-                          )}
-                        </span>
-                        <span className="text-right tabular-nums text-textMain">
-                          {adjustmentAvgPrice ?? '-'}
-                        </span>
-                      </div>
-                    </li>
-                  ) : null}
-                  {journalTrades.map((t) => {
+                  {activityRows.map((row) => {
+                    if (row.kind === 'adjustment') {
+                      return (
+                        <li key={row.id} className="space-y-1">
+                          <div className="grid grid-cols-[96px_minmax(0,1fr)_132px] items-center gap-x-2 gap-y-1">
+                            <span className="text-textMuted">{row.date}</span>
+                            <span
+                              className={`whitespace-nowrap ${
+                                hasStoredAdjustmentDelta
+                                  ? adjustmentDeltaQty >= 0
+                                    ? 'text-positive'
+                                    : 'text-negative'
+                                  : adjustmentSummary.qty >= 0
+                                    ? 'text-positive'
+                                    : 'text-negative'
+                              }`}
+                            >
+                              {hasStoredAdjustmentDelta ? (
+                                <>
+                                  조정 {adjustmentDeltaQty > 0 ? '+' : ''}
+                                  {adjustmentDeltaQty}주 {'->'} 현재 {position.quantity}주
+                                </>
+                              ) : (
+                                <>
+                                  조정원본 {Math.abs(adjustmentSummary.qty)}주 {'->'} 현재 {position.quantity}주
+                                </>
+                              )}
+                            </span>
+                            <span className="text-right tabular-nums text-textMain">
+                              {adjustmentAvgPrice ?? '-'}
+                            </span>
+                          </div>
+                        </li>
+                      );
+                    }
+                    const t = row.trade;
                     const pending = t.executionStatus === 'pending';
                     return (
-                      <li key={t.id} className="space-y-1">
+                      <li key={row.id} className="space-y-1">
                         <div className="grid grid-cols-[96px_minmax(0,1fr)_132px] items-center gap-x-2 gap-y-1">
                           <span className="text-textMuted">{t.date}</span>
                           <span className={t.side === 'buy' ? 'text-positive' : 'text-negative'}>
