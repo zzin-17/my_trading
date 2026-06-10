@@ -73,8 +73,8 @@ export async function fetchNaverMobileQuotePreferOver(code) {
 
 /** 당일 시가(시초가) — 모바일 integration totalInfos */
 export async function fetchKrDayOpenPrice(code) {
-  const c = String(code).trim();
-  if (!/^\d{6}$/.test(c)) return null;
+  const c = String(code).trim().replace(/\s/g, '').toUpperCase();
+  if (!/^[A-Z0-9]{6}$/.test(c)) return null;
   const url = `https://m.stock.naver.com/api/stock/${c}/integration`;
   const r = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },

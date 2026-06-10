@@ -9,7 +9,9 @@ export function isKrOpenAttention(
   currentPrice: number,
   dayOpen: number | undefined,
 ): boolean {
-  if (market !== 'KR' || !/^\d{6}$/.test(ticker.replace(/\s/g, ''))) return false;
+  if (market !== 'KR' || !/^[A-Z0-9]{6}$/.test(ticker.replace(/\s/g, '').toUpperCase())) {
+    return false;
+  }
   if (
     dayOpen === undefined ||
     !Number.isFinite(dayOpen) ||

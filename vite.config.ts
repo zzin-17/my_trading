@@ -37,15 +37,21 @@ export default defineConfig({
           try {
             const reqUrl = (req as { url?: string }).url ?? '/';
             const u = new URL(reqUrl, 'http://vite.local');
-            const code = u.searchParams.get('code');
+            const code = u.searchParams
+              .get('code')
+              ?.trim()
+              .replace(/\s/g, '')
+              .toUpperCase();
             const extended =
               u.searchParams.get('extended') === '1' ||
               u.searchParams.get('extended') === 'true';
-            if (!code || !/^\d{6}$/.test(code)) {
+            if (!code || !/^[A-Z0-9]{6}$/.test(code)) {
               res.statusCode = 400;
               res.setHeader('Content-Type', 'application/json; charset=utf-8');
               res.end(
-                JSON.stringify({ message: '6자리 숫자 종목코드가 필요합니다.' }),
+                JSON.stringify({
+                  message: '6자리 한국 종목코드(예: 005930, 00680K)가 필요합니다.',
+                }),
               );
               return;
             }

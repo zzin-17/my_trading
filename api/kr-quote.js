@@ -17,14 +17,18 @@ export default async function handler(req, res) {
     return;
   }
 
-  const code = req.query?.code;
+  const rawCode = req.query?.code;
+  const code =
+    typeof rawCode === 'string' ? rawCode.trim().replace(/\s/g, '').toUpperCase() : rawCode;
   const extRaw = req.query?.extended;
   const ext0 = Array.isArray(extRaw) ? extRaw[0] : extRaw;
   const extended =
     ext0 === '1' || ext0 === 'true' || extRaw === true;
 
-  if (typeof code !== 'string' || !/^\d{6}$/.test(code)) {
-    return res.status(400).json({ message: '6자리 숫자 종목코드가 필요합니다.' });
+  if (typeof code !== 'string' || !/^[A-Z0-9]{6}$/.test(code)) {
+    return res
+      .status(400)
+      .json({ message: '6자리 한국 종목코드(예: 005930, 00680K)가 필요합니다.' });
   }
 
   try {

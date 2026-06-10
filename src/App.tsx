@@ -74,7 +74,7 @@ import type { Market } from './types/portfolio';
 import type { Trade } from './types/trade';
 import type { TradePlanTodo } from './types/todo';
 import { parseHoldingCsv } from './lib/holdingCsv';
-import { applyKrxMetadataToKrTrades } from './lib/krxLookup';
+import { applyKrxMetadataToKrTrades, normalizeKrTicker } from './lib/krxLookup';
 import { adjustOpeningBalanceTrade } from './lib/positionAdjust';
 import { fetchKrNaverDelayedQuote } from './lib/naverKrQuote';
 import { formatQuoteUpdatedLabel } from './lib/format';
@@ -1722,12 +1722,12 @@ export default function App() {
     const tickers = [
       ...new Set(
         positions
-          .filter((p) => p.market === 'KR' && /^\d{6}$/.test(p.ticker))
-          .map((p) => p.ticker),
+          .map((p) => (p.market === 'KR' ? normalizeKrTicker(p.ticker) : ''))
+          .filter(Boolean),
       ),
     ];
     if (tickers.length === 0) {
-      window.alert('한국장 6자리 숫자 종목이 없습니다.');
+      window.alert('한국장 6자리 종목코드(예: 005930, 00680K)가 없습니다.');
       return;
     }
     setKrQuoteRefreshing(true);
@@ -1844,8 +1844,9 @@ export default function App() {
       head = `시세: 네이버 증권 지연 시세 · 마지막 일괄 갱신 ${formatQuoteUpdatedLabel(lastKrQuoteBulkAt)} ${suffix}`;
     } else {
       const times = visiblePositions
-        .filter((p) => p.market === 'KR' && /^\d{6}$/.test(p.ticker))
-        .map((p) => quoteUpdatedAt[p.ticker])
+        .map((p) => (p.market === 'KR' ? normalizeKrTicker(p.ticker) : ''))
+        .filter(Boolean)
+        .map((ticker) => quoteUpdatedAt[ticker])
         .filter(Boolean) as string[];
       if (times.length === 0) {
         head =

@@ -26,9 +26,9 @@ export async function fetchKrNaverDelayedQuote(
   code: string,
   options?: FetchKrNaverQuoteOptions,
 ): Promise<KrNaverQuoteResponse> {
-  const c = code.trim();
-  if (!/^\d{6}$/.test(c)) {
-    throw new Error('한국 종목은 6자리 숫자 코드만 시세 연동됩니다.');
+  const c = code.trim().replace(/\s/g, '').toUpperCase();
+  if (!/^[A-Z0-9]{6}$/.test(c)) {
+    throw new Error('한국 종목은 6자리 코드(예: 005930, 00680K)만 시세 연동됩니다.');
   }
   const ext = options?.preferExtendedQuote ? '&extended=1' : '';
   const url = `${quoteBaseUrl()}?code=${encodeURIComponent(c)}${ext}`;

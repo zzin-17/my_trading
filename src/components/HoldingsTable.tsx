@@ -4,6 +4,7 @@ import { formatMoney, formatPercent, formatQuoteUpdatedLabel } from '../lib/form
 import { isConcentrationRisk, roundPercent } from '../lib/portfolioMath';
 import { fetchKrBoardByTicker } from '../lib/krxLookup';
 import { krBoardBadgeClass, krBoardDisplayLabel } from '../lib/krBoardUi';
+import { normalizeKrTicker } from '../lib/krxLookup';
 import { ExpandableText } from './ExpandableText';
 import {
   isKrOpenAttention,
@@ -410,7 +411,7 @@ export function HoldingsTable({
                   dayOpen !== undefined &&
                   dayOpen > 0 &&
                   p.market === 'KR' &&
-                  /^\d{6}$/.test(p.ticker.replace(/\s/g, ''))
+                  Boolean(normalizeKrTicker(p.ticker))
                     ? `당일 시가 ${formatMoney(dayOpen, p.currency)} · 시가 대비 ${krOpenDeviationPct(p.current_price, dayOpen).toFixed(2)}% (±${KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 주목 표시)`
                     : undefined;
                 const board = krBoardDisplayLabel(
@@ -622,7 +623,7 @@ export function HoldingsTable({
                 dayOpen !== undefined &&
                 dayOpen > 0 &&
                 p.market === 'KR' &&
-                /^\d{6}$/.test(p.ticker.replace(/\s/g, ''))
+                Boolean(normalizeKrTicker(p.ticker))
                   ? `당일 시가 ${formatMoney(dayOpen, p.currency)} · 시가 대비 ${krOpenDeviationPct(p.current_price, dayOpen).toFixed(2)}% (±${KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 주목 표시)`
                   : undefined;
               return (
