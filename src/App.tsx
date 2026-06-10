@@ -1,6 +1,7 @@
 import {
   lazy,
   Suspense,
+  type SetStateAction,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -95,6 +96,19 @@ const PERSISTENCE_WARNING_MESSAGE =
 
 type ThemeMode = 'dark' | 'light';
 type MobileHomeTab = 'portfolio' | 'journal' | 'settings';
+
+function sameFingerprintMapValues(
+  a: Record<string, string>,
+  b: Record<string, string>,
+): boolean {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const key of aKeys) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
+}
 
 async function sha256Hex(input: string): Promise<string> {
   const bytes = new TextEncoder().encode(input);
@@ -347,6 +361,8 @@ export default function App() {
   const cloudTodoRecordsRef = useRef<Record<string, TradePlanTodo>>({});
   const pendingTradeSyncRef = useRef(false);
   const pendingTodoSyncRef = useRef(false);
+  const pendingTradeFingerprintsRef = useRef<Record<string, string> | null>(null);
+  const pendingTodoFingerprintsRef = useRef<Record<string, string> | null>(null);
   const pendingMetaSyncRef = useRef<string | null>(null);
   const cloudMetaFingerprintRef = useRef('');
   const autoSnapshotTimerRef = useRef<number | null>(null);
@@ -376,6 +392,24 @@ export default function App() {
       setPersistenceWarning(ok ? null : PERSISTENCE_WARNING_MESSAGE);
     }
     return ok;
+  }, []);
+
+  const applyLocalTradeChange = useCallback((next: SetStateAction<Trade[]>) => {
+    setTrades((prev) => {
+      const resolved = typeof next === 'function' ? next(prev) : next;
+      pendingTradeSyncRef.current = true;
+      pendingTradeFingerprintsRef.current = buildTradeFingerprintMap(resolved);
+      return resolved;
+    });
+  }, []);
+
+  const applyLocalTodoChange = useCallback((next: SetStateAction<TradePlanTodo[]>) => {
+    setTodos((prev) => {
+      const resolved = typeof next === 'function' ? next(prev) : next;
+      pendingTodoSyncRef.current = true;
+      pendingTodoFingerprintsRef.current = buildTodoFingerprintMap(resolved);
+      return resolved;
+    });
   }, []);
 
   useLayoutEffect(() => {
@@ -444,6 +478,8 @@ export default function App() {
     cloudTodoRecordsRef.current = {};
     pendingTradeSyncRef.current = false;
     pendingTodoSyncRef.current = false;
+    pendingTradeFingerprintsRef.current = null;
+    pendingTodoFingerprintsRef.current = null;
     pendingMetaSyncRef.current = null;
     cloudMetaFingerprintRef.current = '';
     lastAutoSnapshotFingerprintRef.current = '';
@@ -616,6 +652,8 @@ export default function App() {
         cloudTodoFingerprintsRef.current = bootstrap.nextTodoFingerprints;
         pendingTradeSyncRef.current = false;
         pendingTodoSyncRef.current = false;
+        pendingTradeFingerprintsRef.current = null;
+        pendingTodoFingerprintsRef.current = null;
         pendingMetaSyncRef.current = null;
         lastAutoSnapshotFingerprintRef.current = portfolioGuardFingerprint(nextPortfolio);
         cloudMetaFingerprintRef.current = bootstrap.remoteMetaFingerprint;
@@ -624,15 +662,19 @@ export default function App() {
           cloudPortfolioStore.subscribeTrades(
             user.uid,
             (remoteTrades) => {
+              const remoteFingerprints = buildTradeFingerprintMap(remoteTrades);
               if (
                 pendingTradeSyncRef.current &&
-                !sameTradeLists(portfolioRef.current.trades, remoteTrades)
+                !sameFingerprintMapValues(
+                  pendingTradeFingerprintsRef.current ?? buildTradeFingerprintMap(portfolioRef.current.trades),
+                  remoteFingerprints,
+                )
               ) {
                 return;
               }
               pendingTradeSyncRef.current = false;
-              cloudTradeFingerprintsRef.current =
-                buildTradeFingerprintMap(remoteTrades);
+              pendingTradeFingerprintsRef.current = null;
+              cloudTradeFingerprintsRef.current = remoteFingerprints;
               cloudTradeRecordsRef.current = buildTradeRecordMap(remoteTrades);
               setTrades((prev) =>
                 sameTradeLists(prev, remoteTrades) ? prev : remoteTrades,
@@ -645,14 +687,19 @@ export default function App() {
           cloudPortfolioStore.subscribeTodos(
             user.uid,
             (remoteTodos) => {
+              const remoteFingerprints = buildTodoFingerprintMap(remoteTodos);
               if (
                 pendingTodoSyncRef.current &&
-                !sameTodoLists(portfolioRef.current.todos, remoteTodos)
+                !sameFingerprintMapValues(
+                  pendingTodoFingerprintsRef.current ?? buildTodoFingerprintMap(portfolioRef.current.todos),
+                  remoteFingerprints,
+                )
               ) {
                 return;
               }
               pendingTodoSyncRef.current = false;
-              cloudTodoFingerprintsRef.current = buildTodoFingerprintMap(remoteTodos);
+              pendingTodoFingerprintsRef.current = null;
+              cloudTodoFingerprintsRef.current = remoteFingerprints;
               cloudTodoRecordsRef.current = buildTodoRecordMap(remoteTodos);
               setTodos((prev) =>
                 sameTodoLists(prev, remoteTodos) ? prev : remoteTodos,
@@ -1274,7 +1321,7 @@ export default function App() {
   /** 미체결 주문: 일지에 적은 날(local)이 지나면 자동 삭제(당일 자정 이후 미체결 = 무효) */
   useEffect(() => {
     const sweep = () => {
-      setTrades((prev) => {
+      applyLocalTradeChange((prev) => {
         const today = todayIsoLocal();
         const next = withoutExpiredPendingOrders(prev, today);
         return next.length === prev.length ? prev : next;
@@ -1293,7 +1340,7 @@ export default function App() {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, []);
+  }, [applyLocalTradeChange]);
 
   useEffect(() => {
     const flushOnHide = () => {
@@ -1438,12 +1485,12 @@ export default function App() {
   );
 
   const handleMarkTradeFilled = useCallback((id: string) => {
-    setTrades((prev) =>
+    applyLocalTradeChange((prev) =>
       prev.map((tr) =>
         tr.id === id ? { ...tr, executionStatus: 'filled' as const } : tr,
       ),
     );
-  }, []);
+  }, [applyLocalTradeChange]);
 
   const handleAdjustPosition = useCallback(
     (
@@ -1457,24 +1504,24 @@ export default function App() {
         window.alert(r.message);
         return false;
       }
-      setTrades(r.trades);
+      applyLocalTradeChange(r.trades);
       return true;
     },
-    [trades],
+    [applyLocalTradeChange, trades],
   );
 
   const handleAddTrade = useCallback((t: Trade) => {
-    setTrades((prev) => [...prev, t]);
+    applyLocalTradeChange((prev) => [...prev, t]);
     setPositionIds((prev) =>
       prev[t.ticker] ? prev : { ...prev, [t.ticker]: `p-${Date.now()}` },
     );
     setQuotes((prev) =>
       prev[t.ticker] !== undefined ? prev : { ...prev, [t.ticker]: t.price },
     );
-  }, []);
+  }, [applyLocalTradeChange]);
 
   const handleUpdateTrade = useCallback((updated: Trade) => {
-    setTrades((prev) =>
+    applyLocalTradeChange((prev) =>
       prev.map((tr) => (tr.id === updated.id ? updated : tr)),
     );
     setQuotes((prev) =>
@@ -1487,7 +1534,7 @@ export default function App() {
         ? prev
         : { ...prev, [updated.ticker]: `p-${Date.now()}` },
     );
-  }, []);
+  }, [applyLocalTradeChange]);
 
   const handleDeleteTrade = useCallback((trade: Trade): boolean => {
     const sideLabel = trade.side === 'buy' ? '매수' : '매도';
@@ -1495,11 +1542,11 @@ export default function App() {
       `${trade.date} ${trade.ticker} ${trade.name} ${sideLabel} ${trade.quantity}주 거래를 삭제할까요?`,
     );
     if (!ok) return false;
-    setTrades((prev) => prev.filter((tr) => tr.id !== trade.id));
+    applyLocalTradeChange((prev) => prev.filter((tr) => tr.id !== trade.id));
     setTradeToEdit((prev) => (prev?.id === trade.id ? null : prev));
     setAddTradeOpen((prev) => (tradeToEdit?.id === trade.id ? false : prev));
     return true;
-  }, [tradeToEdit?.id]);
+  }, [applyLocalTradeChange, tradeToEdit?.id]);
 
   const handleDeleteTodo = useCallback((id: string): boolean => {
     const target = todos.find((todo) => todo.id === id);
@@ -1516,9 +1563,9 @@ export default function App() {
       `${target.ticker} ${target.name ?? ''} ${target.action === 'buy' ? '매수' : '매도'} 계획을 삭제할까요?`,
     );
     if (!ok) return false;
-    setTodos((prev) => prev.filter((todo) => todo.id !== id));
+    applyLocalTodoChange((prev) => prev.filter((todo) => todo.id !== id));
     return true;
-  }, [todos]);
+  }, [applyLocalTodoChange, todos]);
 
   const handleOpenAddTrade = useCallback(() => {
     setTradeToEdit(null);
@@ -1567,7 +1614,7 @@ export default function App() {
         excludeFromJournal: true,
         note: '보유종목 추가(일지 제외)',
       };
-      setTrades((prev) => [...prev, trade]);
+      applyLocalTradeChange((prev) => [...prev, trade]);
       setPositionIds((prev) =>
         prev[payload.ticker]
           ? prev
@@ -1575,7 +1622,7 @@ export default function App() {
       );
       setQuotes((prev) => ({ ...prev, [payload.ticker]: payload.currentPrice }));
     },
-    [positions],
+    [applyLocalTradeChange, positions],
   );
 
   const handleUploadCsv = useCallback(async (file: File) => {
@@ -1606,7 +1653,7 @@ export default function App() {
       };
     });
 
-    setTrades((prev) => [...prev, ...importedTrades]);
+    applyLocalTradeChange((prev) => [...prev, ...importedTrades]);
     setPositionIds((prev) => {
       const next = { ...prev };
       rows.forEach((r, idx) => {
@@ -1629,7 +1676,7 @@ export default function App() {
       return;
     }
     window.alert(doneMsg);
-  }, []);
+  }, [applyLocalTradeChange]);
 
   const handleResetData = useCallback(async () => {
     if (user && networkOnline) {
@@ -1637,17 +1684,17 @@ export default function App() {
     }
     clearPersisted();
     clearInitialAppStateCache();
-    setTrades([...tradeSeed.trades]);
+    applyLocalTradeChange([...tradeSeed.trades]);
     setQuotes({ ...tradeSeed.quotes });
     setPositionIds({ ...tradeSeed.positionIds });
-    setTodos([]);
+    applyLocalTodoChange([]);
     setNotes({});
     setQuoteUpdatedAt({});
     setLastKrQuoteBulkAt(null);
     setKrSellCommissionRate(normalizeKrSellCommissionRate(undefined));
     setKrPreferExtendedQuote(false);
     setKrDayOpenByTicker({});
-  }, [createGuardSnapshot, networkOnline, user]);
+  }, [applyLocalTodoChange, applyLocalTradeChange, createGuardSnapshot, networkOnline, user]);
 
   /** 매매·보유·시세 등 전부 비움 (샘플 아님) */
   const handleClearHoldings = useCallback(async () => {
@@ -1655,15 +1702,15 @@ export default function App() {
       await createGuardSnapshot('clear-holdings-before-apply');
     }
     clearInitialAppStateCache();
-    setTrades([]);
+    applyLocalTradeChange([]);
     setQuotes({});
     setPositionIds({});
-    setTodos([]);
+    applyLocalTodoChange([]);
     setNotes({});
     setQuoteUpdatedAt({});
     setLastKrQuoteBulkAt(null);
     setKrDayOpenByTicker({});
-  }, [createGuardSnapshot, networkOnline, user]);
+  }, [applyLocalTodoChange, applyLocalTradeChange, createGuardSnapshot, networkOnline, user]);
 
   const refreshKrQuotes = useCallback(async () => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -1748,7 +1795,7 @@ export default function App() {
         const o = trades[i];
         if (t.sector !== o.sector || t.name !== o.name) changed += 1;
       });
-      setTrades(next);
+      applyLocalTradeChange(next);
       window.alert(
         `KRX 상장목록 기준으로 종목명·섹터(업종)를 맞췄습니다. 변경: ${changed}건`,
       );
@@ -1759,7 +1806,7 @@ export default function App() {
     } finally {
       setKrxSectorSyncing(false);
     }
-  }, [trades]);
+  }, [applyLocalTradeChange, trades]);
 
   const visibleTodos = useMemo(
     () =>
@@ -2102,7 +2149,7 @@ export default function App() {
               ledger={ledger}
               trades={trades}
               onAdd={(payload) =>
-                setTodos((prev) => [
+                applyLocalTodoChange((prev) => [
                   ...prev,
                   {
                     id: `todo-${Date.now()}`,
@@ -2113,7 +2160,7 @@ export default function App() {
                 ])
               }
               onToggleDone={(id) =>
-                setTodos((prev) =>
+                applyLocalTodoChange((prev) =>
                   prev.map((x) => (x.id === id ? { ...x, done: !x.done } : x)),
                 )
               }
@@ -2121,7 +2168,7 @@ export default function App() {
                 handleDeleteTodo(id)
               }
               onUpdate={(id, updates) =>
-                setTodos((prev) =>
+                applyLocalTodoChange((prev) =>
                   prev.map((x) => (x.id === id ? { ...x, ...updates } : x)),
                 )
               }
@@ -2287,7 +2334,7 @@ export default function App() {
           setNotes((prev) => ({ ...prev, [detailNoteKey]: next }));
         }}
         onAddTodo={(payload) =>
-          setTodos((prev) => [
+          applyLocalTodoChange((prev) => [
             ...prev,
             {
               id: `todo-${Date.now()}`,
