@@ -313,36 +313,36 @@ export function PositionDetailModal({
               ) : (
                 <>
                   {hasAdjustment ? (
-                    <li className="rounded border border-accent/20 bg-accent/5 px-2 py-1">
+                    <li key="adjustment-row" className="space-y-1">
                       <div className="grid grid-cols-[96px_minmax(0,1fr)_132px] items-center gap-x-2 gap-y-1">
-                      <span className="text-textMuted">
-                        {adjustmentDisplayDate ?? '조정일'}
-                      </span>
-                      <span
-                        className={
-                          hasStoredAdjustmentDelta
-                            ? adjustmentDeltaQty >= 0
-                              ? 'text-positive'
-                              : 'text-negative'
-                            : adjustmentSummary.qty >= 0
-                              ? 'text-positive'
-                              : 'text-negative'
-                        }
-                      >
-                        {hasStoredAdjustmentDelta ? (
-                          <>
-                            조정 {adjustmentDeltaQty > 0 ? '+' : ''}
-                            {adjustmentDeltaQty}주 {'->'} 현재 {position.quantity}주
-                          </>
-                        ) : (
-                          <>
-                            조정원본 {Math.abs(adjustmentSummary.qty)}주 {'->'} 현재 {position.quantity}주
-                          </>
-                        )}
-                      </span>
-                      <span className="text-right tabular-nums text-textMain">
-                        {adjustmentAvgPrice ?? '-'}
-                      </span>
+                        <span className="text-textMuted">
+                          {adjustmentDisplayDate ?? '조정일'}
+                        </span>
+                        <span
+                          className={`whitespace-nowrap ${
+                            hasStoredAdjustmentDelta
+                              ? adjustmentDeltaQty >= 0
+                                ? 'text-positive'
+                                : 'text-negative'
+                              : adjustmentSummary.qty >= 0
+                                ? 'text-positive'
+                                : 'text-negative'
+                          }`}
+                        >
+                          {hasStoredAdjustmentDelta ? (
+                            <>
+                              조정 {adjustmentDeltaQty > 0 ? '+' : ''}
+                              {adjustmentDeltaQty}주 {'->'} 현재 {position.quantity}주
+                            </>
+                          ) : (
+                            <>
+                              조정원본 {Math.abs(adjustmentSummary.qty)}주 {'->'} 현재 {position.quantity}주
+                            </>
+                          )}
+                        </span>
+                        <span className="text-right tabular-nums text-textMain">
+                          {adjustmentAvgPrice ?? '-'}
+                        </span>
                       </div>
                     </li>
                   ) : null}
