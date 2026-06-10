@@ -120,6 +120,13 @@ export function PositionDetailModal({
     },
     { qty: 0, amount: 0 },
   );
+  const adjustmentDeltaQty = adjustmentTrades.reduce((acc, trade) => {
+    const deltaQty = getTradeAdjustmentDelta(trade);
+    return deltaQty === null ? acc : acc + deltaQty;
+  }, 0);
+  const hasStoredAdjustmentDelta = adjustmentTrades.some(
+    (trade) => getTradeAdjustmentDelta(trade) !== null,
+  );
   const netQty = tradeSummary.buyQty - tradeSummary.sellQty;
   const hasAdjustment = Math.abs(adjustmentSummary.qty) > 0.0001;
   const adjustmentAvgPrice = hasAdjustment
@@ -127,6 +134,9 @@ export function PositionDetailModal({
         roundMoney(adjustmentSummary.amount / adjustmentSummary.qty, position.currency),
         position.currency,
       )
+    : null;
+  const adjustmentDisplayDate = hasAdjustment
+    ? formatAdjustmentDisplayDate(adjustmentTrades)
     : null;
 
   return (
@@ -272,8 +282,20 @@ export function PositionDetailModal({
           {hasAdjustment ? (
             <Mini
               label="조정"
-              value={`${adjustmentSummary.qty > 0 ? '+' : ''}${adjustmentSummary.qty}주${adjustmentAvgPrice ? ` · ${adjustmentAvgPrice}` : ''}`}
-              emph={adjustmentSummary.qty >= 0 ? 'pos' : 'neg'}
+              value={
+                hasStoredAdjustmentDelta
+                  ? `${adjustmentDeltaQty > 0 ? '+' : ''}${adjustmentDeltaQty}주 -> 현재 ${position.quantity}주${adjustmentAvgPrice ? ` · ${adjustmentAvgPrice}` : ''}`
+                  : `원본 ${Math.abs(adjustmentSummary.qty)}주 -> 현재 ${position.quantity}주${adjustmentAvgPrice ? ` · ${adjustmentAvgPrice}` : ''}`
+              }
+              emph={
+                hasStoredAdjustmentDelta
+                  ? adjustmentDeltaQty >= 0
+                    ? 'pos'
+                    : 'neg'
+                  : adjustmentSummary.qty >= 0
+                    ? 'pos'
+                    : 'neg'
+              }
             />
           ) : null}
         </div>
@@ -291,36 +313,52 @@ export function PositionDetailModal({
               ) : (
                 <>
                   {hasAdjustment ? (
-                    <li className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded border border-accent/20 bg-accent/5 px-2 py-1">
-                      <span className="text-textMuted">1900-01-01</span>
+                    <li className="rounded border border-accent/20 bg-accent/5 px-2 py-1">
+                      <div className="grid grid-cols-[96px_minmax(0,1fr)_132px] items-center gap-x-2 gap-y-1">
+                      <span className="text-textMuted">
+                        {adjustmentDisplayDate ?? '조정일'}
+                      </span>
                       <span
                         className={
-                          adjustmentSummary.qty >= 0 ? 'text-positive' : 'text-negative'
+                          hasStoredAdjustmentDelta
+                            ? adjustmentDeltaQty >= 0
+                              ? 'text-positive'
+                              : 'text-negative'
+                            : adjustmentSummary.qty >= 0
+                              ? 'text-positive'
+                              : 'text-negative'
                         }
                       >
-                        조정 {adjustmentSummary.qty > 0 ? '+' : ''}
-                        {adjustmentSummary.qty}주
-                        {adjustmentAvgPrice ? ` · 평단 ${adjustmentAvgPrice}` : ''}
+                        {hasStoredAdjustmentDelta ? (
+                          <>
+                            조정 {adjustmentDeltaQty > 0 ? '+' : ''}
+                            {adjustmentDeltaQty}주 {'->'} 현재 {position.quantity}주
+                          </>
+                        ) : (
+                          <>
+                            조정원본 {Math.abs(adjustmentSummary.qty)}주 {'->'} 현재 {position.quantity}주
+                          </>
+                        )}
                       </span>
-                      <span className="tabular-nums text-textMain">
-                        {formatMoney(Math.abs(adjustmentSummary.amount), position.currency)}
+                      <span className="text-right tabular-nums text-textMain">
+                        {adjustmentAvgPrice ?? '-'}
                       </span>
+                      </div>
                     </li>
                   ) : null}
                   {journalTrades.map((t) => {
                     const pending = t.executionStatus === 'pending';
                     return (
-                      <li
-                        key={t.id}
-                        className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1"
-                      >
-                        <span className="text-textMuted">{t.date}</span>
-                        <span className={t.side === 'buy' ? 'text-positive' : 'text-negative'}>
-                          {t.side === 'buy' ? '매수' : '매도'} {t.quantity}주
-                        </span>
-                        <span className="tabular-nums text-textMain">
-                          {formatMoney(t.price, t.currency)}
-                        </span>
+                      <li key={t.id} className="space-y-1">
+                        <div className="grid grid-cols-[96px_minmax(0,1fr)_132px] items-center gap-x-2 gap-y-1">
+                          <span className="text-textMuted">{t.date}</span>
+                          <span className={t.side === 'buy' ? 'text-positive' : 'text-negative'}>
+                            {t.side === 'buy' ? '매수' : '매도'} {t.quantity}주
+                          </span>
+                          <span className="text-right tabular-nums text-textMain">
+                            {formatMoney(t.price, t.currency)}
+                          </span>
+                        </div>
                         {pending ? (
                           <span className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
                             <span className="rounded bg-warning/20 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
@@ -465,6 +503,33 @@ export function PositionDetailModal({
       </div>
     </div>
   );
+}
+
+function formatAdjustmentDisplayDate(trades: Trade[]): string | null {
+  const latest = [...trades]
+    .map((trade) => getTradeEditedAtMs(trade))
+    .filter((value): value is number => value !== null)
+    .sort((a, b) => b - a)[0];
+  if (!latest) return null;
+  const d = new Date(latest);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getTradeEditedAtMs(trade: Trade): number | null {
+  const match = trade.id.match(/^tr-ob-(\d{11,13})(?:-delta--?\d+)?$/);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function getTradeAdjustmentDelta(trade: Trade): number | null {
+  const match = trade.id.match(/^tr-ob-\d{11,13}-delta-(-?\d+)$/);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : null;
 }
 
 function Mini({

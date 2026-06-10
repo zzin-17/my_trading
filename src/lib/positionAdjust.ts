@@ -35,6 +35,7 @@ export function adjustOpeningBalanceTrade(
     return { ok: false, message: '평단은 0보다 커야 합니다.' };
   }
 
+  const currentQty = computeLedger([...trades]).get(ticker)?.quantity ?? 0;
   const tradesWithoutOpening = withoutOpeningBalanceForTicker(trades, ticker);
   const tickerTrades = tradesWithoutOpening
     .filter((t) => t.ticker === ticker && tradeAppliesToLedger(t))
@@ -43,6 +44,7 @@ export function adjustOpeningBalanceTrade(
       return d !== 0 ? d : a.id.localeCompare(b.id);
     });
   const targetAvgR = roundMoney(targetAvg, currency);
+  const adjustmentDeltaQty = targetQty - currentQty;
   const journalNetQty = tickerTrades.reduce(
     (sum, t) => sum + (t.side === 'buy' ? t.quantity : -t.quantity),
     0,
@@ -101,7 +103,7 @@ export function adjustOpeningBalanceTrade(
   }
 
   const opening: Trade = {
-    id: `tr-ob-${Date.now()}`,
+    id: `tr-ob-${Date.now()}-delta-${adjustmentDeltaQty}`,
     date: '1900-01-01',
     ticker,
     name: patch.name,
