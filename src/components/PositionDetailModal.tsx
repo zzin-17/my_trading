@@ -91,6 +91,9 @@ export function PositionDetailModal({
 
   const journalTrades = trades.filter((t) => !t.excludeFromJournal);
   const ledgerJournalTrades = journalTrades.filter(tradeAppliesToLedger);
+  const adjustmentTrades = trades.filter(
+    (t) => t.excludeFromJournal && tradeAppliesToLedger(t),
+  );
 
   const retPct =
     metric.cost_basis > 0 ? (metric.pnl / metric.cost_basis) * 100 : 0;
@@ -107,7 +110,24 @@ export function PositionDetailModal({
     },
     { buyQty: 0, sellQty: 0, buyAmount: 0, sellAmount: 0 },
   );
+  const adjustmentSummary = adjustmentTrades.reduce(
+    (acc, t) => {
+      const signedQty = t.side === 'buy' ? t.quantity : -t.quantity;
+      const signedAmount = t.side === 'buy' ? t.quantity * t.price : -t.quantity * t.price;
+      acc.qty += signedQty;
+      acc.amount += signedAmount;
+      return acc;
+    },
+    { qty: 0, amount: 0 },
+  );
   const netQty = tradeSummary.buyQty - tradeSummary.sellQty;
+  const hasAdjustment = Math.abs(adjustmentSummary.qty) > 0.0001;
+  const adjustmentAvgPrice = hasAdjustment
+    ? formatMoney(
+        roundMoney(adjustmentSummary.amount / adjustmentSummary.qty, position.currency),
+        position.currency,
+      )
+    : null;
 
   return (
     <div
@@ -233,7 +253,9 @@ export function PositionDetailModal({
           </section>
         ) : null}
 
-        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+        <div
+          className={`mt-3 grid grid-cols-1 gap-2 ${hasAdjustment ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}
+        >
           <Mini
             label={`총매수 (${tradeSummary.buyQty}주)`}
             value={formatMoney(tradeSummary.buyAmount, position.currency)}
@@ -247,49 +269,76 @@ export function PositionDetailModal({
             value={`${netQty}주`}
             emph={netQty >= 0 ? 'pos' : 'neg'}
           />
+          {hasAdjustment ? (
+            <Mini
+              label="조정"
+              value={`${adjustmentSummary.qty > 0 ? '+' : ''}${adjustmentSummary.qty}주${adjustmentAvgPrice ? ` · ${adjustmentAvgPrice}` : ''}`}
+              emph={adjustmentSummary.qty >= 0 ? 'pos' : 'neg'}
+            />
+          ) : null}
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <section className="rounded-md border border-border p-3">
             <h3 className="text-sm font-medium text-textMain">매매현황</h3>
             <p className="mt-1 text-[11px] text-textMuted">
-              위 총매수·총매도·순매수는 체결 건만 집계합니다. 아래 목록에는 미체결 주문도 표시됩니다.
+              위 총매수·총매도·순매수는 체결 건만 집계합니다. 보유수정으로 반영된 수량은
+              「조정」으로 따로 표시되며, 아래 목록에는 미체결 주문도 함께 표시됩니다.
             </p>
             <ul className="mt-2 max-h-48 space-y-1 overflow-auto text-[12px]">
-              {journalTrades.length === 0 ? (
+              {journalTrades.length === 0 && !hasAdjustment ? (
                 <li className="text-textMuted">내역 없음</li>
               ) : (
-                journalTrades.map((t) => {
-                  const pending = t.executionStatus === 'pending';
-                  return (
-                    <li
-                      key={t.id}
-                      className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1"
-                    >
-                      <span className="text-textMuted">{t.date}</span>
-                      <span className={t.side === 'buy' ? 'text-positive' : 'text-negative'}>
-                        {t.side === 'buy' ? '매수' : '매도'} {t.quantity}주
+                <>
+                  {hasAdjustment ? (
+                    <li className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded border border-accent/20 bg-accent/5 px-2 py-1">
+                      <span className="text-textMuted">1900-01-01</span>
+                      <span
+                        className={
+                          adjustmentSummary.qty >= 0 ? 'text-positive' : 'text-negative'
+                        }
+                      >
+                        조정 {adjustmentSummary.qty > 0 ? '+' : ''}
+                        {adjustmentSummary.qty}주
+                        {adjustmentAvgPrice ? ` · 평단 ${adjustmentAvgPrice}` : ''}
                       </span>
                       <span className="tabular-nums text-textMain">
-                        {formatMoney(t.price, t.currency)}
+                        {formatMoney(Math.abs(adjustmentSummary.amount), position.currency)}
                       </span>
-                      {pending ? (
-                        <span className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
-                          <span className="rounded bg-warning/20 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
-                            미체결
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => onMarkTradeFilled(t.id)}
-                            className="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-textMain hover:bg-white/5"
-                          >
-                            체결 처리
-                          </button>
-                        </span>
-                      ) : null}
                     </li>
-                  );
-                })
+                  ) : null}
+                  {journalTrades.map((t) => {
+                    const pending = t.executionStatus === 'pending';
+                    return (
+                      <li
+                        key={t.id}
+                        className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1"
+                      >
+                        <span className="text-textMuted">{t.date}</span>
+                        <span className={t.side === 'buy' ? 'text-positive' : 'text-negative'}>
+                          {t.side === 'buy' ? '매수' : '매도'} {t.quantity}주
+                        </span>
+                        <span className="tabular-nums text-textMain">
+                          {formatMoney(t.price, t.currency)}
+                        </span>
+                        {pending ? (
+                          <span className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
+                            <span className="rounded bg-warning/20 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
+                              미체결
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => onMarkTradeFilled(t.id)}
+                              className="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-textMain hover:bg-white/5"
+                            >
+                              체결 처리
+                            </button>
+                          </span>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </>
               )}
             </ul>
           </section>

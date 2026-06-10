@@ -49,6 +49,23 @@ describe('adjustOpeningBalanceTrade', () => {
     expect(led.get('AAA')?.avgCost).toBe(110);
   });
 
+  it('매수 없이 매도만 있어도 목표 보유수량으로 맞춘다', () => {
+    const trades: Trade[] = [
+      baseTrade({ id: 's1', side: 'sell', quantity: 16, price: 140000 }),
+    ];
+    const r = adjustOpeningBalanceTrade(trades, 'AAA', 24, 100446, {
+      name: 'N',
+      sector: 'S',
+      market: 'KR',
+      currency: 'KRW',
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const led = computeLedger(r.trades);
+    expect(led.get('AAA')?.quantity).toBe(24);
+    expect(led.get('AAA')?.avgCost).toBe(100446);
+  });
+
   it('withoutOpeningBalanceForTicker 제거', () => {
     const trades: Trade[] = [
       baseTrade({ id: 'ob', excludeFromJournal: true, quantity: 5, price: 90 }),
