@@ -21,9 +21,9 @@ export function MarketSplitCard({ weights }: MarketSplitCardProps) {
   ];
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
+    <div className="rounded-xl border border-border/70 bg-surface/40 p-4">
       <h3 className="text-sm font-medium text-textMain">시장별 비중 (KR / US)</h3>
-      <p className="mt-0.5 text-[12px] text-textMuted">평가액 기준 비중</p>
+      <p className="mt-0.5 text-[11px] text-textMuted">평가액 기준</p>
 
       <div className="mt-2 h-[280px] w-full">
         <ResponsiveContainer width="100%" height="100%">

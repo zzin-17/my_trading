@@ -375,6 +375,7 @@ export default function App() {
 
   const [marketTab, setMarketTab] = useState<MarketTab>('KR');
   const [mobileHomeTab, setMobileHomeTab] = useState<MobileHomeTab>('portfolio');
+  const [mobileChartsOpen, setMobileChartsOpen] = useState(false);
   const [filterText, setFilterText] = useState('');
   const [detailId, setDetailId] = useState<string | null>(null);
   const [addTradeOpen, setAddTradeOpen] = useState(false);
@@ -2397,20 +2398,20 @@ export default function App() {
             : undefined
         }
       >
-      <header className="border-b border-border bg-surface/90 px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top,0px))] backdrop-blur sm:px-6">
+      <header className="border-b border-border/70 bg-surface/80 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top,0px))] backdrop-blur sm:px-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-lg font-semibold tracking-tight text-textMain">
               TraderOS — Portfolio Visual
             </h1>
             <p className="text-[12px] text-textMuted">
-              매매일지·시세 기반 평단 · 한국장/미국장 탭 · 로컬 저장
+              매매·보유·시세를 한 화면에서 확인
             </p>
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {user ? (
-              <p className="rounded-md border border-border px-2 py-1 text-[12px] text-textMuted">
-                계정: {user.email ?? user.displayName ?? '로그인됨'}
+              <p className="max-w-[16rem] truncate text-[12px] text-textMuted">
+                {user.email ?? user.displayName ?? '로그인됨'}
               </p>
             ) : null}
             <button
@@ -2432,7 +2433,7 @@ export default function App() {
           주세요. 이 기기의 편집은 로컬에만 반영됩니다.
         </div>
       ) : null}
-      <main className="mx-auto max-w-7xl space-y-6 px-0 py-6 pb-32 md:px-4 md:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] lg:px-6">
+      <main className="mx-auto max-w-7xl space-y-5 px-0 py-5 pb-32 md:px-4 md:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] lg:px-6">
         <MarketTabs
           value={marketTab}
           onChange={setMarketTab}
@@ -2526,7 +2527,7 @@ export default function App() {
           )}
         </div>
 
-        <div className={mobileHomeTab === 'journal' ? 'space-y-6 md:block' : 'hidden space-y-6 md:block'}>
+        <div className={mobileHomeTab === 'journal' ? 'space-y-4 md:block md:space-y-6' : 'hidden space-y-4 md:block md:space-y-6'}>
           {marketTab !== 'all' ? (
             <MarketTodoList
               market={marketTab}
@@ -2579,26 +2580,37 @@ export default function App() {
 
           <Suspense
             fallback={
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 md:gap-6 xl:grid-cols-2">
                 <ChartSkeleton label="종목 비중 차트 불러오는 중…" />
                 <ChartSkeleton label="실현손익 차트 불러오는 중…" />
               </div>
             }
           >
-            <div className="space-y-6">
-              {marketTab === 'all' ? (
-                <MarketSplitCard weights={marketSplitWeights} />
-              ) : null}
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <StockBarChart
-                  data={topStocks}
-                  currency={summary.currency}
-                />
-                <RealizedDailyBarChart
-                  trades={visibleTrades}
-                  krSellCommissionRate={krSellCommissionRate}
-                  marketTab={marketTab}
-                />
+            <div className="space-y-4 md:space-y-6">
+              <div className="md:hidden">
+                <button
+                  type="button"
+                  onClick={() => setMobileChartsOpen((prev) => !prev)}
+                  className="w-full rounded-lg border border-border/70 bg-surface/65 px-3 py-2.5 text-left text-[13px] font-medium text-textMain"
+                >
+                  {mobileChartsOpen ? '차트 접기' : '차트 보기'}
+                </button>
+              </div>
+              <div className={mobileChartsOpen ? 'space-y-4 md:space-y-6' : 'hidden md:block md:space-y-6'}>
+                {marketTab === 'all' ? (
+                  <MarketSplitCard weights={marketSplitWeights} />
+                ) : null}
+                <div className="grid grid-cols-1 gap-4 md:gap-6 xl:grid-cols-2">
+                  <StockBarChart
+                    data={topStocks}
+                    currency={summary.currency}
+                  />
+                  <RealizedDailyBarChart
+                    trades={visibleTrades}
+                    krSellCommissionRate={krSellCommissionRate}
+                    marketTab={marketTab}
+                  />
+                </div>
               </div>
             </div>
           </Suspense>

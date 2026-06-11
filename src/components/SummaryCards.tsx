@@ -43,34 +43,30 @@ export function SummaryCards({ summary, quoteDisclaimer }: SummaryCardsProps) {
         </div>
       </div>
 
-      <div className="hidden grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 md:grid">
-        <div className="rounded-lg border border-border bg-surface px-4 py-3">
-          <p className="text-[12px] font-medium text-textMuted">총 투자금</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-textMain">
-            {formatMoney(summary.total_cost_basis, currency)}
-          </p>
-        </div>
-        <div className="rounded-lg border border-border bg-surface px-4 py-3">
-          <p className="text-[12px] font-medium text-textMuted">총 평가액</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-textMain">
-            {formatMoney(summary.total_market_value, currency)}
-          </p>
-        </div>
-        <div className="rounded-lg border border-border bg-surface px-4 py-3">
-          <p className="text-[12px] font-medium text-textMuted">예상손익</p>
-          <p
-            className={`mt-1 text-2xl font-bold tabular-nums ${pnlPositive ? 'text-positive' : 'text-negative'}`}
-          >
-            {formatMoney(summary.total_pnl, currency)}
-          </p>
-        </div>
-        <div className="rounded-lg border border-border bg-surface px-4 py-3">
-          <p className="text-[12px] font-medium text-textMuted">예상수익률</p>
-          <p
-            className={`mt-1 text-2xl font-bold tabular-nums ${pnlPositive ? 'text-positive' : 'text-negative'}`}
-          >
-            {formatPercent(summary.total_return_pct, true)}
-          </p>
+      <div className="hidden rounded-xl border border-border/70 bg-surface/60 px-4 py-3 md:block">
+        <div className="grid grid-cols-4 gap-0">
+          <DesktopSummaryStat
+            label="투자금"
+            value={formatMoney(summary.total_cost_basis, currency)}
+          />
+          <DesktopSummaryStat
+            label="평가액"
+            value={formatMoney(summary.total_market_value, currency)}
+            bordered
+          />
+          <DesktopSummaryStat
+            label="평가손익"
+            value={formatMoney(summary.total_pnl, currency)}
+            tone={pnlPositive ? 'pos' : 'neg'}
+            bordered
+            strong
+          />
+          <DesktopSummaryStat
+            label="수익률"
+            value={formatPercent(summary.total_return_pct, true)}
+            tone={pnlPositive ? 'pos' : 'neg'}
+            bordered
+          />
         </div>
       </div>
       {quoteDisclaimer ? (
@@ -86,6 +82,39 @@ export function SummaryCards({ summary, quoteDisclaimer }: SummaryCardsProps) {
           />
         </>
       ) : null}
+    </div>
+  );
+}
+
+function DesktopSummaryStat({
+  label,
+  value,
+  tone,
+  bordered = false,
+  strong = false,
+}: {
+  label: string;
+  value: string;
+  tone?: 'pos' | 'neg';
+  bordered?: boolean;
+  strong?: boolean;
+}) {
+  return (
+    <div className={`min-w-0 px-4 py-1.5 ${bordered ? 'border-l border-border/60' : ''}`}>
+      <p className="text-[11px] font-medium tracking-tight text-textMuted">{label}</p>
+      <p
+        className={`mt-1 truncate tabular-nums ${
+          strong ? 'text-[24px] font-bold' : 'text-[20px] font-semibold'
+        } ${
+          tone === 'pos'
+            ? 'text-positive'
+            : tone === 'neg'
+              ? 'text-negative'
+              : 'text-textMain'
+        }`}
+      >
+        {value}
+      </p>
     </div>
   );
 }

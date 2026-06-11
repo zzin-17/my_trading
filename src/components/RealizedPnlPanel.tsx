@@ -235,7 +235,7 @@ export function RealizedPnlPanel({
       : Boolean(dayRangeStart) || Boolean(dayRangeEnd);
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4 sm:p-5">
+    <div className="rounded-lg border border-border bg-surface p-4 sm:p-5 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-center gap-2">
           <h3 className="shrink-0 text-sm font-semibold text-textMain tracking-tight">
@@ -275,7 +275,7 @@ export function RealizedPnlPanel({
         </div>
       </div>
 
-      <div className="mt-3 flex flex-col gap-2 rounded-md border border-border/70 bg-background/40 p-3">
+      <div className="mt-3 flex flex-col gap-2 rounded-md border border-border/60 bg-background/25 p-3 md:border-0 md:bg-transparent md:px-0 md:py-0">
         <div className="flex flex-wrap items-center gap-2">
           {granularity === 'month' ? (
             <>
@@ -356,7 +356,7 @@ export function RealizedPnlPanel({
 
       {!drill ? (
         <>
-        <div className="mt-4 space-y-3 md:hidden">
+        <div className="mt-3 max-h-[22rem] space-y-2 overflow-y-auto pr-1 md:hidden">
           {periodRows.length === 0 ? (
             <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
               {hasActiveFilter
@@ -371,7 +371,7 @@ export function RealizedPnlPanel({
                 onClick={() =>
                   setDrill({ period: row.period, currency: row.currency })
                 }
-                className="w-full rounded-lg border border-border bg-background/40 p-3 text-left"
+                className="w-full rounded-lg border border-border bg-background/40 p-2.5 text-left"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -396,7 +396,7 @@ export function RealizedPnlPanel({
                     </p>
                   </div>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="mt-2 grid grid-cols-2 gap-2">
                   <RealizedMobileCell
                     label="실현수익"
                     value={formatSignedMoney(row.positiveTotal, row.currency)}
@@ -513,7 +513,7 @@ export function RealizedPnlPanel({
                 내역이 없습니다.
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-border/70 bg-background/10">
+              <div className="max-h-[22rem] overflow-auto rounded-lg border border-border/70 bg-background/10">
                 <div style={{ minWidth: '34rem' }}>
                   <div
                     className="sticky top-0 z-10 grid border-b border-border/60 bg-surface/95 text-[10px] font-medium text-textMuted shadow-sm backdrop-blur"

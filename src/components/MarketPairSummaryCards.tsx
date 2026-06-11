@@ -19,8 +19,8 @@ export function MarketPairSummaryCards({
 }: MarketPairSummaryCardsProps) {
   return (
     <div className="space-y-3">
-      <p className="text-[12px] text-textMuted">
-        통화가 달라 합산하지 않습니다. 한국장(KRW)과 미국장(USD)을 각각 확인하세요.
+      <p className="text-[11px] text-textMuted">
+        통화가 달라 합산 대신 KRW / USD를 나눠 표시합니다.
       </p>
       <div className="flex flex-col gap-3">
         <MarketBlock
@@ -58,7 +58,7 @@ function MarketBlock({
   if (!summary) {
     return (
       <div
-        className={`rounded-lg border px-4 py-6 text-center text-sm text-textMuted ${accent}`}
+        className={`rounded-xl border px-4 py-4 text-center text-sm text-textMuted ${accent}`}
       >
         <div className="mb-1 flex items-center justify-center gap-2">
           <span className="font-medium text-textMain">{title}</span>
@@ -74,8 +74,8 @@ function MarketBlock({
   const pnlOk = summary.total_pnl >= 0;
 
   return (
-    <div className={`rounded-lg border px-4 py-2 ${accent}`}>
-      <div className="mb-1.5 flex items-center justify-between gap-2">
+    <div className={`rounded-xl border px-4 py-3 ${accent}`}>
+      <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-sm font-semibold text-textMain">{title}</span>
         <span className="rounded bg-border px-2 py-0.5 text-[11px] font-semibold text-textMuted">
           {badge}
@@ -105,21 +105,21 @@ function MarketBlock({
       </div>
       <div className="hidden grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4 sm:gap-x-5 md:grid">
         <Mini
-          label="총 투자금"
+          label="투자금"
           value={formatMoney(summary.total_cost_basis, summary.currency)}
         />
         <Mini
-          label="총 평가액"
+          label="평가액"
           value={formatMoney(summary.total_market_value, summary.currency)}
         />
         <Mini
-          label="예상손익"
+          label="평가손익"
           value={formatMoney(summary.total_pnl, summary.currency)}
           positive={pnlOk}
           negative={!pnlOk}
         />
         <Mini
-          label="예상수익률"
+          label="수익률"
           value={formatPercent(summary.total_return_pct, true)}
           positive={pnlOk}
           negative={!pnlOk}
@@ -127,7 +127,7 @@ function MarketBlock({
       </div>
       {footnote ? (
         <>
-          <p className="mt-2 hidden text-[11px] leading-relaxed text-textMuted md:block">
+          <p className="mt-2 hidden text-[10px] leading-relaxed text-textMuted md:block">
             {footnote}
           </p>
           <ExpandableText

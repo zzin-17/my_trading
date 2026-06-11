@@ -458,17 +458,34 @@ export function MarketTodoList({
       : '검색 조건에 맞는 계획이 없습니다.';
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
-      <div className="mb-3">
-        <h3 className="text-sm font-medium text-textMain">{title}</h3>
-        <p className="text-[12px] text-textMuted">
-          예) 평단 근처면 3주 매수 / 목표가 도달하면 일부 매도 · 종목은 코드 또는(한국) 종목명 검색
-        </p>
-        <p className="mt-1 text-[11px] text-textMuted">
-          {viewTab === 'open'
-            ? `상태: 도달 ${statusCounts.reached} · 근접 ${statusCounts.near} · 대기 ${statusCounts.waiting}`
-            : `완료된 계획 ${doneItems.length}건 · 전체 ${totalTodoCount}건`}
-        </p>
+    <div className="rounded-lg border border-border bg-surface p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="text-sm font-medium text-textMain">{title}</h3>
+          <p className="text-[11px] text-textMuted">
+            코드·종목명 검색으로 빠르게 등록
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-1.5 text-[11px]">
+          {viewTab === 'open' ? (
+            <>
+              <span className="rounded-full border border-border/70 px-2 py-0.5 text-textMuted">
+                도달 <span className="tabular-nums text-textMain">{statusCounts.reached}</span>
+              </span>
+              <span className="rounded-full border border-border/70 px-2 py-0.5 text-textMuted">
+                근접 <span className="tabular-nums text-textMain">{statusCounts.near}</span>
+              </span>
+              <span className="rounded-full border border-border/70 px-2 py-0.5 text-textMuted">
+                대기 <span className="tabular-nums text-textMain">{statusCounts.waiting}</span>
+              </span>
+            </>
+          ) : (
+            <span className="rounded-full border border-border/70 px-2 py-0.5 text-textMuted">
+              완료 <span className="tabular-nums text-textMain">{doneItems.length}</span> / 전체{' '}
+              <span className="tabular-nums text-textMain">{totalTodoCount}</span>
+            </span>
+          )}
+        </div>
       </div>
 
       <form
@@ -598,8 +615,8 @@ export function MarketTodoList({
 
       <div className="mt-4 flex flex-wrap items-end gap-2">
         <div className="min-w-[14rem] flex-1">
-          <label className="text-[12px] text-textMuted" htmlFor="todo-list-search">
-            {viewTab === 'open' ? '진행중 목록 검색' : '완료 목록 검색'} (종목코드·종목명)
+          <label className="text-[11px] text-textMuted" htmlFor="todo-list-search">
+            {viewTab === 'open' ? '진행중 검색' : '완료 검색'}
           </label>
           <input
             id="todo-list-search"
@@ -679,7 +696,7 @@ export function MarketTodoList({
 
       {displayMode === 'item' ? (
         <>
-          <div className="mt-4 max-h-[28rem] space-y-3 overflow-y-auto pr-1 md:hidden">
+          <div className="mt-3 max-h-[22rem] space-y-2 overflow-y-auto pr-1 md:hidden">
             {filteredSelected.length === 0 ? (
               <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
                 {emptyListMessage}
@@ -691,7 +708,7 @@ export function MarketTodoList({
                 return (
                   <section
                     key={x.id}
-                    className={`rounded-lg border border-border/70 px-3 py-2.5 ${
+                    className={`rounded-lg border border-border/70 px-3 py-2 ${
                       x.done ? 'opacity-60' : ''
                     } ${sell ? 'bg-negative/5' : 'bg-positive/5'}`}
                   >
@@ -702,7 +719,7 @@ export function MarketTodoList({
                           onClick={() => openEditModal(x)}
                           className="block max-w-full text-left"
                         >
-                          <span className="block truncate text-[15px] font-medium text-textMain underline-offset-2 hover:underline">
+                          <span className="block truncate text-[14px] font-medium text-textMain underline-offset-2 hover:underline">
                             {displayName}
                           </span>
                           <span className="mt-0.5 block text-[12px] text-textMuted">
@@ -730,7 +747,7 @@ export function MarketTodoList({
                       </div>
                     </div>
 
-                    <div className="mt-2 grid grid-cols-[auto_1fr_auto_1fr] items-start gap-x-2 gap-y-1 text-[12px]">
+                    <div className="mt-1.5 grid grid-cols-[auto_1fr_auto_1fr] items-start gap-x-2 gap-y-1 text-[12px]">
                       <span className="text-textMuted">목표가</span>
                       <span className="truncate text-right font-semibold tabular-nums text-textMain">
                         {formatMoney(x.targetPrice, currency)}
@@ -751,7 +768,7 @@ export function MarketTodoList({
                       </div>
                     </div>
 
-                    <div className="mt-2.5">{renderTodoActions(x, true)}</div>
+                    <div className="mt-2">{renderTodoActions(x, true)}</div>
                   </section>
                 );
               })
@@ -841,7 +858,7 @@ export function MarketTodoList({
         </>
       ) : (
         <>
-          <div className="mt-4 space-y-3 md:hidden">
+          <div className="mt-3 max-h-[22rem] space-y-2 overflow-y-auto pr-1 md:hidden">
             {groupedSelected.length === 0 ? (
               <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
                 {emptyListMessage}
@@ -853,7 +870,7 @@ export function MarketTodoList({
                 return (
                   <section
                     key={group.ticker}
-                    className={`rounded-lg border border-border/70 px-3 py-2.5 ${
+                    className={`rounded-lg border border-border/70 px-3 py-2 ${
                       latest.done ? 'opacity-60' : ''
                     } ${sell ? 'bg-negative/5' : 'bg-positive/5'}`}
                   >
@@ -864,7 +881,7 @@ export function MarketTodoList({
                           onClick={() => setGroupModalTicker(group.ticker)}
                           className="block max-w-full text-left"
                         >
-                          <span className="block truncate text-[15px] font-medium text-textMain underline-offset-2 hover:underline">
+                          <span className="block truncate text-[14px] font-medium text-textMain underline-offset-2 hover:underline">
                             {group.displayName}
                           </span>
                           <span className="mt-0.5 block text-[12px] text-textMuted">

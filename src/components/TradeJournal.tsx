@@ -364,7 +364,7 @@ export function TradeJournal({
   };
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4 sm:p-5">
+    <div className="rounded-lg border border-border bg-surface p-4 sm:p-5 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="flex min-w-0 items-center gap-2">
           <h3 className="shrink-0 text-sm font-semibold text-textMain tracking-tight">
@@ -444,9 +444,8 @@ export function TradeJournal({
 
       {mainTab === 'today' ? (
         <>
-          <p className="mt-3 text-[12px] text-textMuted">
+          <p className="mt-2 text-[11px] text-textMuted">
             기준일 <span className="tabular-nums text-textMain">{today}</span>
-            의 매매만 표시합니다.
           </p>
           <FilledSummaryLine summary={todayFilledSummary} />
           <JournalTradesTable
@@ -502,8 +501,8 @@ export function TradeJournal({
                 <>
                   {pastSortedDesc.length > 0 ? (
                     <div className="mt-4">
-                      <p className="text-[12px] text-textMuted">
-                        과거 전체(오늘 제외) · 체결만 집계
+                      <p className="text-[11px] text-textMuted">
+                        과거 전체 · 체결만 집계
                       </p>
                       <FilledSummaryLine summary={pastListFilledSummary} />
                     </div>
@@ -893,14 +892,14 @@ function JournalTradesTable({
     '8.25rem 3.25rem 3.75rem 3.5rem 5.25rem 5.25rem 5.25rem 4.75rem';
 
   return (
-    <div className="mt-4">
+      <div className="mt-3">
       <div className="md:hidden">
         {trades.length === 0 ? (
           <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
             {emptyLabel}
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-border/70 bg-background/10">
+          <div className="max-h-[22rem] overflow-auto rounded-lg border border-border/70 bg-background/10">
             <div style={{ minWidth: '39.25rem' }}>
               <div
                 className="sticky top-0 z-10 grid border-b border-border/60 bg-surface/95 text-[10px] font-medium text-textMuted shadow-sm backdrop-blur"

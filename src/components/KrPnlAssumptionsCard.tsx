@@ -23,17 +23,14 @@ export function KrPnlAssumptionsCard({
   const commPct = (krSellCommissionRate * 100).toFixed(3);
 
   return (
-    <div className="space-y-3 rounded-lg border border-border/80 bg-surface/60 px-3 py-2.5 text-[12px] text-textMuted">
-      <div>
+    <div className="space-y-3 rounded-xl border border-border/70 bg-surface/40 px-3 py-2.5 text-[12px] text-textMuted">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <p className="text-[13px] font-semibold text-textMain">
           한국장 손익·시세 가정
         </p>
-        <p className="mt-1 leading-snug">
-          아래 비율은 <span className="text-textMain">요약 카드·보유 종목·매매일지(종목
-          요약)·실현손익(패널·최근 거래일 차트)</span>에 동일하게 적용됩니다. 매도
-          금액 기준으로 증권거래세+농특세 <span className="tabular-nums">{taxPct}%</span>와
-          위탁 수수료 <span className="tabular-nums">{commPct}%</span>(설정)을 빼고,
-          매수 수수료는 평단에 넣지 않은 값으로 따로 차감하지 않습니다.
+        <p className="text-[11px] leading-snug text-textMuted">
+          세금 <span className="tabular-nums text-textMain">{taxPct}%</span> + 수수료{' '}
+          <span className="tabular-nums text-textMain">{commPct}%</span> 반영
         </p>
       </div>
 
@@ -66,9 +63,8 @@ export function KrPnlAssumptionsCard({
           <span className="text-textMain">시세 갱신 시 장외(Over·NXT) 호가 우선</span>
         </label>
       </div>
-      <p className="border-t border-border/50 pt-2 text-[11px] leading-snug">
-        장외 우선 시 네이버 모바일 API를 쓰고, 없으면 PC 지연 시세로 넘깁니다. KRX
-        시간외 단일가 표시와 숫자가 다를 수 있습니다.
+      <p className="border-t border-border/50 pt-2 text-[10px] leading-snug">
+        장외 우선 시 모바일 시세를 먼저 보고, 없으면 PC 지연 시세로 대체합니다.
       </p>
     </div>
   );

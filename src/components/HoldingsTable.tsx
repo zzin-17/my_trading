@@ -242,18 +242,16 @@ export function HoldingsTable({
   }, [rows, sortKey, sortDir, krBoardByTicker]);
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
+    <div className="rounded-lg border border-border bg-surface p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div className="min-w-0">
             <h3 className="text-sm font-medium text-textMain">보유 종목</h3>
-            <p className="mt-0.5 hidden text-[12px] leading-relaxed text-textMuted md:block">
-              코드·이름으로 검색 · 헤더 클릭 시 정렬(↑오름 · ↓내림) · 업종은 종목 클릭 시
-              표시 · 합계는 현재 탭 기준 · 시세 갱신 후 당일 시가 대비 ±
-              {KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 현재가가 주황색(주목)
+            <p className="mt-0.5 hidden text-[11px] leading-relaxed text-textMuted md:block">
+              검색 · 정렬 · 상세 확인, 시가 대비 ±{KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 현재가 강조
             </p>
             <ExpandableText
-              text={`코드·이름으로 검색 · 헤더 클릭 시 정렬(↑오름 · ↓내림) · 업종은 종목 클릭 시 표시 · 합계는 현재 탭 기준 · 시세 갱신 후 당일 시가 대비 ±${KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 현재가가 주황색(주목)`}
+              text={`검색 · 정렬 · 상세 확인 · 시가 대비 ±${KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 현재가 강조`}
               maxChars={30}
               className="mt-0.5 md:hidden"
               textClassName="text-[12px] leading-relaxed text-textMuted"
