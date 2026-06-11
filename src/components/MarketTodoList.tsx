@@ -26,6 +26,7 @@ interface MarketTodoListProps {
   ) => void;
   onToggleDone: (id: string) => void;
   onDelete: (id: string) => void;
+  onCreateTrade?: (todo: TradePlanTodo) => void;
   /** 보유 중인 동일 종목이 있으면 상세 모달로 이동 */
   onOpenHoldingDetail?: (ticker: string, market: Market) => void;
 }
@@ -90,6 +91,7 @@ export function MarketTodoList({
   onUpdate,
   onToggleDone,
   onDelete,
+  onCreateTrade,
   onOpenHoldingDetail,
 }: MarketTodoListProps) {
   const [symbolField, setSymbolField] = useState('');
@@ -106,6 +108,7 @@ export function MarketTodoList({
   >([]);
   const [krSuggestLoading, setKrSuggestLoading] = useState(false);
   const [addSubmitting, setAddSubmitting] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
   const [editingTodo, setEditingTodo] = useState<TradePlanTodo | null>(null);
   const [editAction, setEditAction] = useState<PlanAction>('buy');
   const [editTargetPrice, setEditTargetPrice] = useState('');
@@ -276,19 +279,32 @@ export function MarketTodoList({
     });
   }, [market, symbolField]);
 
-  const handleAddSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitAddTodo = useCallback(async () => {
+    setAddError(null);
     const tk =
       market === 'KR'
         ? symbolField.trim().replace(/\s/g, '')
         : symbolField.trim().toUpperCase();
     const p = Number(targetPrice);
     const q = Number(quantity);
-    if (!tk || !Number.isFinite(p) || p <= 0 || !Number.isFinite(q) || q <= 0) {
+    if (!tk) {
+      setAddError(
+        market === 'KR'
+          ? '종목코드를 입력하거나 검색 목록에서 종목을 선택해 주세요.'
+          : '티커를 입력해 주세요.',
+      );
+      return;
+    }
+    if (!Number.isFinite(p) || p <= 0) {
+      setAddError('목표가는 0보다 큰 숫자로 입력해 주세요.');
+      return;
+    }
+    if (!Number.isFinite(q) || q <= 0) {
+      setAddError('수량은 1 이상의 숫자로 입력해 주세요.');
       return;
     }
     if (market === 'KR' && !normalizeKrTicker(tk)) {
-      window.alert(
+      setAddError(
         '한국장은 6자리 종목코드(예: 005930, 00680K)를 입력하거나, 아래 목록에서 종목을 선택해 주세요.',
       );
       return;
@@ -312,10 +328,21 @@ export function MarketTodoList({
       setTargetPrice('');
       setQuantity('');
       setNote('');
+      setAddError(null);
     } finally {
       setAddSubmitting(false);
     }
-  };
+  }, [
+    action,
+    currency,
+    market,
+    note,
+    onAdd,
+    quantity,
+    resolveNameForSubmit,
+    symbolField,
+    targetPrice,
+  ]);
 
   const openEditModal = useCallback((todo: TradePlanTodo) => {
     setEditingTodo(todo);
@@ -387,15 +414,28 @@ export function MarketTodoList({
             보유 상세
           </button>
         ) : null}
-        <button
-          type="button"
-          onClick={() => onToggleDone(todo.id)}
-          className={`rounded border border-border text-textMain hover:bg-white/5 ${
-            small ? 'px-2 py-1 text-[10px]' : 'px-2 py-1 text-[11px]'
-          }`}
-        >
-          {todo.done ? '미완료' : '완료'}
-        </button>
+        {todo.done ? (
+          <button
+            type="button"
+            onClick={() => onToggleDone(todo.id)}
+            className={`rounded border border-border text-textMain hover:bg-white/5 ${
+              small ? 'px-2 py-1 text-[10px]' : 'px-2 py-1 text-[11px]'
+            }`}
+          >
+            미완료
+          </button>
+        ) : null}
+        {!todo.done && onCreateTrade ? (
+          <button
+            type="button"
+            onClick={() => onCreateTrade(todo)}
+            className={`rounded border border-positive/40 font-medium text-positive hover:bg-positive/10 ${
+              small ? 'px-2 py-1 text-[10px]' : 'px-2 py-1 text-[11px]'
+            }`}
+          >
+            체결 등록
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => handleDeleteTodo(todo)}
@@ -407,7 +447,7 @@ export function MarketTodoList({
         </button>
       </div>
     ),
-    [handleDeleteTodo, market, onOpenHoldingDetail, onToggleDone],
+    [handleDeleteTodo, market, onCreateTrade, onOpenHoldingDetail, onToggleDone],
   );
 
   const emptyListMessage =
@@ -431,7 +471,13 @@ export function MarketTodoList({
         </p>
       </div>
 
-      <form className="space-y-2.5" onSubmit={(e) => void handleAddSubmit(e)}>
+      <form
+        className="space-y-2.5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submitAddTodo();
+        }}
+      >
         <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
           <div className="relative md:col-span-3">
             <input
@@ -442,6 +488,7 @@ export function MarketTodoList({
               onChange={(e) => {
                 const v = e.target.value;
                 setSymbolField(v);
+                if (addError) setAddError(null);
                 if (market !== 'KR') return;
                 const compact = v.trim().replace(/\s/g, '');
                 if (lastKrPickRef.current && compact === lastKrPickRef.current.ticker) {
@@ -488,7 +535,10 @@ export function MarketTodoList({
           </div>
           <select
             value={action}
-            onChange={(e) => setAction(e.target.value as PlanAction)}
+            onChange={(e) => {
+              setAction(e.target.value as PlanAction);
+              if (addError) setAddError(null);
+            }}
             className="rounded-md border border-border bg-background px-2 py-2 text-sm text-textMain outline-none focus:border-accent md:col-span-2"
           >
             <option value="buy">매수</option>
@@ -500,7 +550,10 @@ export function MarketTodoList({
             step="any"
             placeholder={`목표가 (${currency})`}
             value={targetPrice}
-            onChange={(e) => setTargetPrice(e.target.value)}
+            onChange={(e) => {
+              setTargetPrice(e.target.value);
+              if (addError) setAddError(null);
+            }}
             className="rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent md:col-span-2"
           />
           <input
@@ -509,23 +562,38 @@ export function MarketTodoList({
             step={1}
             placeholder="수량"
             value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
+            onChange={(e) => {
+              setQuantity(e.target.value);
+              if (addError) setAddError(null);
+            }}
             className="rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent md:col-span-1"
           />
           <input
             placeholder="메모(선택)"
             value={note}
-            onChange={(e) => setNote(e.target.value)}
+            onChange={(e) => {
+              setNote(e.target.value);
+              if (addError) setAddError(null);
+            }}
             className="rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent md:col-span-3"
           />
           <button
-            type="submit"
+            type="button"
             disabled={addSubmitting}
+            onPointerDown={() => {
+              if (typeof document === 'undefined') return;
+              const active = document.activeElement;
+              if (active instanceof HTMLElement) active.blur();
+            }}
+            onClick={() => void submitAddTodo()}
             className="rounded-md bg-accent px-2.5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60 md:col-span-1"
           >
             {addSubmitting ? '추가 중…' : '추가'}
           </button>
         </div>
+        {addError ? (
+          <p className="text-[12px] text-negative">{addError}</p>
+        ) : null}
       </form>
 
       <div className="mt-4 flex flex-wrap items-end gap-2">

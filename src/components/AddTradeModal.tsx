@@ -25,6 +25,8 @@ interface AddTradeModalProps {
   contextMarket?: Market;
   /** null이면 신규, 값이 있으면 해당 매매 수정 */
   initialTrade?: Trade | null;
+  /** 신규 등록용 미리 채움 값 */
+  initialDraft?: Omit<Trade, 'id'> | null;
   onClose: () => void;
   onAdd: (trade: Trade) => void;
   onUpdate?: (trade: Trade) => void;
@@ -36,6 +38,7 @@ export function AddTradeModal({
   open,
   contextMarket,
   initialTrade = null,
+  initialDraft = null,
   onClose,
   onAdd,
   onUpdate,
@@ -110,6 +113,17 @@ export function AddTradeModal({
       setMarketManual(contextMarket === 'KR' ? 'KR' : initialTrade.market);
       setNote(initialTrade.note ?? '');
       setOrderPending(initialTrade.executionStatus === 'pending');
+    } else if (initialDraft) {
+      setDate(initialDraft.date);
+      setTicker(initialDraft.ticker);
+      setName(initialDraft.name);
+      setSector(initialDraft.sector || '기타');
+      setSide(initialDraft.side);
+      setQuantity(String(initialDraft.quantity));
+      setPrice(String(initialDraft.price));
+      setMarketManual(contextMarket === 'KR' ? 'KR' : initialDraft.market);
+      setNote(initialDraft.note ?? '');
+      setOrderPending(initialDraft.executionStatus === 'pending');
     } else {
       setDate(todayIso());
       setTicker('');
@@ -122,7 +136,7 @@ export function AddTradeModal({
       setNote('');
       setOrderPending(false);
     }
-  }, [open, initialTrade, contextMarket]);
+  }, [open, initialTrade, initialDraft, contextMarket]);
 
   useEffect(() => {
     if (!open || !krLookupActive) {

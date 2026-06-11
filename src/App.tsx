@@ -233,11 +233,13 @@ function MobileBottomTabButton({
   label,
   hint,
   active,
+  badgeCount = 0,
   onClick,
 }: {
   label: string;
   hint: string;
   active: boolean;
+  badgeCount?: number;
   onClick: () => void;
 }) {
   return (
@@ -252,6 +254,11 @@ function MobileBottomTabButton({
       }`}
     >
       <span className="text-[13px] font-semibold leading-none">{label}</span>
+      {badgeCount > 0 ? (
+        <span className="absolute right-2 top-1.5 inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-negative px-1 py-0.5 text-[10px] font-semibold leading-none tabular-nums text-white">
+          {badgeCount > 99 ? '99+' : badgeCount}
+        </span>
+      ) : null}
       <span
         className={`text-[10px] leading-none ${
           active ? 'text-textMuted/90' : 'text-textMuted/75'
@@ -267,6 +274,46 @@ function MobileBottomTabButton({
       />
     </button>
   );
+}
+
+function getTodoAlertStatus(
+  todo: TradePlanTodo,
+  quotes: Record<string, number>,
+): 'reached' | 'near' | 'waiting' {
+  const current = quotes[todo.ticker];
+  if (!Number.isFinite(current)) return 'waiting';
+  const threshold = 0.02;
+  if (todo.action === 'buy') {
+    if (current <= todo.targetPrice) return 'reached';
+    if (current <= todo.targetPrice * (1 + threshold)) return 'near';
+    return 'waiting';
+  }
+  if (current >= todo.targetPrice) return 'reached';
+  if (current >= todo.targetPrice * (1 - threshold)) return 'near';
+  return 'waiting';
+}
+
+function getKstDateParts(date: Date): { weekday: string; hour: number; minute: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Seoul',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return {
+    weekday: get('weekday'),
+    hour: Number(get('hour')),
+    minute: Number(get('minute')),
+  };
+}
+
+function isKrMarketOpen(now = new Date()): boolean {
+  const { weekday, hour, minute } = getKstDateParts(now);
+  if (weekday === 'Sat' || weekday === 'Sun') return false;
+  const totalMinutes = hour * 60 + minute;
+  return totalMinutes >= 9 * 60 && totalMinutes <= 15 * 60 + 30;
 }
 
 export default function App() {
@@ -309,6 +356,8 @@ export default function App() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [addTradeOpen, setAddTradeOpen] = useState(false);
   const [tradeToEdit, setTradeToEdit] = useState<Trade | null>(null);
+  const [tradeDraft, setTradeDraft] = useState<Omit<Trade, 'id'> | null>(null);
+  const [tradeDraftTodoId, setTradeDraftTodoId] = useState<string | null>(null);
   const [addHoldingOpen, setAddHoldingOpen] = useState(false);
   const [krQuoteRefreshing, setKrQuoteRefreshing] = useState(false);
   const [krxSectorSyncing, setKrxSectorSyncing] = useState(false);
@@ -331,6 +380,7 @@ export default function App() {
   const [unlockBlockedUntil, setUnlockBlockedUntil] = useState(0);
   const [unlockNowTs, setUnlockNowTs] = useState(() => Date.now());
   const autoLockTimerRef = useRef<number | null>(null);
+  const lastAutoKrQuoteRefreshAtRef = useRef(0);
 
   const {
     user,
@@ -1427,6 +1477,54 @@ export default function App() {
     return map;
   }, [positions, todos]);
 
+  const reachedTodoCountByPositionId = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const p of positions) {
+      if (p.quantity <= 0) continue;
+      map[p.id] = todos.filter(
+        (todo) =>
+          !todo.done &&
+          todo.market === p.market &&
+          tickersEqual(todo.ticker, p.ticker, p.market) &&
+          getTodoAlertStatus(todo, quotes) === 'reached',
+      ).length;
+    }
+    return map;
+  }, [positions, quotes, todos]);
+
+  const reachedTodoBadgeCount = useMemo(
+    () =>
+      todos.filter((todo) => !todo.done && getTodoAlertStatus(todo, quotes) === 'reached')
+        .length,
+    [quotes, todos],
+  );
+
+  const krQuoteTargetTickers = useMemo(() => {
+    const priorityByTicker = new Map<string, number>();
+    todos.forEach((todo) => {
+      if (todo.done || todo.market !== 'KR') return;
+      const ticker = normalizeKrTicker(todo.ticker);
+      if (!ticker) return;
+      const status = getTodoAlertStatus(todo, quotes);
+      const priority = status === 'reached' ? 0 : status === 'near' ? 1 : 2;
+      const prev = priorityByTicker.get(ticker);
+      if (prev === undefined || priority < prev) {
+        priorityByTicker.set(ticker, priority);
+      }
+    });
+    positions.forEach((position) => {
+      if (position.market !== 'KR') return;
+      const ticker = normalizeKrTicker(position.ticker);
+      if (!ticker) return;
+      if (!priorityByTicker.has(ticker)) {
+        priorityByTicker.set(ticker, 3);
+      }
+    });
+    return [...priorityByTicker.entries()]
+      .sort((a, b) => (a[1] !== b[1] ? a[1] - b[1] : a[0].localeCompare(b[0])))
+      .map(([ticker]) => ticker);
+  }, [positions, quotes, todos]);
+
   const availableQuantityByPositionId = useMemo(() => {
     const map: Record<string, number> = {};
     for (const p of positions) {
@@ -1518,7 +1616,16 @@ export default function App() {
     setQuotes((prev) =>
       prev[t.ticker] !== undefined ? prev : { ...prev, [t.ticker]: t.price },
     );
-  }, [applyLocalTradeChange]);
+    if (tradeDraftTodoId) {
+      applyLocalTodoChange((prev) =>
+        prev.map((todo) =>
+          todo.id === tradeDraftTodoId && !todo.done ? { ...todo, done: true } : todo,
+        ),
+      );
+      setTradeDraftTodoId(null);
+      setTradeDraft(null);
+    }
+  }, [applyLocalTodoChange, applyLocalTradeChange, tradeDraftTodoId]);
 
   const handleUpdateTrade = useCallback((updated: Trade) => {
     applyLocalTradeChange((prev) =>
@@ -1569,18 +1676,53 @@ export default function App() {
 
   const handleOpenAddTrade = useCallback(() => {
     setTradeToEdit(null);
+    setTradeDraft(null);
+    setTradeDraftTodoId(null);
     setAddTradeOpen(true);
   }, []);
 
   const handleOpenEditTrade = useCallback((trade: Trade) => {
     setTradeToEdit(trade);
+    setTradeDraft(null);
+    setTradeDraftTodoId(null);
     setAddTradeOpen(true);
   }, []);
 
   const handleCloseAddTradeModal = useCallback(() => {
     setAddTradeOpen(false);
     setTradeToEdit(null);
+    setTradeDraft(null);
+    setTradeDraftTodoId(null);
   }, []);
+
+  const handleCreateTradeFromTodo = useCallback((todo: TradePlanTodo) => {
+    const row = ledger.get(todo.ticker);
+    const recentTrade = [...trades]
+      .reverse()
+      .find((trade) => trade.market === todo.market && trade.ticker === todo.ticker);
+    const displayName =
+      todo.name?.trim() || (row?.market === todo.market ? row.name.trim() : '') || recentTrade?.name || todo.ticker;
+    const sector =
+      (row?.market === todo.market ? row.sector.trim() : '') ||
+      recentTrade?.sector ||
+      '기타';
+    const currency = defaultCurrencyForMarket(todo.market);
+    setTradeToEdit(null);
+    setTradeDraft({
+      date: todayIsoLocal(),
+      ticker: todo.ticker,
+      name: displayName,
+      sector,
+      market: todo.market,
+      side: todo.action,
+      quantity: todo.quantity,
+      price: roundMoney(todo.targetPrice, currency),
+      currency,
+      ...(todo.note?.trim() ? { note: todo.note.trim() } : {}),
+    });
+    setTradeDraftTodoId(todo.id);
+    setAddTradeOpen(true);
+  }, [ledger, trades]);
 
   const handleAddHolding = useCallback(
     (payload: AddHoldingPayload) => {
@@ -1712,23 +1854,22 @@ export default function App() {
     setKrDayOpenByTicker({});
   }, [applyLocalTodoChange, applyLocalTradeChange, createGuardSnapshot, networkOnline, user]);
 
-  const refreshKrQuotes = useCallback(async () => {
+  const refreshKrQuotes = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true;
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      window.alert(
-        '네트워크에 연결되어 있지 않습니다. 연결 후 시세 갱신을 다시 시도해 주세요.',
-      );
-      return;
+      if (!silent) {
+        window.alert(
+          '네트워크에 연결되어 있지 않습니다. 연결 후 시세 갱신을 다시 시도해 주세요.',
+        );
+      }
+      return false;
     }
-    const tickers = [
-      ...new Set(
-        positions
-          .map((p) => (p.market === 'KR' ? normalizeKrTicker(p.ticker) : ''))
-          .filter(Boolean),
-      ),
-    ];
+    const tickers = krQuoteTargetTickers;
     if (tickers.length === 0) {
-      window.alert('한국장 6자리 종목코드(예: 005930, 00680K)가 없습니다.');
-      return;
+      if (!silent) {
+        window.alert('시세 갱신 대상인 한국장 종목이 없습니다.');
+      }
+      return false;
     }
     setKrQuoteRefreshing(true);
     let ok = 0;
@@ -1770,7 +1911,7 @@ export default function App() {
       setLastKrQuoteBulkAt(new Date().toISOString());
     }
     setKrQuoteRefreshing(false);
-    if (fail > 0) {
+    if (fail > 0 && !silent) {
       const allFailed = ok === 0;
       window.alert(
         allFailed
@@ -1778,7 +1919,33 @@ export default function App() {
           : `시세 갱신: 성공 ${ok}건, 실패 ${fail}건`,
       );
     }
-  }, [positions, krPreferExtendedQuote]);
+    return ok > 0;
+  }, [krPreferExtendedQuote, krQuoteTargetTickers]);
+
+  useEffect(() => {
+    if (marketTab !== 'KR') return;
+    const maybeAutoRefresh = () => {
+      if (!networkOnline || krQuoteRefreshing) return;
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      if (!isKrMarketOpen()) return;
+      const now = Date.now();
+      if (now - lastAutoKrQuoteRefreshAtRef.current < 2 * 60 * 1000) return;
+      lastAutoKrQuoteRefreshAtRef.current = now;
+      void refreshKrQuotes({ silent: true }).catch(() => {});
+    };
+    maybeAutoRefresh();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') maybeAutoRefresh();
+    };
+    const id = window.setInterval(maybeAutoRefresh, 30_000);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', maybeAutoRefresh);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', maybeAutoRefresh);
+    };
+  }, [krQuoteRefreshing, marketTab, networkOnline, refreshKrQuotes]);
 
   const handleSyncKrxSectors = useCallback(async () => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -2135,6 +2302,7 @@ export default function App() {
                 lastKrQuoteBulkAt={lastKrQuoteBulkAt}
                 krDayOpenByTicker={krDayOpenByTicker}
                 pendingTodoCountByPositionId={pendingTodoCountByPositionId}
+                reachedTodoCountByPositionId={reachedTodoCountByPositionId}
                 availableQuantityByPositionId={availableQuantityByPositionId}
               />
             </div>
@@ -2149,6 +2317,7 @@ export default function App() {
               quotes={quotes}
               ledger={ledger}
               trades={trades}
+              onCreateTrade={handleCreateTradeFromTodo}
               onAdd={(payload) =>
                 applyLocalTodoChange((prev) => [
                   ...prev,
@@ -2250,6 +2419,7 @@ export default function App() {
             label="기록"
             hint="To-do·일지"
             active={mobileHomeTab === 'journal'}
+            badgeCount={reachedTodoBadgeCount}
             onClick={() => setMobileHomeTab('journal')}
           />
           <MobileBottomTabButton
@@ -2313,6 +2483,7 @@ export default function App() {
         open={addTradeOpen}
         contextMarket={marketTab === 'KR' ? 'KR' : undefined}
         initialTrade={tradeToEdit}
+          initialDraft={tradeDraft}
         onClose={handleCloseAddTradeModal}
         onAdd={handleAddTrade}
         onUpdate={handleUpdateTrade}

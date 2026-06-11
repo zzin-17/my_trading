@@ -19,6 +19,25 @@ function krPnLClass(value: number): string {
   return 'text-textMain';
 }
 
+function todoBadgeLabel(pendingCount: number, reachedCount: number): string {
+  if (pendingCount <= 0) return '';
+  if (reachedCount <= 0) return String(pendingCount);
+  if (reachedCount >= pendingCount) return `${pendingCount} 도달`;
+  return `${reachedCount}/${pendingCount} 도달`;
+}
+
+function currentPriceEmphasis(
+  openAttention: boolean,
+  currentPrice: number,
+  dayOpen?: number,
+): 'pos' | 'neg' | 'warn' | undefined {
+  if (!openAttention) return undefined;
+  if (dayOpen === undefined || dayOpen <= 0) return 'warn';
+  if (currentPrice > dayOpen) return 'pos';
+  if (currentPrice < dayOpen) return 'neg';
+  return 'warn';
+}
+
 export type HoldingSortKey =
   | 'board'
   | 'ticker'
@@ -93,6 +112,8 @@ interface HoldingsTableProps {
   krDayOpenByTicker?: Record<string, number>;
   /** 포지션별 미완료 To-do 개수(보유와 티커·시장이 일치하는 항목) */
   pendingTodoCountByPositionId?: Record<string, number>;
+  /** 포지션별 도달 상태 미완료 To-do 개수 */
+  reachedTodoCountByPositionId?: Record<string, number>;
   /** 포지션별 거래 가능 수량 = 보유수량 - 미체결 매도 수량 */
   availableQuantityByPositionId?: Record<string, number>;
 }
@@ -111,6 +132,7 @@ export function HoldingsTable({
   lastKrQuoteBulkAt,
   krDayOpenByTicker = {},
   pendingTodoCountByPositionId = {},
+  reachedTodoCountByPositionId = {},
   availableQuantityByPositionId = {},
 }: HoldingsTableProps) {
   const [sortKey, setSortKey] = useState<HoldingSortKey>('name');
@@ -419,7 +441,13 @@ export function HoldingsTable({
                   p.market === 'KR' ? krBoardByTicker.get(p.ticker) : undefined,
                 );
                 const pendingTodoCount = pendingTodoCountByPositionId[p.id] ?? 0;
+                const reachedTodoCount = reachedTodoCountByPositionId[p.id] ?? 0;
                 const availableQty = availableQuantityByPositionId[p.id] ?? p.quantity;
+                const currentPriceEmph = currentPriceEmphasis(
+                  openAttention,
+                  p.current_price,
+                  dayOpen,
+                );
 
                 return (
                   <section
@@ -448,9 +476,13 @@ export function HoldingsTable({
                         {pendingTodoCount > 0 ? (
                           <span
                             className="inline-flex min-w-[1.15rem] items-center justify-center rounded-full bg-accent/25 px-1 py-0.5 text-[9px] font-semibold tabular-nums text-accent"
-                            title="미완료 To-do"
+                            title={
+                              reachedTodoCount > 0
+                                ? `도달 ${reachedTodoCount}건 / 미완료 ${pendingTodoCount}건`
+                                : `미완료 To-do ${pendingTodoCount}건`
+                            }
                           >
-                            {pendingTodoCount}
+                            {todoBadgeLabel(pendingTodoCount, reachedTodoCount)}
                           </span>
                         ) : null}
                       </span>
@@ -472,7 +504,7 @@ export function HoldingsTable({
 
                     <HoldingValueCell
                       value={formatMoney(p.current_price, p.currency)}
-                      emph={openAttention ? 'warn' : undefined}
+                      emph={currentPriceEmph}
                       title={openTip}
                       borderTop
                     />
@@ -626,6 +658,11 @@ export function HoldingsTable({
                 Boolean(normalizeKrTicker(p.ticker))
                   ? `당일 시가 ${formatMoney(dayOpen, p.currency)} · 시가 대비 ${krOpenDeviationPct(p.current_price, dayOpen).toFixed(2)}% (±${KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 주목 표시)`
                   : undefined;
+              const currentPriceEmph = currentPriceEmphasis(
+                openAttention,
+                p.current_price,
+                dayOpen,
+              );
               return (
                 <tr
                   key={p.id}
@@ -651,9 +688,16 @@ export function HoldingsTable({
                       {(pendingTodoCountByPositionId[p.id] ?? 0) > 0 ? (
                         <span
                           className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent/25 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-accent"
-                          title="미완료 To-do"
+                          title={
+                            (reachedTodoCountByPositionId[p.id] ?? 0) > 0
+                              ? `도달 ${(reachedTodoCountByPositionId[p.id] ?? 0)}건 / 미완료 ${(pendingTodoCountByPositionId[p.id] ?? 0)}건`
+                              : `미완료 To-do ${(pendingTodoCountByPositionId[p.id] ?? 0)}건`
+                          }
                         >
-                          {pendingTodoCountByPositionId[p.id]}
+                          {todoBadgeLabel(
+                            pendingTodoCountByPositionId[p.id] ?? 0,
+                            reachedTodoCountByPositionId[p.id] ?? 0,
+                          )}
                         </span>
                       ) : null}
                     </span>
@@ -669,7 +713,13 @@ export function HoldingsTable({
                   </td>
                   <td
                     className={`py-2 pr-3 text-right tabular-nums ${
-                      openAttention ? 'font-semibold text-warning' : 'text-textMain'
+                      currentPriceEmph === 'pos'
+                        ? 'font-semibold text-red-400'
+                        : currentPriceEmph === 'neg'
+                          ? 'font-semibold text-blue-400'
+                          : currentPriceEmph === 'warn'
+                            ? 'font-semibold text-warning'
+                            : 'text-textMain'
                     }`}
                     title={openTip}
                   >
