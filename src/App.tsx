@@ -77,7 +77,7 @@ import { parseHoldingCsv } from './lib/holdingCsv';
 import { applyKrxMetadataToKrTrades, normalizeKrTicker } from './lib/krxLookup';
 import { adjustOpeningBalanceTrade } from './lib/positionAdjust';
 import { fetchKrNaverDelayedQuote } from './lib/naverKrQuote';
-import { formatQuoteUpdatedLabel } from './lib/format';
+import { formatMoney, formatQuoteUpdatedLabel } from './lib/format';
 import { todayIsoLocal, withoutExpiredPendingOrders } from './lib/tradePendingExpiry';
 import {
   KR_SELL_TAX_RATE,
@@ -91,6 +91,8 @@ const APP_PIN_MAX_FAILS = 5;
 const APP_PIN_LOCKOUT_MS = 30 * 1000;
 const THEME_MODE_KEY = 'traderos-theme-mode-v1';
 const ONBOARDING_DONE_KEY = 'traderos-onboarding-done-v1';
+const TODO_ALERTS_ENABLED_KEY = 'traderos-todo-alerts-enabled-v1';
+const TODO_NEAR_ALERTS_ENABLED_KEY = 'traderos-todo-near-alerts-enabled-v1';
 const PERSISTENCE_WARNING_MESSAGE =
   '브라우저에 저장하지 못했습니다. 저장 공간 부족·비공개 모드일 수 있습니다. 이 사이트의 저장 용량을 줄인 뒤 다시 시도해 주세요.';
 
@@ -134,6 +136,24 @@ function loadThemeMode(): ThemeMode {
     /* ignore */
   }
   return 'dark';
+}
+
+function loadBooleanPreference(key: string, fallback = false): boolean {
+  try {
+    const v = window.localStorage.getItem(key);
+    if (v === '1') return true;
+    if (v === '0') return false;
+  } catch {
+    /* ignore */
+  }
+  return fallback;
+}
+
+function getBrowserNotificationPermission(): NotificationPermission | 'unsupported' {
+  if (typeof window === 'undefined' || typeof Notification === 'undefined') {
+    return 'unsupported';
+  }
+  return Notification.permission;
 }
 
 function isOnboardingDone(): boolean {
@@ -280,7 +300,9 @@ function getTodoAlertStatus(
   todo: TradePlanTodo,
   quotes: Record<string, number>,
 ): 'reached' | 'near' | 'waiting' {
-  const current = quotes[todo.ticker];
+  const quoteKey =
+    todo.market === 'KR' ? normalizeKrTicker(todo.ticker) ?? todo.ticker : todo.ticker;
+  const current = quotes[quoteKey];
   if (!Number.isFinite(current)) return 'waiting';
   const threshold = 0.02;
   if (todo.action === 'buy') {
@@ -367,6 +389,16 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(() => !isOnboardingDone());
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => loadThemeMode());
+  const [todoAlertsEnabled, setTodoAlertsEnabled] = useState(() =>
+    loadBooleanPreference(TODO_ALERTS_ENABLED_KEY, false),
+  );
+  const [todoNearAlertsEnabled, setTodoNearAlertsEnabled] = useState(() =>
+    loadBooleanPreference(TODO_NEAR_ALERTS_ENABLED_KEY, false),
+  );
+  const [notificationPermission, setNotificationPermission] = useState<
+    NotificationPermission | 'unsupported'
+  >(() => getBrowserNotificationPermission());
+  const [notificationError, setNotificationError] = useState<string | null>(null);
   const [appLockEnabled, setAppLockEnabled] = useState(
     () => !!loadAppPinHash(),
   );
@@ -381,6 +413,8 @@ export default function App() {
   const [unlockNowTs, setUnlockNowTs] = useState(() => Date.now());
   const autoLockTimerRef = useRef<number | null>(null);
   const lastAutoKrQuoteRefreshAtRef = useRef(0);
+  const todoAlertStatusRef = useRef<Record<string, 'reached' | 'near' | 'waiting'>>({});
+  const todoAlertBaselineReadyRef = useRef(false);
 
   const {
     user,
@@ -1225,6 +1259,51 @@ export default function App() {
     setUnlockBlockedUntil(0);
   }, []);
 
+  const handleToggleTodoAlerts = useCallback(async (nextEnabled: boolean) => {
+    if (!nextEnabled) {
+      setTodoAlertsEnabled(false);
+      setNotificationError(null);
+      return;
+    }
+    if (typeof window === 'undefined' || typeof Notification === 'undefined') {
+      setTodoAlertsEnabled(false);
+      setNotificationError('이 브라우저는 알림 기능을 지원하지 않습니다.');
+      return;
+    }
+    if (Notification.permission === 'granted') {
+      setNotificationPermission('granted');
+      setTodoAlertsEnabled(true);
+      setNotificationError(null);
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      setNotificationPermission('denied');
+      setTodoAlertsEnabled(false);
+      setNotificationError(
+        '브라우저에서 알림이 차단되어 있습니다. 주소창의 사이트 설정에서 알림을 허용한 뒤 다시 켜 주세요.',
+      );
+      return;
+    }
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission === 'granted') {
+        setTodoAlertsEnabled(true);
+        setNotificationError(null);
+      } else {
+        setTodoAlertsEnabled(false);
+        setNotificationError(
+          permission === 'denied'
+            ? '알림 권한이 거부되었습니다. 브라우저 설정에서 다시 허용할 수 있습니다.'
+            : '알림 권한 요청이 취소되었습니다.',
+        );
+      }
+    } catch {
+      setTodoAlertsEnabled(false);
+      setNotificationError('알림 권한 요청 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+    }
+  }, []);
+
   const handleLockNow = useCallback(() => {
     if (!appLockEnabled) return;
     setSettingsOpen(false);
@@ -1296,6 +1375,37 @@ export default function App() {
       /* ignore */
     }
   }, [themeMode]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(TODO_ALERTS_ENABLED_KEY, todoAlertsEnabled ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, [todoAlertsEnabled]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        TODO_NEAR_ALERTS_ENABLED_KEY,
+        todoNearAlertsEnabled ? '1' : '0',
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [todoNearAlertsEnabled]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof Notification === 'undefined') return;
+    const syncPermission = () => setNotificationPermission(Notification.permission);
+    syncPermission();
+    window.addEventListener('focus', syncPermission);
+    document.addEventListener('visibilitychange', syncPermission);
+    return () => {
+      window.removeEventListener('focus', syncPermission);
+      document.removeEventListener('visibilitychange', syncPermission);
+    };
+  }, []);
 
   const closeOnboarding = useCallback((remember: boolean) => {
     if (remember) markOnboardingDone(true);
@@ -1947,6 +2057,79 @@ export default function App() {
     };
   }, [krQuoteRefreshing, marketTab, networkOnline, refreshKrQuotes]);
 
+  useEffect(() => {
+    const activeTodos = todos.filter((todo) => !todo.done);
+    const nextStatusMap = Object.fromEntries(
+      activeTodos.map((todo) => [todo.id, getTodoAlertStatus(todo, quotes)]),
+    ) as Record<string, 'reached' | 'near' | 'waiting'>;
+    const alertsActive =
+      todoAlertsEnabled &&
+      notificationPermission === 'granted' &&
+      typeof window !== 'undefined' &&
+      typeof Notification !== 'undefined';
+
+    if (!alertsActive) {
+      todoAlertStatusRef.current = nextStatusMap;
+      todoAlertBaselineReadyRef.current = false;
+      return;
+    }
+
+    if (!todoAlertBaselineReadyRef.current) {
+      todoAlertStatusRef.current = nextStatusMap;
+      todoAlertBaselineReadyRef.current = true;
+      return;
+    }
+
+    activeTodos.forEach((todo) => {
+      const currentStatus = nextStatusMap[todo.id];
+      const prevStatus = todoAlertStatusRef.current[todo.id];
+      if (!prevStatus || currentStatus === prevStatus) return;
+
+      const shouldNotifyReached =
+        currentStatus === 'reached' && prevStatus !== 'reached';
+      const shouldNotifyNear =
+        todoNearAlertsEnabled &&
+        currentStatus === 'near' &&
+        prevStatus === 'waiting';
+      if (!shouldNotifyReached && !shouldNotifyNear) return;
+
+      const quoteKey =
+        todo.market === 'KR' ? normalizeKrTicker(todo.ticker) ?? todo.ticker : todo.ticker;
+      const currentPrice = quotes[quoteKey];
+      const currency = defaultCurrencyForMarket(todo.market);
+      const label = todo.name?.trim() || todo.ticker;
+      const title = shouldNotifyReached
+        ? `To-do 도달: ${label}`
+        : `To-do 근접: ${label}`;
+      const body = `${todo.action === 'buy' ? '매수' : '매도'} 목표가 ${formatMoney(
+        todo.targetPrice,
+        currency,
+      )} · 현재가 ${formatMoney(currentPrice, currency)}`;
+      try {
+        const notification = new Notification(title, {
+          body,
+          tag: `todo-${todo.id}-${currentStatus}`,
+        });
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+        };
+      } catch {
+        setNotificationError(
+          '브라우저 알림을 보내지 못했습니다. 브라우저 권한과 운영체제 알림 설정을 확인해 주세요.',
+        );
+      }
+    });
+
+    todoAlertStatusRef.current = nextStatusMap;
+  }, [
+    notificationPermission,
+    quotes,
+    todoAlertsEnabled,
+    todoNearAlertsEnabled,
+    todos,
+  ]);
+
   const handleSyncKrxSectors = useCallback(async () => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       window.alert(
@@ -2478,6 +2661,12 @@ export default function App() {
         onSetAppPin={handleSetAppPin}
         onDisableAppPin={handleDisableAppPin}
         onLockNow={handleLockNow}
+        notificationPermission={notificationPermission}
+        todoAlertsEnabled={todoAlertsEnabled}
+        todoNearAlertsEnabled={todoNearAlertsEnabled}
+        notificationError={notificationError}
+        onToggleTodoAlerts={handleToggleTodoAlerts}
+        onToggleTodoNearAlerts={setTodoNearAlertsEnabled}
       />
       <AddTradeModal
         open={addTradeOpen}

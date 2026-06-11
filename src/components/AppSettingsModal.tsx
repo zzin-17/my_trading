@@ -72,6 +72,12 @@ interface AppSettingsModalProps {
   onSetAppPin?: () => void | Promise<void>;
   onDisableAppPin?: () => void | Promise<void>;
   onLockNow?: () => void;
+  notificationPermission?: NotificationPermission | 'unsupported';
+  todoAlertsEnabled?: boolean;
+  todoNearAlertsEnabled?: boolean;
+  notificationError?: string | null;
+  onToggleTodoAlerts?: (enabled: boolean) => void | Promise<void>;
+  onToggleTodoNearAlerts?: (enabled: boolean) => void;
 }
 
 export function AppSettingsModal({
@@ -107,6 +113,12 @@ export function AppSettingsModal({
   onSetAppPin,
   onDisableAppPin,
   onLockNow,
+  notificationPermission = 'unsupported',
+  todoAlertsEnabled = false,
+  todoNearAlertsEnabled = false,
+  notificationError = null,
+  onToggleTodoAlerts,
+  onToggleTodoNearAlerts,
 }: AppSettingsModalProps) {
   useEffect(() => {
     if (!open) return;
@@ -128,6 +140,15 @@ export function AppSettingsModal({
       minute: '2-digit',
     });
   };
+
+  const notificationStatusLabel =
+    notificationPermission === 'granted'
+      ? '허용됨'
+      : notificationPermission === 'denied'
+        ? '차단됨'
+        : notificationPermission === 'default'
+          ? '미요청'
+          : '지원 안 함';
 
   return (
     <div
@@ -365,6 +386,47 @@ export function AppSettingsModal({
             </div>
           </section>
         ) : null}
+
+        <section className="mt-5 border-t border-border/60 pt-4">
+          <h3 className="text-[12px] font-semibold text-textMain">브라우저 알림</h3>
+          <p className="mt-1 text-[12px] leading-relaxed text-textMuted">
+            To-do가 목표가에 도달했을 때 브라우저 알림을 받을 수 있습니다. 근접
+            알림은 목표가 2% 이내 구간에서만 추가로 보냅니다.
+          </p>
+          <p className="mt-1 text-[12px] text-textMain">
+            상태: {notificationStatusLabel}
+          </p>
+          {notificationError ? (
+            <p className="mt-2 rounded border border-warning/40 bg-warning/10 px-2 py-1.5 text-[12px] text-warning">
+              {notificationError}
+            </p>
+          ) : null}
+          <div className="mt-3 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => void onToggleTodoAlerts?.(!todoAlertsEnabled)}
+              className={`rounded-md border px-3 py-2.5 text-left text-[13px] font-medium ${
+                todoAlertsEnabled
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'border-border bg-background text-textMain hover:bg-white/5'
+              }`}
+            >
+              {todoAlertsEnabled ? '도달 알림 켜짐' : '도달 알림 켜기'}
+            </button>
+            <button
+              type="button"
+              disabled={!todoAlertsEnabled || notificationPermission !== 'granted'}
+              onClick={() => onToggleTodoNearAlerts?.(!todoNearAlertsEnabled)}
+              className={`rounded-md border px-3 py-2.5 text-left text-[13px] font-medium ${
+                todoAlertsEnabled && todoNearAlertsEnabled
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'border-border bg-background text-textMain hover:bg-white/5 disabled:opacity-50'
+              }`}
+            >
+              {todoNearAlertsEnabled ? '근접 알림 켜짐 (목표가 2% 이내)' : '근접 알림 켜기 (선택)'}
+            </button>
+          </div>
+        </section>
 
         <section className="mt-5 border-t border-border/60 pt-4">
           <h3 className="text-[12px] font-semibold text-textMain">도움말</h3>
