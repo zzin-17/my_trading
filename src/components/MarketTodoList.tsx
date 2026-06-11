@@ -459,42 +459,46 @@ export function MarketTodoList({
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-4 space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h3 className="text-sm font-medium text-textMain">{title}</h3>
           <p className="text-[11px] text-textMuted">
-            코드·종목명 검색으로 빠르게 등록
+              코드·종목명 검색으로 빠르게 등록
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5 text-[11px]">
-          {viewTab === 'open' ? (
-            <>
+            {viewTab === 'open' ? (
+              <>
+                <SummaryCountChip label="도달" count={statusCounts.reached} tone="positive" />
+                <SummaryCountChip label="근접" count={statusCounts.near} tone="warning" />
+                <SummaryCountChip label="대기" count={statusCounts.waiting} />
+              </>
+            ) : (
               <span className="rounded-full border border-border/70 px-2 py-0.5 text-textMuted">
-                도달 <span className="tabular-nums text-textMain">{statusCounts.reached}</span>
+                완료 <span className="tabular-nums text-textMain">{doneItems.length}</span> / 전체{' '}
+                <span className="tabular-nums text-textMain">{totalTodoCount}</span>
               </span>
-              <span className="rounded-full border border-border/70 px-2 py-0.5 text-textMuted">
-                근접 <span className="tabular-nums text-textMain">{statusCounts.near}</span>
-              </span>
-              <span className="rounded-full border border-border/70 px-2 py-0.5 text-textMuted">
-                대기 <span className="tabular-nums text-textMain">{statusCounts.waiting}</span>
-              </span>
-            </>
-          ) : (
-            <span className="rounded-full border border-border/70 px-2 py-0.5 text-textMuted">
-              완료 <span className="tabular-nums text-textMain">{doneItems.length}</span> / 전체{' '}
-              <span className="tabular-nums text-textMain">{totalTodoCount}</span>
-            </span>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
       <form
-        className="space-y-2.5"
+        className="rounded-xl border border-border/60 bg-background/25 p-3"
         onSubmit={(e) => {
           e.preventDefault();
           void submitAddTodo();
         }}
       >
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="text-[11px] font-medium text-textMuted">빠른 등록</p>
+          {market === 'KR' && pickedKrName ? (
+            <p className="truncate text-[11px] text-textMuted" title={pickedKrName}>
+              {pickedKrName}
+            </p>
+          ) : null}
+        </div>
         <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
           <div className="relative md:col-span-3">
             <input
@@ -545,9 +549,6 @@ export function MarketTodoList({
             ) : null}
             {market === 'KR' && krSuggestLoading ? (
               <p className="mt-1 text-[11px] text-textMuted">종목명 검색 중…</p>
-            ) : null}
-            {market === 'KR' && pickedKrName ? (
-              <p className="mt-1 truncate text-[11px] text-textMuted">선택·조회명: {pickedKrName}</p>
             ) : null}
           </div>
           <select
@@ -609,21 +610,21 @@ export function MarketTodoList({
           </button>
         </div>
         {addError ? (
-          <p className="text-[12px] text-negative">{addError}</p>
+          <p className="mt-2 text-[12px] text-negative">{addError}</p>
         ) : null}
       </form>
 
-      <div className="mt-4 flex flex-wrap items-end gap-2">
+      <div className="mt-3 flex flex-col gap-2 border-t border-border/60 pt-3 lg:flex-row lg:items-end">
         <div className="min-w-[14rem] flex-1">
-          <label className="text-[11px] text-textMuted" htmlFor="todo-list-search">
+          <label className="sr-only" htmlFor="todo-list-search">
             {viewTab === 'open' ? '진행중 검색' : '완료 검색'}
           </label>
           <input
             id="todo-list-search"
             value={listSearchText}
             onChange={(e) => setListSearchText(e.target.value)}
-            placeholder="예: 005930, 삼성…"
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+            placeholder="종목코드·종목명 검색"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
           />
         </div>
 
@@ -643,7 +644,7 @@ export function MarketTodoList({
                 : 'text-textMuted hover:bg-white/5 hover:text-textMain'
             }`}
           >
-            진행중 ({openItems.length}건)
+            진행중 ({openItems.length})
           </button>
           <button
             type="button"
@@ -656,7 +657,7 @@ export function MarketTodoList({
                 : 'text-textMuted hover:bg-white/5 hover:text-textMain'
             }`}
           >
-            완료 ({doneItems.length}건)
+            완료 ({doneItems.length})
           </button>
         </div>
 
@@ -676,7 +677,7 @@ export function MarketTodoList({
                 : 'text-textMuted hover:bg-white/5 hover:text-textMain'
             }`}
           >
-            건건이 보기
+            건건이
           </button>
           <button
             type="button"
@@ -689,7 +690,7 @@ export function MarketTodoList({
                 : 'text-textMuted hover:bg-white/5 hover:text-textMain'
             }`}
           >
-            종목별 보기
+            종목별
           </button>
         </div>
       </div>
@@ -1263,6 +1264,30 @@ function StatusBadge({ status }: { status: 'reached' | 'near' | 'waiting' }) {
   return (
     <span className="inline-flex items-center justify-center rounded bg-border px-1.5 py-0.5 text-[11px] font-medium leading-none text-textMuted">
       대기
+    </span>
+  );
+}
+
+function SummaryCountChip({
+  label,
+  count,
+  tone,
+}: {
+  label: string;
+  count: number;
+  tone?: 'positive' | 'warning';
+}) {
+  return (
+    <span
+      className={`rounded-full border px-2 py-0.5 ${
+        tone === 'positive'
+          ? 'border-positive/25 bg-positive/10 text-positive'
+          : tone === 'warning'
+            ? 'border-warning/25 bg-warning/10 text-warning'
+            : 'border-border/70 text-textMuted'
+      }`}
+    >
+      {label} <span className="tabular-nums">{count}</span>
     </span>
   );
 }
