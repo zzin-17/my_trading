@@ -69,7 +69,6 @@ import {
 } from './lib/cloudPortfolioStore';
 import { useAuth } from './auth/AuthContext';
 import { MixedCurrencyBanner } from './components/MixedCurrencyBanner';
-import { KrPnlAssumptionsCard } from './components/KrPnlAssumptionsCard';
 import type { Market } from './types/portfolio';
 import type { Trade } from './types/trade';
 import type { TradePlanTodo } from './types/todo';
@@ -2414,6 +2413,42 @@ export default function App() {
                 {user.email ?? user.displayName ?? '로그인됨'}
               </p>
             ) : null}
+            <div
+              role="tablist"
+              aria-label="거래 시장"
+              className="hidden items-center gap-1 rounded-full border border-border bg-background/70 p-1 md:inline-flex"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={marketTab === 'KR'}
+                onClick={() => setMarketTab('KR')}
+                className={`rounded-full px-3 py-1 text-[12px] font-medium transition ${
+                  marketTab === 'KR'
+                    ? 'bg-accent text-white'
+                    : 'text-textMuted hover:bg-white/5 hover:text-textMain'
+                }`}
+              >
+                한국장
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={marketTab === 'US'}
+                disabled={!enabledTabs.includes('US')}
+                onClick={() => setMarketTab('US')}
+                className={`rounded-full px-3 py-1 text-[12px] font-medium transition ${
+                  marketTab === 'US'
+                    ? 'bg-accent text-white'
+                    : 'text-textMuted hover:bg-white/5 hover:text-textMain'
+                } disabled:cursor-not-allowed disabled:opacity-45`}
+                title={
+                  enabledTabs.includes('US') ? '미국장 보기' : '아직 미국장 환경은 준비되지 않았습니다.'
+                }
+              >
+                미국장
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
@@ -2434,12 +2469,14 @@ export default function App() {
         </div>
       ) : null}
       <main className="mx-auto max-w-7xl space-y-5 px-0 py-5 pb-32 md:px-4 md:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] lg:px-6">
-        <MarketTabs
-          value={marketTab}
-          onChange={setMarketTab}
-          counts={marketCounts}
-          enabledTabs={enabledTabs}
-        />
+        <div className="md:hidden">
+          <MarketTabs
+            value={marketTab}
+            onChange={setMarketTab}
+            counts={marketCounts}
+            enabledTabs={enabledTabs}
+          />
+        </div>
 
         {persistenceWarning ? (
           <div
@@ -2448,27 +2485,6 @@ export default function App() {
           >
             {persistenceWarning}
           </div>
-        ) : null}
-
-        {marketTab === 'KR' ? (
-          <>
-            <div className={mobileHomeTab === 'settings' ? 'md:hidden' : 'hidden'}>
-              <KrPnlAssumptionsCard
-                krSellCommissionRate={krSellCommissionRate}
-                onKrSellCommissionRateChange={setKrSellCommissionRate}
-                krPreferExtendedQuote={krPreferExtendedQuote}
-                onKrPreferExtendedQuoteChange={setKrPreferExtendedQuote}
-              />
-            </div>
-            <div className="hidden md:block">
-              <KrPnlAssumptionsCard
-                krSellCommissionRate={krSellCommissionRate}
-                onKrSellCommissionRateChange={setKrSellCommissionRate}
-                krPreferExtendedQuote={krPreferExtendedQuote}
-                onKrPreferExtendedQuoteChange={setKrPreferExtendedQuote}
-              />
-            </div>
-          </>
         ) : null}
 
         <div className={mobileHomeTab === 'portfolio' ? 'md:block' : 'hidden md:block'}>
@@ -2713,6 +2729,10 @@ export default function App() {
         notificationError={notificationError}
         onToggleTodoAlerts={handleToggleTodoAlerts}
         onToggleTodoNearAlerts={setTodoNearAlertsEnabled}
+        krSellCommissionRate={krSellCommissionRate}
+        onKrSellCommissionRateChange={setKrSellCommissionRate}
+        krPreferExtendedQuote={krPreferExtendedQuote}
+        onKrPreferExtendedQuoteChange={setKrPreferExtendedQuote}
       />
       <AddTradeModal
         open={addTradeOpen}

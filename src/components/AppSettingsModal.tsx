@@ -1,4 +1,8 @@
 import { useEffect } from 'react';
+import {
+  clampKrSellCommissionRate,
+  KR_SELL_TAX_RATE,
+} from '../lib/krTradingAssumptions';
 
 interface SnapshotRecoveryItem {
   id: string;
@@ -78,6 +82,10 @@ interface AppSettingsModalProps {
   notificationError?: string | null;
   onToggleTodoAlerts?: (enabled: boolean) => void | Promise<void>;
   onToggleTodoNearAlerts?: (enabled: boolean) => void;
+  krSellCommissionRate?: number;
+  onKrSellCommissionRateChange?: (rate: number) => void;
+  krPreferExtendedQuote?: boolean;
+  onKrPreferExtendedQuoteChange?: (value: boolean) => void;
 }
 
 export function AppSettingsModal({
@@ -119,6 +127,10 @@ export function AppSettingsModal({
   notificationError = null,
   onToggleTodoAlerts,
   onToggleTodoNearAlerts,
+  krSellCommissionRate = 0.00015,
+  onKrSellCommissionRateChange,
+  krPreferExtendedQuote = false,
+  onKrPreferExtendedQuoteChange,
 }: AppSettingsModalProps) {
   useEffect(() => {
     if (!open) return;
@@ -191,6 +203,43 @@ export function AppSettingsModal({
           >
             {krxSectorSyncing ? '섹터 동기화 중…' : 'KRX 기준 섹터·종목명 동기화'}
           </button>
+        </section>
+
+        <section className="mt-5 border-t border-border/60 pt-4">
+          <h3 className="text-[12px] font-semibold text-textMain">한국장 계산</h3>
+          <p className="mt-1 text-[12px] leading-relaxed text-textMuted">
+            한국장 예상손익·실현손익 계산에 쓰는 위탁 수수료율입니다. 세금은 고정{' '}
+            <span className="tabular-nums">{(KR_SELL_TAX_RATE * 100).toFixed(2)}%</span>
+            입니다.
+          </p>
+          <label className="mt-3 flex items-center gap-3 text-[13px] text-textMain">
+            <span className="whitespace-nowrap">위탁 수수료율 (%)</span>
+            <input
+              type="number"
+              min={0.01}
+              max={0.15}
+              step={0.005}
+              value={krSellCommissionRate * 100}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (!Number.isFinite(v)) return;
+                onKrSellCommissionRateChange?.(clampKrSellCommissionRate(v / 100));
+              }}
+              className="w-28 rounded-md border border-border bg-background px-2 py-1.5 text-sm tabular-nums text-textMain outline-none focus:border-accent"
+            />
+          </label>
+          <p className="mt-2 text-[11px] text-textMuted">
+            권장 범위 0.01% ~ 0.15%
+          </p>
+          <label className="mt-3 flex cursor-pointer items-center gap-2 text-[12px] text-textMain">
+            <input
+              type="checkbox"
+              checked={krPreferExtendedQuote}
+              onChange={(e) => onKrPreferExtendedQuoteChange?.(e.target.checked)}
+              className="rounded border-border text-accent focus:ring-accent"
+            />
+            <span>시세 갱신 시 장외(Over·NXT) 호가 우선</span>
+          </label>
         </section>
 
         {firebaseCloudEnabled ? (
