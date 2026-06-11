@@ -382,16 +382,83 @@ export function TradeJournal({
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4 sm:p-5 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start lg:gap-x-4">
           <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-2">
-              <h3 className="shrink-0 text-sm font-semibold text-textMain tracking-tight">
-                매매일지
-              </h3>
-              <JournalHelpTooltip />
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <h3 className="shrink-0 text-sm font-semibold text-textMain tracking-tight">
+                  매매일지
+                </h3>
+                <JournalHelpTooltip />
+              </div>
+              <div
+                className="flex flex-wrap gap-1"
+                role="tablist"
+                aria-label="매매일지 구분"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mainTab === 'today'}
+                  onClick={() => setMainTab('today')}
+                  className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
+                    mainTab === 'today'
+                      ? 'bg-accent text-white shadow-sm'
+                      : 'text-textMuted hover:bg-white/5 hover:text-textMain'
+                  }`}
+                >
+                  오늘 ({todayTrades.length}건)
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mainTab === 'history'}
+                  onClick={() => setMainTab('history')}
+                  className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
+                    mainTab === 'history'
+                      ? 'bg-accent text-white shadow-sm'
+                      : 'text-textMuted hover:bg-white/5 hover:text-textMain'
+                  }`}
+                >
+                  과거 ({pastTrades.length}건)
+                </button>
+              </div>
+              {mainTab === 'history' ? (
+                <div
+                  className="flex flex-wrap gap-1"
+                  role="tablist"
+                  aria-label="과거 매매 보기 방식"
+                >
+                  {(
+                    [
+                      ['month', '월별'],
+                      ['calendar', '캘린더'],
+                      ['list', '목록'],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      role="tab"
+                      aria-selected={historyView === id}
+                      onClick={() => {
+                        setHistoryView(id);
+                        if (id !== 'calendar') setSelectedDay(null);
+                      }}
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${
+                        historyView === id
+                          ? 'bg-accent text-white shadow-sm'
+                          : 'text-textMuted hover:text-textMain'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
-            <p className="mt-1 text-[11px] leading-relaxed text-textMuted">
+            <p className="mt-1 text-[11px] leading-relaxed text-textMuted lg:pr-4">
               {mainTab === 'today'
                 ? `기준일 ${today} · ${todaySummaryText}`
                 : historyView === 'list' && pastSortedDesc.length > 0
@@ -399,33 +466,31 @@ export function TradeJournal({
                   : `과거 ${pastTrades.length}건${futureTrades.length > 0 ? ` · 예정 ${futureTrades.length}건` : ''}`}
             </p>
           </div>
-          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-            <form
-              className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
-              onSubmit={(e) => {
-                e.preventDefault();
-                runJournalSearch();
-              }}
+          <form
+            className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end"
+            onSubmit={(e) => {
+              e.preventDefault();
+              runJournalSearch();
+            }}
+          >
+            <label htmlFor="journal-search" className="sr-only">
+              매매일지 종목 검색
+            </label>
+            <input
+              id="journal-search"
+              type="search"
+              enterKeyHint="search"
+              placeholder="코드·종목명 검색…"
+              value={journalSearchText}
+              onChange={(e) => setJournalSearchText(e.target.value)}
+              className="min-w-0 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent sm:min-w-[13rem] sm:w-[15rem]"
+            />
+            <button
+              type="submit"
+              className="shrink-0 rounded-full px-3 py-2 text-sm font-medium text-textMuted hover:bg-white/5 hover:text-textMain"
             >
-              <label htmlFor="journal-search" className="sr-only">
-                매매일지 종목 검색
-              </label>
-              <input
-                id="journal-search"
-                type="search"
-                enterKeyHint="search"
-                placeholder="코드·종목명 검색…"
-                value={journalSearchText}
-                onChange={(e) => setJournalSearchText(e.target.value)}
-                className="min-w-0 w-full flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent sm:min-w-[12rem] sm:w-[15rem]"
-              />
-              <button
-                type="submit"
-                className="shrink-0 rounded-full px-3 py-2 text-sm font-medium text-textMuted hover:bg-white/5 hover:text-textMain"
-              >
-                검색
-              </button>
-            </form>
+              검색
+            </button>
             <button
               type="button"
               onClick={onOpenAddTrade}
@@ -433,75 +498,7 @@ export function TradeJournal({
             >
               거래 추가
             </button>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <div
-            className="flex flex-wrap gap-1"
-            role="tablist"
-            aria-label="매매일지 구분"
-          >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mainTab === 'today'}
-            onClick={() => setMainTab('today')}
-            className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
-              mainTab === 'today'
-                ? 'bg-accent text-white shadow-sm'
-                : 'text-textMuted hover:bg-white/5 hover:text-textMain'
-            }`}
-          >
-            오늘 ({todayTrades.length}건)
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mainTab === 'history'}
-            onClick={() => setMainTab('history')}
-            className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
-              mainTab === 'history'
-                ? 'bg-accent text-white shadow-sm'
-                : 'text-textMuted hover:bg-white/5 hover:text-textMain'
-            }`}
-          >
-            과거 ({pastTrades.length}건)
-          </button>
-          </div>
-          {mainTab === 'history' ? (
-            <div
-              className="flex flex-wrap gap-1"
-              role="tablist"
-              aria-label="과거 매매 보기 방식"
-            >
-              {(
-                [
-                  ['month', '월별'],
-                  ['calendar', '캘린더'],
-                  ['list', '목록'],
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  role="tab"
-                  aria-selected={historyView === id}
-                  onClick={() => {
-                    setHistoryView(id);
-                    if (id !== 'calendar') setSelectedDay(null);
-                  }}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${
-                    historyView === id
-                      ? 'bg-accent text-white shadow-sm'
-                      : 'text-textMuted hover:text-textMain'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          ) : null}
+          </form>
         </div>
       </div>
 
