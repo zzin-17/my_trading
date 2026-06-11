@@ -93,6 +93,7 @@ const THEME_MODE_KEY = 'traderos-theme-mode-v1';
 const ONBOARDING_DONE_KEY = 'traderos-onboarding-done-v1';
 const TODO_ALERTS_ENABLED_KEY = 'traderos-todo-alerts-enabled-v1';
 const TODO_NEAR_ALERTS_ENABLED_KEY = 'traderos-todo-near-alerts-enabled-v1';
+const TODO_ALERT_COOLDOWN_MS = 10 * 60 * 1000;
 const PERSISTENCE_WARNING_MESSAGE =
   '브라우저에 저장하지 못했습니다. 저장 공간 부족·비공개 모드일 수 있습니다. 이 사이트의 저장 용량을 줄인 뒤 다시 시도해 주세요.';
 
@@ -415,6 +416,7 @@ export default function App() {
   const lastAutoKrQuoteRefreshAtRef = useRef(0);
   const todoAlertStatusRef = useRef<Record<string, 'reached' | 'near' | 'waiting'>>({});
   const todoAlertBaselineReadyRef = useRef(false);
+  const todoAlertCooldownRef = useRef<Record<string, number>>({});
 
   const {
     user,
@@ -1653,8 +1655,14 @@ export default function App() {
     return map;
   }, [positions, trades]);
 
-  const handleOpenHoldingFromTodo = useCallback(
-    (ticker: string, market: Market) => {
+  const openHoldingDetailByTicker = useCallback(
+    (
+      ticker: string,
+      market: Market,
+      options?: { alertIfMissing?: boolean; focusPortfolioTab?: boolean },
+    ) => {
+      const alertIfMissing = options?.alertIfMissing ?? true;
+      const focusPortfolioTab = options?.focusPortfolioTab ?? false;
       const pos = positions.find(
         (p) =>
           p.market === market &&
@@ -1662,14 +1670,30 @@ export default function App() {
           p.quantity > 0,
       );
       if (!pos) {
-        window.alert(
-          '해당 종목의 보유 내역이 없습니다. 보유종목을 먼저 추가해 주세요.',
-        );
-        return;
+        if (focusPortfolioTab) {
+          setMobileHomeTab('journal');
+        }
+        if (alertIfMissing) {
+          window.alert(
+            '해당 종목의 보유 내역이 없습니다. 보유종목을 먼저 추가해 주세요.',
+          );
+        }
+        return false;
+      }
+      if (focusPortfolioTab) {
+        setMobileHomeTab('portfolio');
       }
       setDetailId(pos.id);
+      return true;
     },
     [positions],
+  );
+
+  const handleOpenHoldingFromTodo = useCallback(
+    (ticker: string, market: Market) => {
+      openHoldingDetailByTicker(ticker, market, { alertIfMissing: true });
+    },
+    [openHoldingDetailByTicker],
   );
 
   const getAvailableQuantity = useCallback(
@@ -2092,6 +2116,10 @@ export default function App() {
         currentStatus === 'near' &&
         prevStatus === 'waiting';
       if (!shouldNotifyReached && !shouldNotifyNear) return;
+      const cooldownKey = `${todo.id}:${currentStatus}`;
+      const now = Date.now();
+      const lastNotifiedAt = todoAlertCooldownRef.current[cooldownKey] ?? 0;
+      if (now - lastNotifiedAt < TODO_ALERT_COOLDOWN_MS) return;
 
       const quoteKey =
         todo.market === 'KR' ? normalizeKrTicker(todo.ticker) ?? todo.ticker : todo.ticker;
@@ -2112,8 +2140,13 @@ export default function App() {
         });
         notification.onclick = () => {
           window.focus();
+          openHoldingDetailByTicker(todo.ticker, todo.market, {
+            alertIfMissing: false,
+            focusPortfolioTab: true,
+          });
           notification.close();
         };
+        todoAlertCooldownRef.current[cooldownKey] = now;
       } catch {
         setNotificationError(
           '브라우저 알림을 보내지 못했습니다. 브라우저 권한과 운영체제 알림 설정을 확인해 주세요.',
@@ -2124,6 +2157,7 @@ export default function App() {
     todoAlertStatusRef.current = nextStatusMap;
   }, [
     notificationPermission,
+    openHoldingDetailByTicker,
     quotes,
     todoAlertsEnabled,
     todoNearAlertsEnabled,
