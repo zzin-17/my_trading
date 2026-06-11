@@ -485,20 +485,17 @@ export function MarketTodoList({
       </div>
 
       <form
-        className="rounded-xl border border-border/60 bg-background/25 p-3"
+        className=""
         onSubmit={(e) => {
           e.preventDefault();
           void submitAddTodo();
         }}
       >
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="text-[11px] font-medium text-textMuted">빠른 등록</p>
-          {market === 'KR' && pickedKrName ? (
-            <p className="truncate text-[11px] text-textMuted" title={pickedKrName}>
-              {pickedKrName}
-            </p>
-          ) : null}
-        </div>
+        {market === 'KR' && pickedKrName ? (
+          <p className="mb-2 truncate text-[11px] text-textMuted" title={pickedKrName}>
+            {pickedKrName}
+          </p>
+        ) : null}
         <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
           <div className="relative md:col-span-3">
             <input
@@ -629,7 +626,7 @@ export function MarketTodoList({
         </div>
 
         <div
-          className="flex shrink-0 flex-wrap gap-1 rounded-md border border-border bg-background p-0.5"
+          className="flex shrink-0 flex-wrap gap-1"
           role="tablist"
           aria-label="To-do 보기 구분"
         >
@@ -638,9 +635,9 @@ export function MarketTodoList({
             role="tab"
             aria-selected={viewTab === 'open'}
             onClick={() => setViewTab('open')}
-            className={`rounded px-3 py-1.5 text-[12px] font-medium transition ${
+            className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
               viewTab === 'open'
-                ? 'bg-accent text-white'
+                ? 'bg-accent text-white shadow-sm'
                 : 'text-textMuted hover:bg-white/5 hover:text-textMain'
             }`}
           >
@@ -651,9 +648,9 @@ export function MarketTodoList({
             role="tab"
             aria-selected={viewTab === 'done'}
             onClick={() => setViewTab('done')}
-            className={`rounded px-3 py-1.5 text-[12px] font-medium transition ${
+            className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
               viewTab === 'done'
-                ? 'bg-accent text-white'
+                ? 'bg-accent text-white shadow-sm'
                 : 'text-textMuted hover:bg-white/5 hover:text-textMain'
             }`}
           >
@@ -662,7 +659,7 @@ export function MarketTodoList({
         </div>
 
         <div
-          className="flex shrink-0 flex-wrap gap-1 rounded-md border border-border bg-background p-0.5"
+          className="flex shrink-0 flex-wrap gap-1"
           role="tablist"
           aria-label="To-do 표시 방식"
         >
@@ -671,9 +668,9 @@ export function MarketTodoList({
             role="tab"
             aria-selected={displayMode === 'item'}
             onClick={() => setDisplayMode('item')}
-            className={`rounded px-3 py-1.5 text-[12px] font-medium transition ${
+            className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
               displayMode === 'item'
-                ? 'bg-accent text-white'
+                ? 'bg-accent text-white shadow-sm'
                 : 'text-textMuted hover:bg-white/5 hover:text-textMain'
             }`}
           >
@@ -684,9 +681,9 @@ export function MarketTodoList({
             role="tab"
             aria-selected={displayMode === 'group'}
             onClick={() => setDisplayMode('group')}
-            className={`rounded px-3 py-1.5 text-[12px] font-medium transition ${
+            className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
               displayMode === 'group'
-                ? 'bg-accent text-white'
+                ? 'bg-accent text-white shadow-sm'
                 : 'text-textMuted hover:bg-white/5 hover:text-textMain'
             }`}
           >

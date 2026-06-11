@@ -393,7 +393,7 @@ export function TradeJournal({
           />
           <button
             type="submit"
-            className="shrink-0 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-textMain hover:bg-white/5"
+            className="shrink-0 rounded-full px-3 py-2 text-sm font-medium text-textMuted hover:bg-white/5 hover:text-textMain"
           >
             검색
           </button>
@@ -402,7 +402,7 @@ export function TradeJournal({
 
       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div
-          className="flex flex-wrap gap-1 rounded-md border border-border bg-background p-0.5"
+          className="flex flex-wrap gap-1"
           role="tablist"
           aria-label="매매일지 구분"
         >
@@ -411,9 +411,9 @@ export function TradeJournal({
             role="tab"
             aria-selected={mainTab === 'today'}
             onClick={() => setMainTab('today')}
-            className={`rounded px-3 py-1.5 text-[12px] font-medium transition ${
+            className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
               mainTab === 'today'
-                ? 'bg-accent text-white'
+                ? 'bg-accent text-white shadow-sm'
                 : 'text-textMuted hover:bg-white/5 hover:text-textMain'
             }`}
           >
@@ -424,9 +424,9 @@ export function TradeJournal({
             role="tab"
             aria-selected={mainTab === 'history'}
             onClick={() => setMainTab('history')}
-            className={`rounded px-3 py-1.5 text-[12px] font-medium transition ${
+            className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
               mainTab === 'history'
-                ? 'bg-accent text-white'
+                ? 'bg-accent text-white shadow-sm'
                 : 'text-textMuted hover:bg-white/5 hover:text-textMain'
             }`}
           >
@@ -460,7 +460,7 @@ export function TradeJournal({
       ) : (
         <>
           <div
-            className="mt-3 flex flex-wrap gap-1 rounded-md border border-border/80 bg-background/50 p-0.5"
+            className="mt-3 flex flex-wrap gap-1"
             role="tablist"
             aria-label="과거 매매 보기 방식"
           >
@@ -480,9 +480,9 @@ export function TradeJournal({
                   setHistoryView(id);
                   if (id !== 'calendar') setSelectedDay(null);
                 }}
-                className={`rounded px-2.5 py-1 text-[11px] font-medium transition ${
+                className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${
                   historyView === id
-                    ? 'bg-white/10 text-textMain'
+                    ? 'bg-accent text-white shadow-sm'
                     : 'text-textMuted hover:text-textMain'
                 }`}
               >

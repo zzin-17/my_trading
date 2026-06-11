@@ -29,7 +29,7 @@ export function MarketTabs({
     <div
       role="tablist"
       aria-label="거래 시장"
-      className="flex flex-wrap gap-1 rounded-lg border border-border bg-background p-1"
+      className="flex flex-wrap gap-1"
     >
       {visibleTabs.map((tab) => {
         const active = value === tab.id;
@@ -41,9 +41,9 @@ export function MarketTabs({
             role="tab"
             aria-selected={active}
             onClick={() => onChange(tab.id)}
-            className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
               active
-                ? 'bg-accent text-white'
+                ? 'bg-accent text-white shadow-sm'
                 : 'text-textMuted hover:bg-white/5 hover:text-textMain'
             }`}
           >

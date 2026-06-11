@@ -246,7 +246,7 @@ export function RealizedPnlPanel({
           />
         </div>
         <div
-          className="flex shrink-0 flex-wrap gap-1 rounded-md border border-border bg-background p-0.5"
+          className="flex shrink-0 flex-wrap gap-1"
           role="tablist"
           aria-label="집계 단위"
         >
@@ -262,9 +262,9 @@ export function RealizedPnlPanel({
                   setGranularity(id);
                   setDrill(null);
                 }}
-                className={`rounded px-2.5 py-1 text-[12px] font-medium transition ${
+                className={`rounded-full px-2.5 py-1 text-[12px] font-medium transition ${
                   active
-                    ? 'bg-accent text-white'
+                    ? 'bg-accent text-white shadow-sm'
                     : 'text-textMuted hover:bg-white/5 hover:text-textMain'
                 }`}
               >
@@ -275,7 +275,7 @@ export function RealizedPnlPanel({
         </div>
       </div>
 
-      <div className="mt-3 flex flex-col gap-2 rounded-md border border-border/60 bg-background/25 p-3 md:border-0 md:bg-transparent md:px-0 md:py-0">
+      <div className="mt-3 flex flex-col gap-2 md:px-0 md:py-0">
         <div className="flex flex-wrap items-center gap-2">
           {granularity === 'month' ? (
             <>
