@@ -2635,9 +2635,8 @@ export default function App() {
         <div className={mobileHomeTab === 'settings' ? 'space-y-6 md:hidden' : 'hidden'}>
           <section className="rounded-lg border border-border bg-surface p-4">
             <h2 className="text-sm font-semibold text-textMain">앱 설정</h2>
-            <p className="mt-1 text-[12px] leading-relaxed text-textMuted">
-              테마, 앱 잠금, 클라우드 동기화, 데이터 가져오기/내보내기, 튜토리얼을
-              여기서 관리할 수 있습니다.
+            <p className="mt-1 text-[11px] leading-relaxed text-textMuted">
+              테마, 잠금, 동기화, 백업 관리
             </p>
             <div className="mt-3 rounded-md border border-border/60 bg-background/50 px-3 py-2 text-[12px] text-textMuted">
               계정: {user?.email ?? user?.displayName ?? '로그인 안 됨'}
