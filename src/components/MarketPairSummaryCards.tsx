@@ -18,11 +18,11 @@ export function MarketPairSummaryCards({
   krFootnote,
 }: MarketPairSummaryCardsProps) {
   return (
-    <div className="space-y-3">
-      <p className="text-[11px] text-textMuted">
+    <div className="space-y-2">
+      <p className="text-[10px] text-textMuted">
         통화가 달라 합산 대신 KRW / USD를 나눠 표시합니다.
       </p>
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2.5">
         <MarketBlock
           title="한국장"
           badge="KRW"
@@ -58,7 +58,7 @@ function MarketBlock({
   if (!summary) {
     return (
       <div
-        className={`rounded-xl border px-4 py-4 text-center text-sm text-textMuted ${accent}`}
+        className={`rounded-xl border px-4 py-3 text-center text-sm text-textMuted ${accent}`}
       >
         <div className="mb-1 flex items-center justify-center gap-2">
           <span className="font-medium text-textMain">{title}</span>
@@ -74,14 +74,14 @@ function MarketBlock({
   const pnlOk = summary.total_pnl >= 0;
 
   return (
-    <div className={`rounded-xl border px-4 py-3 ${accent}`}>
-      <div className="mb-2 flex items-center justify-between gap-2">
+    <div className={`rounded-xl border px-4 py-2.5 ${accent}`}>
+      <div className="mb-1.5 flex items-center justify-between gap-2">
         <span className="text-sm font-semibold text-textMain">{title}</span>
         <span className="rounded bg-border px-2 py-0.5 text-[11px] font-semibold text-textMuted">
           {badge}
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-x-3 gap-y-1 md:hidden">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 md:hidden">
         <Mini
           label="평가액"
           value={formatMoney(summary.total_market_value, summary.currency)}
@@ -103,7 +103,7 @@ function MarketBlock({
           negative={!pnlOk}
         />
       </div>
-      <div className="hidden grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4 sm:gap-x-5 md:grid">
+      <div className="hidden grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-4 sm:gap-x-5 md:grid">
         <Mini
           label="투자금"
           value={formatMoney(summary.total_cost_basis, summary.currency)}
@@ -127,13 +127,13 @@ function MarketBlock({
       </div>
       {footnote ? (
         <>
-          <p className="mt-2 hidden text-[10px] leading-relaxed text-textMuted md:block">
+          <p className="mt-1.5 hidden text-[10px] leading-relaxed text-textMuted md:block">
             {footnote}
           </p>
           <ExpandableText
             text={footnote}
             maxChars={30}
-            className="mt-2 md:hidden"
+            className="mt-1.5 md:hidden"
             textClassName="text-[11px] leading-relaxed text-textMuted"
           />
         </>
@@ -154,12 +154,12 @@ function Mini({
   negative?: boolean;
 }) {
   return (
-    <div className="inline-flex items-center gap-1.5 whitespace-nowrap">
+    <div className="inline-flex items-center gap-1 whitespace-nowrap">
       <p className="text-[11px] font-medium leading-tight text-textMuted">
         {label}
       </p>
       <p
-        className={`text-[13px] font-semibold leading-tight tabular-nums ${
+        className={`text-[12px] font-semibold leading-tight tabular-nums ${
           positive ? 'text-positive' : negative ? 'text-negative' : 'text-textMain'
         }`}
       >

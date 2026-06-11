@@ -41,7 +41,7 @@ export function MarketTabs({
             role="tab"
             aria-selected={active}
             onClick={() => onChange(tab.id)}
-            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`rounded-full px-3 py-1.25 text-[13px] font-medium transition-colors ${
               active
                 ? 'bg-accent text-white shadow-sm'
                 : 'text-textMuted hover:bg-white/5 hover:text-textMain'

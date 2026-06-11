@@ -13,13 +13,13 @@ export function SummaryCards({ summary, quoteDisclaimer }: SummaryCardsProps) {
   const pnlPositive = summary.total_pnl >= 0;
 
   return (
-    <div className="space-y-2">
-      <div className="rounded-lg border border-border bg-surface md:hidden">
-        <div className="px-4 py-3">
+    <div className="space-y-1.5">
+      <div className="rounded-lg border border-border/70 bg-surface md:hidden">
+        <div className="px-4 py-2.5">
           <p className="text-[13px] font-semibold text-textMain">총평가손익(예상)</p>
-          <div className="mt-2 text-right">
+          <div className="mt-1.5 text-right">
             <p
-              className={`max-w-full text-[clamp(20px,8vw,32px)] font-bold tabular-nums leading-none ${pnlPositive ? 'text-positive' : 'text-negative'}`}
+              className={`max-w-full text-[clamp(20px,7vw,30px)] font-bold tabular-nums leading-none ${pnlPositive ? 'text-positive' : 'text-negative'}`}
             >
               {formatMoney(summary.total_pnl, currency)}
             </p>
@@ -30,7 +30,7 @@ export function SummaryCards({ summary, quoteDisclaimer }: SummaryCardsProps) {
             </p>
           </div>
         </div>
-        <div className="grid grid-cols-2 border-t border-border/70">
+        <div className="grid grid-cols-2 border-t border-border/60">
           <CompactSummaryCell
             label="총 평가액"
             value={formatMoney(summary.total_market_value, currency)}
@@ -43,7 +43,7 @@ export function SummaryCards({ summary, quoteDisclaimer }: SummaryCardsProps) {
         </div>
       </div>
 
-      <div className="hidden rounded-xl border border-border/70 bg-surface/60 px-4 py-3 md:block">
+      <div className="hidden rounded-xl border border-border/60 bg-surface/50 px-3 py-2.5 md:block">
         <div className="grid grid-cols-4 gap-0">
           <DesktopSummaryStat
             label="투자금"
@@ -71,7 +71,7 @@ export function SummaryCards({ summary, quoteDisclaimer }: SummaryCardsProps) {
       </div>
       {quoteDisclaimer ? (
         <>
-          <p className="hidden text-[11px] leading-relaxed text-textMuted md:block">
+          <p className="hidden text-[10px] leading-relaxed text-textMuted md:block">
             {quoteDisclaimer}
           </p>
           <ExpandableText
@@ -100,11 +100,11 @@ function DesktopSummaryStat({
   strong?: boolean;
 }) {
   return (
-    <div className={`min-w-0 px-4 py-1.5 ${bordered ? 'border-l border-border/60' : ''}`}>
+    <div className={`min-w-0 px-3 py-1 ${bordered ? 'border-l border-border/60' : ''}`}>
       <p className="text-[11px] font-medium tracking-tight text-textMuted">{label}</p>
       <p
         className={`mt-1 truncate tabular-nums ${
-          strong ? 'text-[24px] font-bold' : 'text-[20px] font-semibold'
+          strong ? 'text-[22px] font-bold' : 'text-[18px] font-semibold'
         } ${
           tone === 'pos'
             ? 'text-positive'
@@ -131,10 +131,10 @@ function CompactSummaryCell({
   bordered?: boolean;
 }) {
   return (
-    <div className={`px-4 py-3 ${bordered ? 'border-l border-border/70' : ''}`}>
+    <div className={`px-4 py-2.5 ${bordered ? 'border-l border-border/70' : ''}`}>
       <p className="text-[12px] font-medium text-textMuted">{label}</p>
       <p
-        className={`mt-1 text-[16px] font-semibold tabular-nums ${
+        className={`mt-0.5 text-[15px] font-semibold tabular-nums ${
           tone === 'pos'
             ? 'text-positive'
             : tone === 'neg'

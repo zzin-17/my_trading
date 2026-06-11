@@ -2,7 +2,7 @@ export function MixedCurrencyBanner() {
   return (
     <div
       role="alert"
-      className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-2.5 text-[12px] text-textMain"
+      className="rounded-xl border border-warning/35 bg-warning/10 px-3.5 py-2 text-[11px] text-textMain"
     >
       <span className="font-medium text-warning">통화 혼합 포트폴리오</span>
       <span className="ml-2 text-textMuted">

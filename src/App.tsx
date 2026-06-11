@@ -239,7 +239,7 @@ const RealizedDailyBarChart = lazy(() =>
 
 function ChartSkeleton({ label }: { label: string }) {
   return (
-    <div className="flex min-h-[300px] flex-col rounded-lg border border-border bg-surface p-4">
+    <div className="flex min-h-[300px] flex-col rounded-lg border border-border/70 bg-surface p-3.5">
       <div className="h-4 w-28 animate-pulse rounded bg-border" />
       <div className="mt-2 h-3 w-44 max-w-full animate-pulse rounded bg-border/70" />
       <div className="mt-6 flex flex-1 items-center justify-center">
@@ -2397,17 +2397,17 @@ export default function App() {
             : undefined
         }
       >
-      <header className="border-b border-border/70 bg-surface/80 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top,0px))] backdrop-blur sm:px-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <header className="border-b border-border/70 bg-surface/80 px-4 pb-2.5 pt-[max(0.875rem,env(safe-area-inset-top,0px))] backdrop-blur sm:px-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-lg font-semibold tracking-tight text-textMain">
               TraderOS — Portfolio Visual
             </h1>
-            <p className="text-[12px] text-textMuted">
+            <p className="hidden text-[11px] text-textMuted sm:block">
               매매·보유·시세를 한 화면에서 확인
             </p>
           </div>
-          <div className="ml-auto flex shrink-0 items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
             {user ? (
               <p className="max-w-[16rem] truncate text-[12px] text-textMuted">
                 {user.email ?? user.displayName ?? '로그인됨'}
@@ -2468,7 +2468,7 @@ export default function App() {
           주세요. 이 기기의 편집은 로컬에만 반영됩니다.
         </div>
       ) : null}
-      <main className="mx-auto max-w-7xl space-y-5 px-0 py-5 pb-32 md:px-4 md:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] lg:px-6">
+      <main className="mx-auto max-w-7xl space-y-4 px-0 py-4 pb-32 md:space-y-5 md:px-4 md:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] lg:px-6">
         <div className="md:hidden">
           <MarketTabs
             value={marketTab}
@@ -2489,7 +2489,7 @@ export default function App() {
 
         <div className={mobileHomeTab === 'portfolio' ? 'md:block' : 'hidden md:block'}>
           {visiblePositions.length === 0 ? (
-            <div className="rounded-lg border border-border bg-surface px-4 py-14 text-center">
+            <div className="rounded-lg border border-border bg-surface px-4 py-12 text-center">
               <p className="text-sm text-textMuted">
                 {marketTab === 'all'
                   ? '보유 종목이 없습니다. 매매일지에서 거래를 추가하세요.'
@@ -2508,7 +2508,7 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-4 md:space-y-5">
               {showMixedBanner && <MixedCurrencyBanner />}
               {showSplitSummary ? (
                 <MarketPairSummaryCards
@@ -2543,7 +2543,7 @@ export default function App() {
           )}
         </div>
 
-        <div className={mobileHomeTab === 'journal' ? 'space-y-4 md:block md:space-y-6' : 'hidden space-y-4 md:block md:space-y-6'}>
+        <div className={mobileHomeTab === 'journal' ? 'space-y-4 md:block md:space-y-5' : 'hidden space-y-4 md:block md:space-y-5'}>
           {marketTab !== 'all' ? (
             <MarketTodoList
               market={marketTab}
@@ -2596,27 +2596,27 @@ export default function App() {
 
           <Suspense
             fallback={
-              <div className="grid grid-cols-1 gap-4 md:gap-6 xl:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 md:gap-5 xl:grid-cols-2">
                 <ChartSkeleton label="종목 비중 차트 불러오는 중…" />
                 <ChartSkeleton label="실현손익 차트 불러오는 중…" />
               </div>
             }
           >
-            <div className="space-y-4 md:space-y-6">
+            <div className="space-y-3 md:space-y-5">
               <div className="md:hidden">
                 <button
                   type="button"
                   onClick={() => setMobileChartsOpen((prev) => !prev)}
-                  className="w-full rounded-lg border border-border/70 bg-surface/65 px-3 py-2.5 text-left text-[13px] font-medium text-textMain"
+                  className="w-full rounded-lg border border-border/60 bg-surface/55 px-3 py-2 text-left text-[13px] font-medium text-textMain"
                 >
                   {mobileChartsOpen ? '차트 접기' : '차트 보기'}
                 </button>
               </div>
-              <div className={mobileChartsOpen ? 'space-y-4 md:space-y-6' : 'hidden md:block md:space-y-6'}>
+              <div className={mobileChartsOpen ? 'space-y-3 md:space-y-5' : 'hidden md:block md:space-y-5'}>
                 {marketTab === 'all' ? (
                   <MarketSplitCard weights={marketSplitWeights} />
                 ) : null}
-                <div className="grid grid-cols-1 gap-4 md:gap-6 xl:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 md:gap-5 xl:grid-cols-2">
                   <StockBarChart
                     data={topStocks}
                     currency={summary.currency}
@@ -2633,26 +2633,26 @@ export default function App() {
         </div>
 
         <div className={mobileHomeTab === 'settings' ? 'space-y-6 md:hidden' : 'hidden'}>
-          <section className="rounded-lg border border-border bg-surface p-4">
+          <section className="rounded-lg border border-border/70 bg-surface p-4">
             <h2 className="text-sm font-semibold text-textMain">앱 설정</h2>
-            <p className="mt-1 text-[11px] leading-relaxed text-textMuted">
+            <p className="mt-0.5 text-[11px] leading-relaxed text-textMuted">
               테마, 잠금, 동기화, 백업 관리
             </p>
-            <div className="mt-3 rounded-md border border-border/60 bg-background/50 px-3 py-2 text-[12px] text-textMuted">
+            <div className="mt-2.5 rounded-md border border-border/50 bg-background/40 px-3 py-2 text-[12px] text-textMuted">
               계정: {user?.email ?? user?.displayName ?? '로그인 안 됨'}
             </div>
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
-              className="mt-3 w-full rounded-md bg-accent px-4 py-3 text-sm font-medium text-white hover:opacity-90"
+              className="mt-2.5 w-full rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-white hover:opacity-90"
             >
               상세 설정 열기
             </button>
           </section>
         </div>
       </main>
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/96 px-0 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-2 backdrop-blur md:hidden">
-        <div className="mx-auto flex max-w-7xl items-center gap-1 border border-border/70 bg-surface/72 p-1.5 shadow-[0_-8px_24px_rgba(0,0,0,0.18)]">
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/96 px-2 pb-[max(0.625rem,env(safe-area-inset-bottom,0px))] pt-1.5 backdrop-blur md:hidden">
+        <div className="mx-auto flex max-w-7xl items-center gap-1 rounded-2xl bg-surface/72 p-1 shadow-[0_-8px_24px_rgba(0,0,0,0.18)]">
           <MobileBottomTabButton
             label="자산"
             hint="요약·보유"

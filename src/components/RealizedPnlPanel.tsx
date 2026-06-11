@@ -236,7 +236,7 @@ export function RealizedPnlPanel({
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4 sm:p-5 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-center gap-2">
           <h3 className="shrink-0 text-sm font-semibold text-textMain tracking-tight">
             실현손익
@@ -262,7 +262,7 @@ export function RealizedPnlPanel({
                   setGranularity(id);
                   setDrill(null);
                 }}
-                className={`rounded-full px-2.5 py-1 text-[12px] font-medium transition ${
+                className={`rounded-full px-2.5 py-0.75 text-[12px] font-medium transition ${
                   active
                     ? 'bg-accent text-white shadow-sm'
                     : 'text-textMuted hover:bg-white/5 hover:text-textMain'
@@ -275,12 +275,12 @@ export function RealizedPnlPanel({
         </div>
       </div>
 
-      <div className="mt-3 flex flex-col gap-2 md:px-0 md:py-0">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="mt-2 flex flex-col gap-1.5 md:px-0 md:py-0">
+        <div className="flex flex-wrap items-center gap-1.5">
           {granularity === 'month' ? (
             <>
-              <label className="flex items-center gap-2 text-[12px] text-textMuted">
-                <span>시작월</span>
+              <label className="flex items-center gap-1.5 text-[11px] text-textMuted">
+                <span>시작</span>
                 <input
                   type="month"
                   value={monthRangeStart}
@@ -289,11 +289,11 @@ export function RealizedPnlPanel({
                     setMonthRangeStart(e.target.value);
                     setDrill(null);
                   }}
-                  className="rounded-md border border-border bg-surface px-2 py-1.5 text-[12px] text-textMain outline-none focus:border-accent"
+                  className="rounded-md border border-border bg-surface px-2 py-1 text-[12px] text-textMain outline-none focus:border-accent"
                 />
               </label>
-              <label className="flex items-center gap-2 text-[12px] text-textMuted">
-                <span>종료월</span>
+              <label className="flex items-center gap-1.5 text-[11px] text-textMuted">
+                <span>종료</span>
                 <input
                   type="month"
                   value={monthRangeEnd}
@@ -302,14 +302,14 @@ export function RealizedPnlPanel({
                     setMonthRangeEnd(e.target.value);
                     setDrill(null);
                   }}
-                  className="rounded-md border border-border bg-surface px-2 py-1.5 text-[12px] text-textMain outline-none focus:border-accent"
+                  className="rounded-md border border-border bg-surface px-2 py-1 text-[12px] text-textMain outline-none focus:border-accent"
                 />
               </label>
             </>
           ) : (
             <>
-              <label className="flex items-center gap-2 text-[12px] text-textMuted">
-                <span>시작일</span>
+              <label className="flex items-center gap-1.5 text-[11px] text-textMuted">
+                <span>시작</span>
                 <input
                   type="date"
                   value={dayRangeStart}
@@ -318,11 +318,11 @@ export function RealizedPnlPanel({
                     setDayRangeStart(e.target.value);
                     setDrill(null);
                   }}
-                  className="rounded-md border border-border bg-surface px-2 py-1.5 text-[12px] text-textMain outline-none focus:border-accent"
+                  className="rounded-md border border-border bg-surface px-2 py-1 text-[12px] text-textMain outline-none focus:border-accent"
                 />
               </label>
-              <label className="flex items-center gap-2 text-[12px] text-textMuted">
-                <span>종료일</span>
+              <label className="flex items-center gap-1.5 text-[11px] text-textMuted">
+                <span>종료</span>
                 <input
                   type="date"
                   value={dayRangeEnd}
@@ -331,7 +331,7 @@ export function RealizedPnlPanel({
                     setDayRangeEnd(e.target.value);
                     setDrill(null);
                   }}
-                  className="rounded-md border border-border bg-surface px-2 py-1.5 text-[12px] text-textMain outline-none focus:border-accent"
+                  className="rounded-md border border-border bg-surface px-2 py-1 text-[12px] text-textMain outline-none focus:border-accent"
                 />
               </label>
             </>
@@ -346,7 +346,7 @@ export function RealizedPnlPanel({
                 setDayRangeEnd('');
                 setDrill(null);
               }}
-              className="rounded-md border border-border px-2.5 py-1.5 text-[12px] font-medium text-textMain hover:bg-white/5"
+              className="rounded-md border border-border px-2.5 py-1 text-[12px] font-medium text-textMain hover:bg-white/5"
             >
               필터 초기화
             </button>
@@ -356,7 +356,7 @@ export function RealizedPnlPanel({
 
       {!drill ? (
         <>
-        <div className="mt-3 max-h-[22rem] space-y-2 overflow-y-auto pr-1 md:hidden">
+        <div className="mt-3 max-h-[20rem] space-y-1.5 overflow-y-auto pr-1 md:hidden">
           {periodRows.length === 0 ? (
             <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
               {hasActiveFilter
@@ -371,7 +371,7 @@ export function RealizedPnlPanel({
                 onClick={() =>
                   setDrill({ period: row.period, currency: row.currency })
                 }
-                className="w-full rounded-lg border border-border bg-background/40 p-2.5 text-left"
+                className="w-full rounded-lg border border-border/60 bg-background/35 p-2.5 text-left"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -413,7 +413,7 @@ export function RealizedPnlPanel({
           )}
         </div>
 
-        <div className="mt-4 hidden overflow-x-auto md:block">
+        <div className="mt-3 hidden overflow-x-auto md:block">
           <table className="w-full min-w-[760px] border-collapse text-left text-[12px]">
             <thead>
               <tr className="border-b border-border text-textMuted">
@@ -513,7 +513,7 @@ export function RealizedPnlPanel({
                 내역이 없습니다.
               </div>
             ) : (
-              <div className="max-h-[22rem] overflow-auto rounded-lg border border-border/70 bg-background/10">
+              <div className="max-h-[20rem] overflow-auto rounded-lg border border-border/60 bg-background/10">
                 <div style={{ minWidth: '34rem' }}>
                   <div
                     className="sticky top-0 z-10 grid border-b border-border/60 bg-surface/95 text-[10px] font-medium text-textMuted shadow-sm backdrop-blur"

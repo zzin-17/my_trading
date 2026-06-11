@@ -401,14 +401,26 @@ export function MarketTodoList({
   );
 
   const renderTodoActions = useCallback(
-    (todo: TradePlanTodo, small = false) => (
-      <div className="flex flex-wrap justify-end gap-1">
+    (todo: TradePlanTodo, options?: { small?: boolean; stacked?: boolean }) => (
+      <div
+        className={
+          options?.stacked
+            ? 'flex flex-col gap-1'
+            : options?.small
+              ? 'flex flex-wrap gap-1'
+              : 'flex flex-wrap justify-end gap-1'
+        }
+      >
         {onOpenHoldingDetail ? (
           <button
             type="button"
             onClick={() => onOpenHoldingDetail(todo.ticker, market)}
             className={`rounded border border-accent/40 font-medium text-accent hover:bg-accent/10 ${
-              small ? 'px-2 py-1 text-[10px]' : 'px-2 py-1 text-[11px]'
+              options?.stacked
+                ? 'px-1.5 py-1 text-[10px] text-center'
+                : options?.small
+                  ? 'flex-1 px-2 py-1 text-[10px] text-center'
+                  : 'px-2 py-1 text-[11px]'
             }`}
           >
             보유 상세
@@ -419,7 +431,11 @@ export function MarketTodoList({
             type="button"
             onClick={() => onToggleDone(todo.id)}
             className={`rounded border border-border text-textMain hover:bg-white/5 ${
-              small ? 'px-2 py-1 text-[10px]' : 'px-2 py-1 text-[11px]'
+              options?.stacked
+                ? 'px-1.5 py-1 text-[10px] text-center'
+                : options?.small
+                  ? 'flex-1 px-2 py-1 text-[10px] text-center'
+                  : 'px-2 py-1 text-[11px]'
             }`}
           >
             미완료
@@ -430,7 +446,11 @@ export function MarketTodoList({
             type="button"
             onClick={() => onCreateTrade(todo)}
             className={`rounded border border-positive/40 font-medium text-positive hover:bg-positive/10 ${
-              small ? 'px-2 py-1 text-[10px]' : 'px-2 py-1 text-[11px]'
+              options?.stacked
+                ? 'px-1.5 py-1 text-[10px] text-center'
+                : options?.small
+                  ? 'flex-1 px-2 py-1 text-[10px] text-center'
+                  : 'px-2 py-1 text-[11px]'
             }`}
           >
             체결 등록
@@ -440,7 +460,11 @@ export function MarketTodoList({
           type="button"
           onClick={() => handleDeleteTodo(todo)}
           className={`rounded border border-negative/40 text-negative hover:bg-negative/10 ${
-            small ? 'px-2 py-1 text-[10px]' : 'px-2 py-1 text-[11px]'
+            options?.stacked
+              ? 'px-1.5 py-1 text-[10px] text-center'
+              : options?.small
+                ? 'flex-1 px-2 py-1 text-[10px] text-center'
+                : 'px-2 py-1 text-[11px]'
           }`}
         >
           삭제
@@ -459,19 +483,27 @@ export function MarketTodoList({
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
-      <div className="mb-4 space-y-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h3 className="text-sm font-medium text-textMain">{title}</h3>
-          <p className="text-[11px] text-textMuted">
+      <div className="mb-3 space-y-2">
+        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h3 className="text-sm font-medium text-textMain">{title}</h3>
+            <p className="text-[10px] text-textMuted">
               코드·종목명 검색으로 빠르게 등록
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-1.5 text-[11px]">
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-1 text-[11px]">
             {viewTab === 'open' ? (
               <>
-                <SummaryCountChip label="도달" count={statusCounts.reached} tone="positive" />
-                <SummaryCountChip label="근접" count={statusCounts.near} tone="warning" />
+                <SummaryCountChip
+                  label="도달"
+                  count={statusCounts.reached}
+                  tone="positive"
+                />
+                <SummaryCountChip
+                  label="근접"
+                  count={statusCounts.near}
+                  tone="warning"
+                />
                 <SummaryCountChip label="대기" count={statusCounts.waiting} />
               </>
             ) : (
@@ -485,22 +517,21 @@ export function MarketTodoList({
       </div>
 
       <form
-        className=""
         onSubmit={(e) => {
           e.preventDefault();
           void submitAddTodo();
         }}
       >
         {market === 'KR' && pickedKrName ? (
-          <p className="mb-2 truncate text-[11px] text-textMuted" title={pickedKrName}>
+          <p className="mb-1.5 truncate text-[10px] text-textMuted" title={pickedKrName}>
             {pickedKrName}
           </p>
         ) : null}
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
-          <div className="relative md:col-span-3">
+        <div className="grid grid-cols-[minmax(0,1fr)_5.25rem] gap-1.5 sm:grid-cols-[minmax(0,1.7fr)_5.5rem_minmax(0,1.1fr)_4.8rem] lg:grid-cols-[minmax(0,2.2fr)_5.5rem_minmax(0,1.15fr)_4.8rem_minmax(0,1.5fr)_4.8rem] lg:items-center">
+          <div className="relative">
             <input
               placeholder={
-                market === 'KR' ? '종목코드(6자리) 또는 종목명 검색' : '티커 (예: AAPL)'
+                market === 'KR' ? '종목코드·종목명' : '티커 (예: AAPL)'
               }
               value={symbolField}
               onChange={(e) => {
@@ -520,7 +551,7 @@ export function MarketTodoList({
                 handleKrBlurLookup();
               }}
               autoComplete="off"
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+              className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-[13px] text-textMain outline-none focus:border-accent"
             />
             {market === 'KR' && krSuggestions.length > 0 && !normalizeKrTicker(trimmedSymbol) ? (
               <ul className="absolute z-20 mt-1 max-h-40 w-full overflow-auto rounded-md border border-border bg-surface py-1 shadow-lg">
@@ -554,7 +585,7 @@ export function MarketTodoList({
               setAction(e.target.value as PlanAction);
               if (addError) setAddError(null);
             }}
-            className="rounded-md border border-border bg-background px-2 py-2 text-sm text-textMain outline-none focus:border-accent md:col-span-2"
+            className="rounded-md border border-border bg-background px-2 py-1.5 text-[13px] text-textMain outline-none focus:border-accent"
           >
             <option value="buy">매수</option>
             <option value="sell">매도</option>
@@ -563,13 +594,13 @@ export function MarketTodoList({
             type="number"
             min={0}
             step="any"
-            placeholder={`목표가 (${currency})`}
+            placeholder="목표가"
             value={targetPrice}
             onChange={(e) => {
               setTargetPrice(e.target.value);
               if (addError) setAddError(null);
             }}
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent md:col-span-2"
+            className="rounded-md border border-border bg-background px-3 py-1.5 text-[13px] text-textMain outline-none focus:border-accent sm:col-start-3"
           />
           <input
             type="number"
@@ -581,7 +612,7 @@ export function MarketTodoList({
               setQuantity(e.target.value);
               if (addError) setAddError(null);
             }}
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent md:col-span-1"
+            className="rounded-md border border-border bg-background px-3 py-1.5 text-[13px] text-textMain outline-none focus:border-accent"
           />
           <input
             placeholder="메모(선택)"
@@ -590,7 +621,7 @@ export function MarketTodoList({
               setNote(e.target.value);
               if (addError) setAddError(null);
             }}
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent md:col-span-3"
+            className="rounded-md border border-border bg-background px-3 py-1.5 text-[13px] text-textMain outline-none focus:border-accent sm:col-span-3 lg:col-span-1"
           />
           <button
             type="button"
@@ -601,7 +632,7 @@ export function MarketTodoList({
               if (active instanceof HTMLElement) active.blur();
             }}
             onClick={() => void submitAddTodo()}
-            className="rounded-md bg-accent px-2.5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60 md:col-span-1"
+            className="justify-self-stretch rounded-md bg-accent px-3 py-1 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-60 sm:col-span-1 sm:justify-self-auto"
           >
             {addSubmitting ? '추가 중…' : '추가'}
           </button>
@@ -611,7 +642,7 @@ export function MarketTodoList({
         ) : null}
       </form>
 
-      <div className="mt-3 flex flex-col gap-2 border-t border-border/60 pt-3 lg:flex-row lg:items-end">
+      <div className="mt-2 flex flex-col gap-1.5 border-t border-border/60 pt-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-[14rem] flex-1">
           <label className="sr-only" htmlFor="todo-list-search">
             {viewTab === 'open' ? '진행중 검색' : '완료 검색'}
@@ -620,81 +651,83 @@ export function MarketTodoList({
             id="todo-list-search"
             value={listSearchText}
             onChange={(e) => setListSearchText(e.target.value)}
-            placeholder="종목코드·종목명 검색"
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+            placeholder="목록 검색"
+            className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-[13px] text-textMain outline-none focus:border-accent lg:max-w-[14rem]"
           />
         </div>
 
-        <div
-          className="flex shrink-0 flex-wrap gap-1"
-          role="tablist"
-          aria-label="To-do 보기 구분"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={viewTab === 'open'}
-            onClick={() => setViewTab('open')}
-            className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
-              viewTab === 'open'
-                ? 'bg-accent text-white shadow-sm'
-                : 'text-textMuted hover:bg-white/5 hover:text-textMain'
-            }`}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <div
+            className="flex shrink-0 flex-wrap gap-1"
+            role="tablist"
+            aria-label="To-do 보기 구분"
           >
-            진행중 ({openItems.length})
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={viewTab === 'done'}
-            onClick={() => setViewTab('done')}
-            className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
-              viewTab === 'done'
-                ? 'bg-accent text-white shadow-sm'
-                : 'text-textMuted hover:bg-white/5 hover:text-textMain'
-            }`}
-          >
-            완료 ({doneItems.length})
-          </button>
-        </div>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewTab === 'open'}
+              onClick={() => setViewTab('open')}
+              className={`rounded-full px-3 py-1.25 text-[12px] font-medium transition ${
+                viewTab === 'open'
+                  ? 'bg-accent text-white shadow-sm'
+                  : 'text-textMuted hover:bg-white/5 hover:text-textMain'
+              }`}
+            >
+              진행중 ({openItems.length})
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewTab === 'done'}
+              onClick={() => setViewTab('done')}
+              className={`rounded-full px-3 py-1.25 text-[12px] font-medium transition ${
+                viewTab === 'done'
+                  ? 'bg-accent text-white shadow-sm'
+                  : 'text-textMuted hover:bg-white/5 hover:text-textMain'
+              }`}
+            >
+              완료 ({doneItems.length})
+            </button>
+          </div>
 
-        <div
-          className="flex shrink-0 flex-wrap gap-1"
-          role="tablist"
-          aria-label="To-do 표시 방식"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={displayMode === 'item'}
-            onClick={() => setDisplayMode('item')}
-            className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
-              displayMode === 'item'
-                ? 'bg-accent text-white shadow-sm'
-                : 'text-textMuted hover:bg-white/5 hover:text-textMain'
-            }`}
+          <div
+            className="flex shrink-0 flex-wrap gap-1"
+            role="tablist"
+            aria-label="To-do 표시 방식"
           >
-            건건이
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={displayMode === 'group'}
-            onClick={() => setDisplayMode('group')}
-            className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
-              displayMode === 'group'
-                ? 'bg-accent text-white shadow-sm'
-                : 'text-textMuted hover:bg-white/5 hover:text-textMain'
-            }`}
-          >
-            종목별
-          </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={displayMode === 'item'}
+              onClick={() => setDisplayMode('item')}
+              className={`rounded-full px-3 py-1.25 text-[12px] font-medium transition ${
+                displayMode === 'item'
+                  ? 'bg-accent text-white shadow-sm'
+                  : 'text-textMuted hover:bg-white/5 hover:text-textMain'
+              }`}
+            >
+              건벌
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={displayMode === 'group'}
+              onClick={() => setDisplayMode('group')}
+              className={`rounded-full px-3 py-1.25 text-[12px] font-medium transition ${
+                displayMode === 'group'
+                  ? 'bg-accent text-white shadow-sm'
+                  : 'text-textMuted hover:bg-white/5 hover:text-textMain'
+              }`}
+            >
+              종목별
+            </button>
+          </div>
         </div>
       </div>
 
       {displayMode === 'item' ? (
         <>
-          <div className="mt-3 max-h-[22rem] space-y-2 overflow-y-auto pr-1 md:hidden">
+          <div className="mt-3 max-h-[20rem] space-y-1.5 overflow-y-auto pr-1 md:hidden">
             {filteredSelected.length === 0 ? (
               <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
                 {emptyListMessage}
@@ -703,14 +736,15 @@ export function MarketTodoList({
               filteredSelected.map((x) => {
                 const displayName = resolveTodoDisplayName(x, market, ledger, trades);
                 const sell = x.action === 'sell';
+                const noteText = x.note?.trim() || '메모 없음';
                 return (
                   <section
                     key={x.id}
-                    className={`rounded-lg border border-border/70 px-3 py-2 ${
+                    className={`rounded-lg border border-border/60 px-3 py-2.5 ${
                       x.done ? 'opacity-60' : ''
                     } ${sell ? 'bg-negative/5' : 'bg-positive/5'}`}
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start justify-between gap-2.5">
                       <div className="min-w-0">
                         <button
                           type="button"
@@ -720,7 +754,7 @@ export function MarketTodoList({
                           <span className="block truncate text-[14px] font-medium text-textMain underline-offset-2 hover:underline">
                             {displayName}
                           </span>
-                          <span className="mt-0.5 block text-[12px] text-textMuted">
+                          <span className="mt-0.5 block text-[11px] text-textMuted">
                             {x.ticker} · {todoListDateLabel(x.createdAt)}
                           </span>
                         </button>
@@ -745,35 +779,42 @@ export function MarketTodoList({
                       </div>
                     </div>
 
-                    <div className="mt-1.5 grid grid-cols-[auto_1fr_auto_1fr] items-start gap-x-2 gap-y-1 text-[12px]">
-                      <span className="text-textMuted">목표가</span>
-                      <span className="truncate text-right font-semibold tabular-nums text-textMain">
-                        {formatMoney(x.targetPrice, currency)}
-                      </span>
-                      <span className="text-textMuted">수량</span>
-                      <span className="text-right font-semibold tabular-nums text-textMain">
-                        {x.quantity}주
-                      </span>
-                      <span className="self-start text-textMuted">비고</span>
-                      <div className="col-span-3 min-w-0">
-                        <ExpandableText
-                          text={x.note ?? '—'}
-                          maxChars={30}
-                          preserveWhitespace={false}
-                          textClassName="text-[13px] text-textMain"
-                          buttonClassName="text-[10px]"
+                    <div className="mt-2 grid grid-cols-[minmax(0,1fr)_5rem_4.6rem] gap-1.5">
+                      <div className="min-w-0 space-y-1.5">
+                        <TodoMobileStat
+                          label="목표가"
+                          value={formatMoney(x.targetPrice, currency)}
+                        />
+                        <div className="col-span-2 flex items-start gap-2 text-[12px]">
+                          <span className="shrink-0 pt-0.5 text-textMuted">메모</span>
+                          <div className="min-w-0 flex-1">
+                            <ExpandableText
+                              text={noteText}
+                              maxChars={32}
+                              preserveWhitespace={false}
+                              textClassName="text-[12px] text-textMain"
+                              buttonClassName="text-[10px]"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <TodoMobileStat
+                          label="수량"
+                          value={`${x.quantity}주`}
                         />
                       </div>
+                      <div className="row-span-2 self-start">
+                        <div>{renderTodoActions(x, { small: true, stacked: true })}</div>
+                      </div>
                     </div>
-
-                    <div className="mt-2">{renderTodoActions(x, true)}</div>
                   </section>
                 );
               })
             )}
           </div>
 
-          <div className="mt-4 hidden max-h-[30rem] overflow-auto md:block">
+          <div className="mt-3 hidden max-h-[28rem] overflow-auto md:block">
             <table className="w-full min-w-[720px] border-collapse text-left text-[12px]">
               <thead className="sticky top-0 z-10 bg-surface">
                 <tr className="border-b border-border text-textMuted">
@@ -856,7 +897,7 @@ export function MarketTodoList({
         </>
       ) : (
         <>
-          <div className="mt-3 max-h-[22rem] space-y-2 overflow-y-auto pr-1 md:hidden">
+          <div className="mt-3 max-h-[20rem] space-y-1.5 overflow-y-auto pr-1 md:hidden">
             {groupedSelected.length === 0 ? (
               <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
                 {emptyListMessage}
@@ -868,11 +909,11 @@ export function MarketTodoList({
                 return (
                   <section
                     key={group.ticker}
-                    className={`rounded-lg border border-border/70 px-3 py-2 ${
+                    className={`rounded-lg border border-border/60 px-3 py-2.5 ${
                       latest.done ? 'opacity-60' : ''
                     } ${sell ? 'bg-negative/5' : 'bg-positive/5'}`}
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start justify-between gap-2.5">
                       <div className="min-w-0">
                         <button
                           type="button"
@@ -882,7 +923,7 @@ export function MarketTodoList({
                           <span className="block truncate text-[14px] font-medium text-textMain underline-offset-2 hover:underline">
                             {group.displayName}
                           </span>
-                          <span className="mt-0.5 block text-[12px] text-textMuted">
+                          <span className="mt-0.5 block text-[11px] text-textMuted">
                             {group.ticker} · 최근 등록 {todoListDateLabel(latest.createdAt)} · 총{' '}
                             {group.items.length}건
                           </span>
@@ -905,15 +946,15 @@ export function MarketTodoList({
                         )}
                       </div>
                     </div>
-                    <div className="mt-2 grid grid-cols-[auto_1fr_auto_1fr] gap-x-2 gap-y-1 text-[12px]">
-                      <span className="text-textMuted">최신 목표가</span>
-                      <span className="text-right font-semibold tabular-nums text-textMain">
-                        {formatMoney(latest.targetPrice, currency)}
-                      </span>
-                      <span className="text-textMuted">최신 수량</span>
-                      <span className="text-right font-semibold tabular-nums text-textMain">
-                        {latest.quantity}주
-                      </span>
+                    <div className="mt-2 grid grid-cols-2 gap-1.5">
+                      <TodoMobileStat
+                        label="최신 목표가"
+                        value={formatMoney(latest.targetPrice, currency)}
+                      />
+                      <TodoMobileStat
+                        label="최신 수량"
+                        value={`${latest.quantity}주`}
+                      />
                     </div>
                   </section>
                 );
@@ -921,7 +962,7 @@ export function MarketTodoList({
             )}
           </div>
 
-          <div className="mt-4 hidden overflow-x-auto md:block">
+          <div className="mt-3 hidden overflow-x-auto md:block">
             <table className="w-full min-w-[720px] border-collapse text-left text-[12px]">
               <thead>
                 <tr className="border-b border-border text-textMuted">
@@ -1286,5 +1327,22 @@ function SummaryCountChip({
     >
       {label} <span className="tabular-nums">{count}</span>
     </span>
+  );
+}
+
+function TodoMobileStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-md border border-border/50 bg-background/35 px-2.5 py-2">
+      <p className="text-[10px] text-textMuted">{label}</p>
+      <p className="mt-0.5 truncate text-[13px] font-semibold tabular-nums text-textMain">
+        {value}
+      </p>
+    </div>
   );
 }

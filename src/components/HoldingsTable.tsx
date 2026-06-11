@@ -243,16 +243,16 @@ export function HoldingsTable({
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+      <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
           <div className="min-w-0">
             <h3 className="text-sm font-medium text-textMain">보유 종목</h3>
-            <p className="mt-0.5 hidden text-[11px] leading-relaxed text-textMuted md:block">
-              검색 · 정렬 · 상세 확인, 시가 대비 ±{KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 현재가 강조
+            <p className="mt-0.5 hidden text-[10px] leading-relaxed text-textMuted md:block">
+              검색 · 정렬 · 상세 확인 · 시가 대비 ±{KR_OPEN_ATTENTION_ABS_PCT}% 이상 현재가 강조
             </p>
             <ExpandableText
-              text={`검색 · 정렬 · 상세 확인 · 시가 대비 ±${KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 현재가 강조`}
-              maxChars={30}
+              text={`검색 · 정렬 · 상세 확인 · 시가 대비 ±${KR_OPEN_ATTENTION_ABS_PCT}% 이상 현재가 강조`}
+              maxChars={26}
               className="mt-0.5 md:hidden"
               textClassName="text-[12px] leading-relaxed text-textMuted"
             />
@@ -264,24 +264,24 @@ export function HoldingsTable({
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-2 border-t border-border/60 pt-3 sm:flex-row sm:items-center sm:gap-3">
+        <div className="flex flex-col gap-1.5 border-t border-border/60 pt-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
           <input
             type="search"
-            placeholder="검색…"
+            placeholder="코드·종목 검색"
             value={filterText}
             onChange={(e) => onFilterChange(e.target.value)}
-            className="min-w-0 w-full flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent sm:min-w-[12rem]"
+            className="min-w-0 w-full rounded-md border border-border bg-background px-3 py-1.5 text-[13px] text-textMain outline-none focus:border-accent sm:max-w-[14rem] lg:max-w-[16rem]"
           />
-          <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
+          <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0 sm:justify-end">
             <button
               type="button"
               onClick={onRefreshKrQuotes}
               disabled={krQuoteRefreshing}
-              className="rounded-md border border-accent/50 bg-accent/10 px-3 py-2 text-sm font-medium text-accent hover:bg-accent/20 disabled:opacity-50"
+              className="rounded-md border border-accent/50 bg-accent/10 px-2.5 py-1.5 text-[12px] font-medium text-accent hover:bg-accent/20 disabled:opacity-50"
             >
-              {krQuoteRefreshing ? '시세 갱신 중…' : '시세 갱신'}
+              {krQuoteRefreshing ? '갱신 중…' : '시세'}
             </button>
-            <label className="cursor-pointer rounded-md border border-border px-3 py-2 text-sm font-medium text-textMain hover:bg-white/5">
+            <label className="cursor-pointer rounded-md border border-border px-2.5 py-1.5 text-[12px] font-medium text-textMain hover:bg-white/5">
               CSV
               <input
                 type="file"
@@ -297,15 +297,15 @@ export function HoldingsTable({
             <button
               type="button"
               onClick={onOpenAddHolding}
-              className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+              className="rounded-md bg-accent px-2.5 py-1.5 text-[12px] font-medium text-white hover:opacity-90"
             >
-              + 보유종목
+              + 보유
             </button>
           </div>
         </div>
       </div>
 
-      <div className="mt-4 md:hidden">
+      <div className="mt-3 md:hidden">
         {sortedRows.length === 0 && q ? (
           <div className="rounded-md border border-border/60 px-4 py-10 text-center text-[13px] text-textMuted">
             조건에 맞는 종목이 없습니다. 필터를 바꿔 보세요.
@@ -313,7 +313,7 @@ export function HoldingsTable({
         ) : null}
 
         {sortedRows.length > 0 ? (
-          <div className="rounded-lg border border-border/50 bg-background/10">
+          <div className="rounded-lg border border-border/45 bg-background/10">
             <div className="sticky top-0 z-20 flex overflow-hidden rounded-t-lg border-b border-border/60 bg-surface/95 shadow-sm backdrop-blur">
               <button
                 type="button"
@@ -532,7 +532,7 @@ export function HoldingsTable({
 
       </div>
 
-      <div className="mt-4 hidden max-h-[min(65vh,720px)] overflow-auto rounded-md border border-border/60 md:block">
+      <div className="mt-3 hidden max-h-[min(65vh,720px)] overflow-auto rounded-md border border-border/60 md:block">
         <table className="w-full min-w-[880px] border-collapse text-left text-[12px]">
           <thead className="sticky top-0 z-10 border-b border-border bg-surface shadow-sm">
             <tr>

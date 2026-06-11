@@ -381,9 +381,9 @@ export function TradeJournal({
   };
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4 sm:p-5 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
+    <div className="rounded-lg border border-border bg-surface p-4 sm:p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
       <div className="flex flex-col gap-2">
-        <div className="flex flex-col gap-2 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start lg:gap-x-4">
+        <div className="flex flex-col gap-1.5 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start lg:gap-x-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex min-w-0 items-center gap-2">
@@ -458,7 +458,7 @@ export function TradeJournal({
                 </div>
               ) : null}
             </div>
-            <p className="mt-1 text-[11px] leading-relaxed text-textMuted lg:pr-4">
+            <p className="mt-0.5 text-[10px] leading-relaxed text-textMuted lg:pr-4">
               {mainTab === 'today'
                 ? `기준일 ${today} · ${todaySummaryText}`
                 : historyView === 'list' && pastSortedDesc.length > 0
@@ -467,7 +467,7 @@ export function TradeJournal({
             </p>
           </div>
           <form
-            className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end"
+            className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end"
             onSubmit={(e) => {
               e.preventDefault();
               runJournalSearch();
@@ -908,14 +908,14 @@ function JournalTradesTable({
     '8.25rem 3.25rem 3.75rem 3.5rem 5.25rem 5.25rem 5.25rem 4.75rem';
 
   return (
-      <div className="mt-3">
+      <div className="mt-2.5">
       <div className="md:hidden">
         {trades.length === 0 ? (
           <div className="rounded-md border border-border px-4 py-8 text-center text-textMuted">
             {emptyLabel}
           </div>
         ) : (
-          <div className="max-h-[22rem] overflow-auto rounded-lg border border-border/70 bg-background/10">
+          <div className="max-h-[20rem] overflow-auto rounded-lg border border-border/60 bg-background/10">
             <div style={{ minWidth: '39.25rem' }}>
               <div
                 className="sticky top-0 z-10 grid border-b border-border/60 bg-surface/95 text-[10px] font-medium text-textMuted shadow-sm backdrop-blur"
