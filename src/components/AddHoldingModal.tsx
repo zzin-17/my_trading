@@ -196,25 +196,38 @@ export function AddHoldingModal({
       <div
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-lg rounded-lg border border-border bg-surface p-5"
+        className="w-full max-w-xl rounded-lg border border-border bg-surface p-4 shadow-xl sm:p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-base font-semibold text-textMain">보유종목 추가</h2>
-        <p className="mt-1 text-[12px] text-textMuted">
+        <p className="mt-0.5 text-[11px] text-textMuted">
           초기 보유분을 한 번에 등록합니다. 매매일지에는 올라가지 않으며, 평단·수량만 장부에 반영됩니다.
         </p>
-        <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+        <form onSubmit={handleSubmit} className="mt-3 space-y-2.5">
           <div className="grid grid-cols-2 gap-2">
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="rounded border border-border bg-background px-2 py-2 text-sm text-textMain outline-none focus:border-accent"
-              required
-            />
-            <div className="flex gap-2">
+            <div>
+              <label className="text-[11px] text-textMuted">기준일</label>
               <input
-                placeholder="종목코드 또는 종목명"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm text-textMain outline-none focus:border-accent"
+                required
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-textMuted">시장</label>
+              <div className="mt-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-textMain">
+                {market === 'KR' ? '한국 (KRW)' : '미국 (USD)'}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] text-textMuted">종목코드 또는 종목명</label>
+            <div className="mt-1 grid grid-cols-[minmax(0,1fr)_4.25rem] gap-2">
+              <input
+                placeholder="예: AAPL, 005930, 삼성"
                 value={ticker}
                 onChange={(e) => setTicker(e.target.value)}
                 onBlur={(e) => {
@@ -222,7 +235,7 @@ export function AddHoldingModal({
                   const t = e.target.value.trim().replace(/\s/g, '');
                   if (normalizeKrTicker(t) && !name.trim()) void handleLookup(e.target.value);
                 }}
-                className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-textMain outline-none focus:border-accent"
                 required
               />
               {market === 'KR' && (
@@ -230,28 +243,36 @@ export function AddHoldingModal({
                   type="button"
                   onClick={() => void handleLookup()}
                   disabled={lookupLoading}
-                  className="shrink-0 rounded border border-border px-3 py-2 text-xs text-textMain hover:bg-white/5 disabled:opacity-60"
+                  className="shrink-0 rounded-md border border-border px-2 py-1.5 text-[11px] font-medium text-textMain hover:bg-white/5 disabled:opacity-60"
                 >
                   {lookupLoading ? '조회중' : '조회'}
                 </button>
               )}
             </div>
           </div>
-          {lookupMessage && <p className="text-[12px] text-textMuted">{lookupMessage}</p>}
-          <input
-            placeholder="종목명"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
-          />
+
+          {lookupMessage ? (
+            <p className="text-[11px] text-textMuted">{lookupMessage}</p>
+          ) : null}
+
+          <div>
+            <label className="text-[11px] text-textMuted">종목명</label>
+            <input
+              placeholder="비우면 종목코드와 동일"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-textMain outline-none focus:border-accent"
+            />
+          </div>
+
           {market === 'KR' && (
-            <div className="rounded border border-border bg-background p-2">
-              <div className="mb-1 flex items-center justify-between text-[11px] text-textMuted">
+            <div className="rounded-md border border-border/70 bg-background/60 p-2">
+              <div className="mb-1 flex items-center justify-between text-[10px] text-textMuted">
                 <span>종목명 검색 결과</span>
                 {nameSuggestLoading ? <span>조회중…</span> : null}
               </div>
               {nameSuggestions.length === 0 ? (
-                <p className="text-[11px] text-textMuted">
+                <p className="text-[10px] leading-relaxed text-textMuted">
                   {name.trim()
                     ? '일치하는 후보가 없습니다. 종목명을 직접 입력해도 됩니다.'
                     : '종목명을 입력하거나, 위 칸에 종목명·코드를 넣고 「조회」하면 후보가 표시됩니다.'}
@@ -286,55 +307,74 @@ export function AddHoldingModal({
               )}
             </div>
           )}
-          <input
-            placeholder="섹터 (KRX 업종 자동 · 수정 가능)"
-            value={sector}
-            onChange={(e) => setSector(e.target.value)}
-            className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
-          />
-          <div className="grid grid-cols-3 gap-2">
-            <input
-              type="number"
-              min={1}
-              step={1}
-              placeholder="수량"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              className="rounded border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
-              required
-            />
-            <input
-              type="number"
-              min={0}
-              step="any"
-              placeholder={`평단 (${currency})`}
-              value={avgPrice}
-              onChange={(e) => setAvgPrice(e.target.value)}
-              className="rounded border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
-              required
-            />
-            <input
-              type="number"
-              min={0}
-              step="any"
-              placeholder={`현재가 (${currency})`}
-              value={currentPrice}
-              onChange={(e) => setCurrentPrice(e.target.value)}
-              className="rounded border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
-            />
+
+          <div className="grid grid-cols-[minmax(0,1fr)_10.5rem] gap-2">
+            <div>
+              <label className="text-[11px] text-textMuted">
+                섹터 (KRX 업종 자동 · 수정 가능)
+              </label>
+              <input
+                value={sector}
+                onChange={(e) => setSector(e.target.value)}
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-textMain outline-none focus:border-accent"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-textMuted">수량</label>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                placeholder="수량"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-textMain outline-none focus:border-accent"
+                required
+              />
+            </div>
           </div>
-          {error && <p className="text-[12px] text-negative">{error}</p>}
-          <div className="flex justify-end gap-2">
+
+          <div className="grid grid-cols-[6.75rem_minmax(0,1fr)] gap-2">
+            <div>
+              <label className="text-[11px] text-textMuted">평단</label>
+              <input
+                type="number"
+                min={0}
+                step="any"
+                placeholder={currency}
+                value={avgPrice}
+                onChange={(e) => setAvgPrice(e.target.value)}
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-textMain outline-none focus:border-accent"
+                required
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-textMuted">현재가</label>
+              <input
+                type="number"
+                min={0}
+                step="any"
+                placeholder={`${currency} (비우면 평단)`}
+                value={currentPrice}
+                onChange={(e) => setCurrentPrice(e.target.value)}
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-textMain outline-none focus:border-accent"
+              />
+            </div>
+          </div>
+
+          {error ? <p className="text-[11px] text-negative">{error}</p> : null}
+
+          <div className="flex justify-end gap-2 pt-1">
             <button
               type="button"
               onClick={onClose}
-              className="rounded border border-border px-3 py-2 text-sm text-textMain hover:bg-white/5"
+              className="rounded-md border border-border px-3 py-1.5 text-sm text-textMain hover:bg-white/5"
             >
               취소
             </button>
             <button
               type="submit"
-              className="rounded bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+              className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
             >
               추가
             </button>

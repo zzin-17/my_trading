@@ -330,23 +330,23 @@ export function AddTradeModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-trade-title"
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-border bg-surface p-5 shadow-xl"
+        className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-lg border border-border bg-surface p-4 shadow-xl sm:p-5"
         onClick={(ev) => ev.stopPropagation()}
       >
         <h2 id="add-trade-title" className="text-base font-semibold text-textMain">
           {initialTrade ? '매매 수정' : '매매 추가'}
         </h2>
-        <p className="mt-1 text-[12px] text-textMuted">
+        <p className="mt-0.5 text-[11px] text-textMuted">
           추론 시장: {inferredLabel}
           {!krMarketMode && marketManual ? ` · 수동: ${marketManual}` : ''} · 통화{' '}
           {currency}
           {initialTrade ? ' · 등록 후에도 내용을 고칠 수 있습니다.' : ''}
         </p>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+        <form onSubmit={handleSubmit} className="mt-3 space-y-2.5">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label htmlFor="at-date" className="text-[12px] text-textMuted">
+              <label htmlFor="at-date" className="text-[11px] text-textMuted">
                 날짜
               </label>
               <input
@@ -354,19 +354,19 @@ export function AddTradeModal({
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="mt-1 w-full rounded-md border border-border bg-background px-2 py-2 text-sm text-textMain outline-none focus:border-accent"
+                className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm text-textMain outline-none focus:border-accent"
                 required
               />
             </div>
             <div>
-              <label htmlFor="at-side" className="text-[12px] text-textMuted">
+              <label htmlFor="at-side" className="text-[11px] text-textMuted">
                 구분
               </label>
               <select
                 id="at-side"
                 value={side}
                 onChange={(e) => setSide(e.target.value as TradeSide)}
-                className="mt-1 w-full rounded-md border border-border bg-background px-2 py-2 text-sm text-textMain outline-none focus:border-accent"
+                className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm text-textMain outline-none focus:border-accent"
               >
                 <option value="buy">매수</option>
                 <option value="sell">매도</option>
@@ -375,10 +375,10 @@ export function AddTradeModal({
           </div>
 
           <div>
-            <label htmlFor="at-ticker" className="text-[12px] text-textMuted">
+            <label htmlFor="at-ticker" className="text-[11px] text-textMuted">
               종목코드 또는 종목명
             </label>
-            <div className="mt-1 flex gap-2">
+            <div className="mt-1 grid grid-cols-[minmax(0,1fr)_4.25rem] gap-2">
               <input
                 id="at-ticker"
                 value={ticker}
@@ -389,7 +389,7 @@ export function AddTradeModal({
                   if (normalizeKrTicker(t) && !name.trim()) void handleLookup(e.target.value);
                 }}
                 placeholder="예: AAPL, 005930, 삼성"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-textMain outline-none focus:border-accent"
                 required
               />
               {showKrLookupButton ? (
@@ -397,7 +397,7 @@ export function AddTradeModal({
                   type="button"
                   onClick={() => void handleLookup()}
                   disabled={lookupLoading}
-                  className="shrink-0 rounded-md border border-border px-3 py-2 text-xs text-textMain hover:bg-white/5 disabled:opacity-60"
+                  className="shrink-0 rounded-md border border-border px-2 py-1.5 text-[11px] font-medium text-textMain hover:bg-white/5 disabled:opacity-60"
                 >
                   {lookupLoading ? '조회중' : '조회'}
                 </button>
@@ -406,29 +406,29 @@ export function AddTradeModal({
           </div>
 
           {lookupMessage ? (
-            <p className="text-[12px] text-textMuted">{lookupMessage}</p>
+            <p className="text-[11px] text-textMuted">{lookupMessage}</p>
           ) : null}
 
           <div>
-            <label htmlFor="at-name" className="text-[12px] text-textMuted">
+            <label htmlFor="at-name" className="text-[11px] text-textMuted">
               종목명 (비우면 종목코드와 동일)
             </label>
             <input
               id="at-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-textMain outline-none focus:border-accent"
             />
           </div>
 
           {krLookupActive ? (
-            <div className="rounded-md border border-border bg-background p-2">
-              <div className="mb-1 flex items-center justify-between text-[11px] text-textMuted">
+            <div className="rounded-md border border-border/70 bg-background/60 p-2">
+              <div className="mb-1 flex items-center justify-between text-[10px] text-textMuted">
                 <span>종목명 검색 결과</span>
                 {nameSuggestLoading ? <span>조회중…</span> : null}
               </div>
               {nameSuggestions.length === 0 ? (
-                <p className="text-[11px] text-textMuted">
+                <p className="text-[10px] leading-relaxed text-textMuted">
                   {name.trim()
                     ? '일치하는 후보가 없습니다. 종목명을 직접 입력해도 됩니다.'
                     : '종목명을 입력하거나, 위 칸에 종목명·코드를 넣고 「조회」하면 후보가 표시됩니다.'}
@@ -464,46 +464,48 @@ export function AddTradeModal({
             </div>
           ) : null}
 
-          <div>
-            <label htmlFor="at-sector" className="text-[12px] text-textMuted">
-              섹터 (한국: 조회·검색 시 KRX 업종 자동)
-            </label>
-            <input
-              id="at-sector"
-              value={sector}
-              onChange={(e) => setSector(e.target.value)}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
-            />
-          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label htmlFor="at-sector" className="text-[11px] text-textMuted">
+                섹터 (한국: 조회·검색 시 KRX 업종 자동)
+              </label>
+              <input
+                id="at-sector"
+                value={sector}
+                onChange={(e) => setSector(e.target.value)}
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-textMain outline-none focus:border-accent"
+              />
+            </div>
 
-          <div>
-            <label htmlFor="at-market" className="text-[12px] text-textMuted">
-              {krMarketMode ? '시장 (한국장 탭)' : '시장 (비우면 티커 규칙)'}
-            </label>
-            <select
-              id="at-market"
-              value={krMarketMode ? 'KR' : marketManual}
-              onChange={(e) =>
-                setMarketManual((e.target.value || '') as Market | '')
-              }
-              disabled={krMarketMode}
-              className="mt-1 w-full rounded-md border border-border bg-background px-2 py-2 text-sm text-textMain outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {krMarketMode ? (
-                <option value="KR">한국 (KRW) — 탭 기준 고정</option>
-              ) : (
-                <>
-                  <option value="">자동</option>
-                  <option value="KR">한국 (KRW)</option>
-                  <option value="US">미국 (USD)</option>
-                </>
-              )}
-            </select>
+            <div>
+              <label htmlFor="at-market" className="text-[11px] text-textMuted">
+                {krMarketMode ? '시장 (한국장 탭)' : '시장 (비우면 티커 규칙)'}
+              </label>
+              <select
+                id="at-market"
+                value={krMarketMode ? 'KR' : marketManual}
+                onChange={(e) =>
+                  setMarketManual((e.target.value || '') as Market | '')
+                }
+                disabled={krMarketMode}
+                className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm text-textMain outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {krMarketMode ? (
+                  <option value="KR">한국 (KRW) — 탭 기준 고정</option>
+                ) : (
+                  <>
+                    <option value="">자동</option>
+                    <option value="KR">한국 (KRW)</option>
+                    <option value="US">미국 (USD)</option>
+                  </>
+                )}
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label htmlFor="at-qty" className="text-[12px] text-textMuted">
+              <label htmlFor="at-qty" className="text-[11px] text-textMuted">
                 수량
               </label>
               <input
@@ -513,12 +515,12 @@ export function AddTradeModal({
                 step={1}
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-textMain outline-none focus:border-accent"
                 required
               />
             </div>
             <div>
-              <label htmlFor="at-price" className="text-[12px] text-textMuted">
+              <label htmlFor="at-price" className="text-[11px] text-textMuted">
                 단가
               </label>
               <input
@@ -529,25 +531,25 @@ export function AddTradeModal({
                 step="any"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-textMain outline-none focus:border-accent"
                 required
               />
             </div>
           </div>
 
           <div>
-            <label htmlFor="at-note" className="text-[12px] text-textMuted">
+            <label htmlFor="at-note" className="text-[11px] text-textMuted">
               비고 (선택)
             </label>
             <input
               id="at-note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-textMain outline-none focus:border-accent"
             />
           </div>
 
-          <label className="flex cursor-pointer items-start gap-2 text-[12px] text-textMain">
+          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border/60 bg-background/35 px-3 py-2 text-[11px] text-textMain">
             <input
               type="checkbox"
               checked={orderPending}
@@ -561,22 +563,22 @@ export function AddTradeModal({
           </label>
 
           {error && (
-            <p className="text-[12px] text-negative" role="alert">
+            <p className="text-[11px] text-negative" role="alert">
               {error}
             </p>
           )}
 
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-2 pt-1">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md border border-border px-3 py-2 text-sm font-medium text-textMain hover:bg-white/5"
+              className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-textMain hover:bg-white/5"
             >
               취소
             </button>
             <button
               type="submit"
-              className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+              className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
             >
               {initialTrade ? '저장' : '추가'}
             </button>
