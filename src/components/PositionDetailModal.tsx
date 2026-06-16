@@ -138,7 +138,7 @@ export function PositionDetailModal({
   const adjustmentDisplayDate = hasAdjustment
     ? formatAdjustmentDisplayDate(adjustmentTrades)
     : null;
-  const activityRows = useMemo(() => {
+  const activityRows = (() => {
     const rows: Array<
       | {
           kind: 'adjustment';
@@ -168,7 +168,7 @@ export function PositionDetailModal({
       const d = b.date.localeCompare(a.date);
       return d !== 0 ? d : a.id.localeCompare(b.id);
     });
-  }, [adjustmentDisplayDate, hasAdjustment, journalTrades]);
+  })();
 
   return (
     <div
