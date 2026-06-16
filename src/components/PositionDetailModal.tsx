@@ -139,7 +139,6 @@ export function PositionDetailModal({
   const hasStoredAdjustmentDelta = adjustmentTrades.some(
     (trade) => getTradeAdjustmentDelta(trade) !== null,
   );
-  const netQty = tradeSummary.buyQty - tradeSummary.sellQty;
   const hasAdjustment = Math.abs(adjustmentSummary.qty) > 0.0001;
   const adjustmentAvgPrice = hasAdjustment
     ? formatMoney(
@@ -311,9 +310,7 @@ export function PositionDetailModal({
           </section>
         ) : null}
 
-        <div
-          className={`mt-3 grid grid-cols-1 gap-2 ${hasAdjustment ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}
-        >
+        <div className="mt-3 grid grid-cols-2 gap-2">
           <Mini
             label={`총매수 (${tradeSummary.buyQty}주)`}
             value={formatMoney(tradeSummary.buyAmount, position.currency)}
@@ -322,38 +319,14 @@ export function PositionDetailModal({
             label={`총매도 (${tradeSummary.sellQty}주)`}
             value={formatMoney(tradeSummary.sellAmount, position.currency)}
           />
-          <Mini
-            label="순매수(수량)"
-            value={`${netQty}주`}
-            emph={netQty >= 0 ? 'pos' : 'neg'}
-          />
-          {hasAdjustment ? (
-            <Mini
-              label="조정"
-              value={
-                hasStoredAdjustmentDelta
-                  ? `${adjustmentDeltaQty > 0 ? '+' : ''}${adjustmentDeltaQty}주 -> 현재 ${position.quantity}주${adjustmentAvgPrice ? ` · ${adjustmentAvgPrice}` : ''}`
-                  : `원본 ${Math.abs(adjustmentSummary.qty)}주 -> 현재 ${position.quantity}주${adjustmentAvgPrice ? ` · ${adjustmentAvgPrice}` : ''}`
-              }
-              emph={
-                hasStoredAdjustmentDelta
-                  ? adjustmentDeltaQty >= 0
-                    ? 'pos'
-                    : 'neg'
-                  : adjustmentSummary.qty >= 0
-                    ? 'pos'
-                    : 'neg'
-              }
-            />
-          ) : null}
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <section className="rounded-md border border-border p-3">
             <h3 className="text-sm font-medium text-textMain">매매현황</h3>
             <p className="mt-1 text-[11px] text-textMuted">
-              위 총매수·총매도·순매수는 체결 건만 집계합니다. 보유수정으로 반영된 수량은
-              「조정」으로 따로 표시되며, 아래 목록에는 미체결 주문도 함께 표시됩니다.
+              위 총매수·총매도는 체결 건만 집계합니다. 보유수정으로 반영된 수량은 아래
+              목록의 「조정」 행에서 확인할 수 있고, 미체결 주문도 함께 표시됩니다.
             </p>
             <ul className="mt-2 max-h-48 space-y-1 overflow-auto text-[12px]">
               {activityRows.length === 0 ? (
