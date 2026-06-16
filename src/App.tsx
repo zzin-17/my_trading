@@ -2343,7 +2343,11 @@ export default function App() {
   const detailTrades = useMemo(
     () =>
       detailPosition
-        ? trades.filter((t) => t.ticker === detailPosition.ticker)
+        ? trades.filter(
+            (t) =>
+              t.ticker === detailPosition.ticker &&
+              t.market === detailPosition.market,
+          )
         : [],
     [detailPosition, trades],
   );
@@ -2783,6 +2787,7 @@ export default function App() {
             : undefined
         }
         onMarkTradeFilled={handleMarkTradeFilled}
+        krSellCommissionRate={krSellCommissionRate}
       />
       {onboardingOpen && !appLocked ? (
         <div className="fixed inset-0 z-[190] flex items-center justify-center bg-black/60 p-4">

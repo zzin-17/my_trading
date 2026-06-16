@@ -7,6 +7,7 @@ import { roundMoney } from '../lib/portfolioMath';
 import { fetchKrBoardByTicker } from '../lib/krxLookup';
 import { krBoardBadgeClass, krBoardDisplayLabel } from '../lib/krBoardUi';
 import { tradeAppliesToLedger } from '../lib/ledger';
+import { computeRealizedSellEvents } from '../lib/realizedPnl';
 
 interface PositionDetailModalProps {
   position: Position | null;
@@ -20,6 +21,7 @@ interface PositionDetailModalProps {
   /** 보유수량·평단 수정 (매매일지 체결은 유지하고 초기보유 레이어만 조정) */
   onAdjustPosition?: (quantity: number, avgPrice: number) => boolean;
   onMarkTradeFilled: (id: string) => void;
+  krSellCommissionRate: number;
 }
 
 export function PositionDetailModal({
@@ -33,6 +35,7 @@ export function PositionDetailModal({
   onClose,
   onAdjustPosition,
   onMarkTradeFilled,
+  krSellCommissionRate,
 }: PositionDetailModalProps) {
   const [editingBasis, setEditingBasis] = useState(false);
   const [editQty, setEditQty] = useState('');
@@ -83,6 +86,15 @@ export function PositionDetailModal({
       [...todos].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [todos],
   );
+  const realizedNetPnl = useMemo(() => {
+    if (!position) return 0;
+    return computeRealizedSellEvents(trades, krSellCommissionRate)
+      .filter(
+        (event) =>
+          event.market === position.market && event.ticker === position.ticker,
+      )
+      .reduce((sum, event) => sum + event.netPnl, 0);
+  }, [krSellCommissionRate, position, trades]);
 
   if (!position || !metric) return null;
 
@@ -211,12 +223,17 @@ export function PositionDetailModal({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
           <Mini label="보유수량" value={`${position.quantity}`} />
           <Mini label="평단" value={formatMoney(position.avg_price, position.currency)} />
           <Mini label="현재가" value={formatMoney(position.current_price, position.currency)} />
           <Mini label="예상손익" value={formatMoney(metric.pnl, position.currency)} emph={metric.pnl >= 0 ? 'pos' : 'neg'} />
           <Mini label="예상수익률" value={formatPercent(retPct, true)} emph={retPct >= 0 ? 'pos' : 'neg'} />
+          <Mini
+            label="누적 실현손익"
+            value={formatMoney(realizedNetPnl, position.currency)}
+            emph={realizedNetPnl >= 0 ? 'pos' : 'neg'}
+          />
         </div>
 
         {onAdjustPosition ? (
