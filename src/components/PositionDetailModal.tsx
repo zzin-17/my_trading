@@ -68,8 +68,8 @@ export function PositionDetailModal({
     setEditQty(String(position.quantity));
     setEditAvg(String(position.avg_price));
     setAvgCalcQty('');
-    setAvgCalcPrice('');
-  }, [position?.id, position?.quantity, position?.avg_price]);
+    setAvgCalcPrice(String(position.current_price));
+  }, [position?.id, position?.quantity, position?.avg_price, position?.current_price]);
 
   useEffect(() => {
     if (!position) return;
@@ -373,7 +373,7 @@ export function PositionDetailModal({
                 step="any"
                 value={avgCalcPrice}
                 onChange={(e) => setAvgCalcPrice(e.target.value)}
-                placeholder="예: 72000"
+                placeholder={String(position.current_price)}
                 className="rounded border border-border bg-background px-2 py-1.5 text-sm text-textMain outline-none focus:border-accent"
               />
             </label>
