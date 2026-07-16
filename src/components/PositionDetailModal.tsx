@@ -119,6 +119,7 @@ export function PositionDetailModal({
       addedCost: roundMoney(addedCost, position.currency),
       nextQty,
       nextAvg,
+      avgDelta: roundMoney(nextAvg - position.avg_price, position.currency),
     };
   }, [avgCalcPrice, avgCalcQty, position]);
 
@@ -404,7 +405,10 @@ export function PositionDetailModal({
                   }`}
                 >
                   {formatMoney(position.avg_price, position.currency)} {'->'}{' '}
-                  {formatMoney(avgCalcPreview.nextAvg, position.currency)}
+                  {formatMoney(avgCalcPreview.nextAvg, position.currency)}{' '}
+                  <span className="text-[11px] font-medium">
+                    ({formatSignedMoney(avgCalcPreview.avgDelta, position.currency)})
+                  </span>
                 </span>
               </div>
             </div>
@@ -663,6 +667,12 @@ function getTradeAdjustmentDelta(trade: Trade): number | null {
   if (!match) return null;
   const value = Number(match[1]);
   return Number.isFinite(value) ? value : null;
+}
+
+function formatSignedMoney(value: number, currency: Position['currency']): string {
+  if (value === 0) return formatMoney(0, currency);
+  const sign = value > 0 ? '+' : '-';
+  return `${sign}${formatMoney(Math.abs(value), currency)}`;
 }
 
 function Mini({
