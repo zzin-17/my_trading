@@ -353,7 +353,7 @@ export function PositionDetailModal({
           <p className="mt-1 text-[11px] leading-relaxed text-textMuted">
             현재 {position.quantity}주 · {formatMoney(position.avg_price, position.currency)} 기준
           </p>
-          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[9.5rem_minmax(0,1fr)]">
             <label className="flex items-center gap-2 rounded border border-border bg-background px-2.5 py-2 text-[11px] text-textMuted">
               <span className="shrink-0">수량</span>
               <input
@@ -380,7 +380,7 @@ export function PositionDetailModal({
             </label>
           </div>
           {avgCalcPreview ? (
-            <div className="mt-2 grid grid-cols-1 gap-2 rounded-md border border-border bg-background p-2 sm:grid-cols-[0.9fr_0.85fr_1.45fr]">
+            <div className="mt-2 grid grid-cols-1 gap-2 rounded-md border border-border bg-background p-2 sm:grid-cols-[9.5rem_9.5rem_minmax(0,1fr)]">
               <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-surface/40 px-3 py-2">
                 <span className="shrink-0 text-[11px] text-textMuted">추가금액</span>
                 <span className="text-sm font-semibold text-textMain">
