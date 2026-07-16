@@ -350,12 +350,11 @@ export function PositionDetailModal({
         <section className="mt-3 rounded-md border border-border p-3">
           <h3 className="text-sm font-medium text-textMain">추가 매수 평단 계산기</h3>
           <p className="mt-1 text-[11px] leading-relaxed text-textMuted">
-            현재 {position.quantity}주 · {formatMoney(position.avg_price, position.currency)} 기준으로
-            추가 매수 후 평단이 어떻게 바뀌는지 미리 계산합니다.
+            현재 {position.quantity}주 · {formatMoney(position.avg_price, position.currency)} 기준
           </p>
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <label className="flex flex-col gap-0.5 text-[11px] text-textMuted">
-              추가 매수 수량
+            <label className="flex items-center gap-2 rounded border border-border bg-background px-2.5 py-2 text-[11px] text-textMuted">
+              <span className="shrink-0">수량</span>
               <input
                 type="number"
                 min={1}
@@ -363,11 +362,11 @@ export function PositionDetailModal({
                 value={avgCalcQty}
                 onChange={(e) => setAvgCalcQty(e.target.value)}
                 placeholder="예: 5"
-                className="rounded border border-border bg-background px-2 py-1.5 text-sm text-textMain outline-none focus:border-accent"
+                className="min-w-0 flex-1 bg-transparent text-sm text-textMain outline-none placeholder:text-textMuted/70"
               />
             </label>
-            <label className="flex flex-col gap-0.5 text-[11px] text-textMuted">
-              추가 매수 단가 ({position.currency})
+            <label className="flex items-center gap-2 rounded border border-border bg-background px-2.5 py-2 text-[11px] text-textMuted">
+              <span className="shrink-0">단가 ({position.currency})</span>
               <input
                 type="number"
                 min={0}
@@ -375,38 +374,43 @@ export function PositionDetailModal({
                 value={avgCalcPrice ?? String(position.current_price)}
                 onChange={(e) => setAvgCalcPrice(e.target.value)}
                 placeholder={String(position.current_price)}
-                className="rounded border border-border bg-background px-2 py-1.5 text-sm text-textMain outline-none focus:border-accent"
+                className="min-w-0 flex-1 bg-transparent text-sm text-textMain outline-none placeholder:text-textMuted/70"
               />
             </label>
           </div>
           {avgCalcPreview ? (
-            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <Mini
-                label="추가 매수금액"
-                value={formatMoney(avgCalcPreview.addedCost, position.currency)}
-              />
-              <Mini
-                label="총 보유수량"
-                value={`${avgCalcPreview.nextQty}주`}
-              />
-              <Mini
-                label="평단 변화"
-                value={`${formatMoney(position.avg_price, position.currency)} -> ${formatMoney(
-                  avgCalcPreview.nextAvg,
-                  position.currency,
-                )}`}
-                emph={
-                  avgCalcPreview.nextAvg < position.avg_price
-                    ? 'pos'
-                    : avgCalcPreview.nextAvg > position.avg_price
-                      ? 'neg'
-                      : undefined
-                }
-              />
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-border bg-background px-3 py-2">
+              <span className="text-[11px] text-textMuted">
+                추가금액{' '}
+                <span className="ml-1 text-sm font-semibold text-textMain">
+                  {formatMoney(avgCalcPreview.addedCost, position.currency)}
+                </span>
+              </span>
+              <span className="text-[11px] text-textMuted">
+                총보유{' '}
+                <span className="ml-1 text-sm font-semibold text-textMain">
+                  {avgCalcPreview.nextQty}주
+                </span>
+              </span>
+              <span className="text-[11px] text-textMuted">
+                평단{' '}
+                <span
+                  className={`ml-1 text-sm font-semibold ${
+                    avgCalcPreview.nextAvg < position.avg_price
+                      ? 'text-positive'
+                      : avgCalcPreview.nextAvg > position.avg_price
+                        ? 'text-negative'
+                        : 'text-textMain'
+                  }`}
+                >
+                  {formatMoney(position.avg_price, position.currency)} {'->'}{' '}
+                  {formatMoney(avgCalcPreview.nextAvg, position.currency)}
+                </span>
+              </span>
             </div>
           ) : (
             <p className="mt-2 text-[11px] text-textMuted">
-              추가 매수 수량과 단가를 입력하면 새 평단과 총 보유수량을 바로 보여줍니다.
+              수량만 넣으면 현재가 기준 새 평단과 총 보유수량을 바로 보여줍니다.
             </p>
           )}
         </section>
