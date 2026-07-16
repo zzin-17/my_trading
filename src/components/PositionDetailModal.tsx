@@ -379,23 +379,23 @@ export function PositionDetailModal({
             </label>
           </div>
           {avgCalcPreview ? (
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-border bg-background px-3 py-2">
-              <span className="text-[11px] text-textMuted">
-                추가금액{' '}
-                <span className="ml-1 text-sm font-semibold text-textMain">
+            <div className="mt-2 grid grid-cols-1 gap-2 rounded-md border border-border bg-background p-2 sm:grid-cols-3">
+              <div className="rounded-md border border-border/50 bg-surface/40 px-3 py-2 text-center">
+                <p className="text-[11px] text-textMuted">추가금액</p>
+                <p className="mt-0.5 text-sm font-semibold text-textMain">
                   {formatMoney(avgCalcPreview.addedCost, position.currency)}
-                </span>
-              </span>
-              <span className="text-[11px] text-textMuted">
-                총보유{' '}
-                <span className="ml-1 text-sm font-semibold text-textMain">
+                </p>
+              </div>
+              <div className="rounded-md border border-border/50 bg-surface/40 px-3 py-2 text-center">
+                <p className="text-[11px] text-textMuted">총보유</p>
+                <p className="mt-0.5 text-sm font-semibold text-textMain">
                   {avgCalcPreview.nextQty}주
-                </span>
-              </span>
-              <span className="text-[11px] text-textMuted">
-                평단{' '}
-                <span
-                  className={`ml-1 text-sm font-semibold ${
+                </p>
+              </div>
+              <div className="rounded-md border border-border/50 bg-surface/40 px-3 py-2 text-center">
+                <p className="text-[11px] text-textMuted">평단 변화</p>
+                <p
+                  className={`mt-0.5 text-sm font-semibold ${
                     avgCalcPreview.nextAvg < position.avg_price
                       ? 'text-positive'
                       : avgCalcPreview.nextAvg > position.avg_price
@@ -405,8 +405,8 @@ export function PositionDetailModal({
                 >
                   {formatMoney(position.avg_price, position.currency)} {'->'}{' '}
                   {formatMoney(avgCalcPreview.nextAvg, position.currency)}
-                </span>
-              </span>
+                </p>
+              </div>
             </div>
           ) : (
             <p className="mt-2 text-[11px] text-textMuted">
