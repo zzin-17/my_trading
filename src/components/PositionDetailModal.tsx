@@ -380,7 +380,7 @@ export function PositionDetailModal({
             </label>
           </div>
           {avgCalcPreview ? (
-            <div className="mt-2 grid grid-cols-1 gap-2 rounded-md border border-border bg-background p-2 sm:grid-cols-3">
+            <div className="mt-2 grid grid-cols-1 gap-2 rounded-md border border-border bg-background p-2 sm:grid-cols-[0.9fr_0.85fr_1.45fr]">
               <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-surface/40 px-3 py-2">
                 <span className="shrink-0 text-[11px] text-textMuted">추가금액</span>
                 <span className="text-sm font-semibold text-textMain">
@@ -406,7 +406,7 @@ export function PositionDetailModal({
                 >
                   {formatMoney(position.avg_price, position.currency)} {'->'}{' '}
                   {formatMoney(avgCalcPreview.nextAvg, position.currency)}{' '}
-                  <span className="text-[11px] font-medium">
+                  <span className="whitespace-nowrap text-[11px] font-medium">
                     ({formatSignedMoney(avgCalcPreview.avgDelta, position.currency)})
                   </span>
                 </span>
