@@ -40,6 +40,8 @@ export function PositionDetailModal({
   const [editingBasis, setEditingBasis] = useState(false);
   const [editQty, setEditQty] = useState('');
   const [editAvg, setEditAvg] = useState('');
+  const [avgCalcQty, setAvgCalcQty] = useState('');
+  const [avgCalcPrice, setAvgCalcPrice] = useState('');
   const [todoAction, setTodoAction] = useState<'buy' | 'sell'>('buy');
   const [todoPrice, setTodoPrice] = useState('');
   const [todoQty, setTodoQty] = useState('');
@@ -65,6 +67,8 @@ export function PositionDetailModal({
     setEditingBasis(false);
     setEditQty(String(position.quantity));
     setEditAvg(String(position.avg_price));
+    setAvgCalcQty('');
+    setAvgCalcPrice('');
   }, [position?.id, position?.quantity, position?.avg_price]);
 
   useEffect(() => {
@@ -95,6 +99,27 @@ export function PositionDetailModal({
       )
       .reduce((sum, event) => sum + event.netPnl, 0);
   }, [krSellCommissionRate, position, trades]);
+  const avgCalcPreview = useMemo(() => {
+    if (!position) return null;
+    const buyQty = Number(avgCalcQty);
+    const buyPrice = Number(avgCalcPrice);
+    if (!Number.isInteger(buyQty) || buyQty <= 0) return null;
+    if (!Number.isFinite(buyPrice) || buyPrice <= 0) return null;
+    const nextQty = position.quantity + buyQty;
+    const currentCost = position.quantity * position.avg_price;
+    const addedCost = buyQty * buyPrice;
+    const nextAvg = roundMoney(
+      (currentCost + addedCost) / nextQty,
+      position.currency,
+    );
+    return {
+      buyQty,
+      buyPrice: roundMoney(buyPrice, position.currency),
+      addedCost: roundMoney(addedCost, position.currency),
+      nextQty,
+      nextAvg,
+    };
+  }, [avgCalcPrice, avgCalcQty, position]);
 
   if (!position || !metric) return null;
 
@@ -149,23 +174,27 @@ export function PositionDetailModal({
   const adjustmentDisplayDate = hasAdjustment
     ? formatAdjustmentDisplayDate(adjustmentTrades)
     : null;
+  const adjustmentSortMs = hasAdjustment ? getLatestTradeEventAtMs(adjustmentTrades) : null;
   const activityRows = (() => {
     const rows: Array<
       | {
           kind: 'adjustment';
           id: string;
           date: string;
+          sortMs: number | null;
         }
       | {
           kind: 'trade';
           id: string;
           date: string;
+          sortMs: number | null;
           trade: Trade;
         }
     > = journalTrades.map((trade) => ({
       kind: 'trade',
       id: trade.id,
       date: trade.date,
+      sortMs: getTradeEventAtMs(trade),
       trade,
     }));
     if (hasAdjustment && adjustmentDisplayDate) {
@@ -173,11 +202,18 @@ export function PositionDetailModal({
         kind: 'adjustment',
         id: 'adjustment-row',
         date: adjustmentDisplayDate,
+        sortMs: adjustmentSortMs,
       });
     }
     return rows.sort((a, b) => {
       const d = b.date.localeCompare(a.date);
-      return d !== 0 ? d : a.id.localeCompare(b.id);
+      if (d !== 0) return d;
+      if (a.sortMs !== null && b.sortMs !== null && a.sortMs !== b.sortMs) {
+        return b.sortMs - a.sortMs;
+      }
+      if (a.sortMs !== null && b.sortMs === null) return -1;
+      if (a.sortMs === null && b.sortMs !== null) return 1;
+      return b.id.localeCompare(a.id);
     });
   })();
 
@@ -309,6 +345,70 @@ export function PositionDetailModal({
             ) : null}
           </section>
         ) : null}
+
+        <section className="mt-3 rounded-md border border-border p-3">
+          <h3 className="text-sm font-medium text-textMain">추가 매수 평단 계산기</h3>
+          <p className="mt-1 text-[11px] leading-relaxed text-textMuted">
+            현재 {position.quantity}주 · {formatMoney(position.avg_price, position.currency)} 기준으로
+            추가 매수 후 평단이 어떻게 바뀌는지 미리 계산합니다.
+          </p>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <label className="flex flex-col gap-0.5 text-[11px] text-textMuted">
+              추가 매수 수량
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={avgCalcQty}
+                onChange={(e) => setAvgCalcQty(e.target.value)}
+                placeholder="예: 5"
+                className="rounded border border-border bg-background px-2 py-1.5 text-sm text-textMain outline-none focus:border-accent"
+              />
+            </label>
+            <label className="flex flex-col gap-0.5 text-[11px] text-textMuted">
+              추가 매수 단가 ({position.currency})
+              <input
+                type="number"
+                min={0}
+                step="any"
+                value={avgCalcPrice}
+                onChange={(e) => setAvgCalcPrice(e.target.value)}
+                placeholder="예: 72000"
+                className="rounded border border-border bg-background px-2 py-1.5 text-sm text-textMain outline-none focus:border-accent"
+              />
+            </label>
+          </div>
+          {avgCalcPreview ? (
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <Mini
+                label="추가 매수금액"
+                value={formatMoney(avgCalcPreview.addedCost, position.currency)}
+              />
+              <Mini
+                label="총 보유수량"
+                value={`${avgCalcPreview.nextQty}주`}
+              />
+              <Mini
+                label="평단 변화"
+                value={`${formatMoney(position.avg_price, position.currency)} -> ${formatMoney(
+                  avgCalcPreview.nextAvg,
+                  position.currency,
+                )}`}
+                emph={
+                  avgCalcPreview.nextAvg < position.avg_price
+                    ? 'pos'
+                    : avgCalcPreview.nextAvg > position.avg_price
+                      ? 'neg'
+                      : undefined
+                }
+              />
+            </div>
+          ) : (
+            <p className="mt-2 text-[11px] text-textMuted">
+              추가 매수 수량과 단가를 입력하면 새 평단과 총 보유수량을 바로 보여줍니다.
+            </p>
+          )}
+        </section>
 
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Mini
@@ -528,10 +628,7 @@ export function PositionDetailModal({
 }
 
 function formatAdjustmentDisplayDate(trades: Trade[]): string | null {
-  const latest = [...trades]
-    .map((trade) => getTradeEditedAtMs(trade))
-    .filter((value): value is number => value !== null)
-    .sort((a, b) => b - a)[0];
+  const latest = getLatestTradeEventAtMs(trades);
   if (!latest) return null;
   const d = new Date(latest);
   const year = d.getFullYear();
@@ -540,8 +637,17 @@ function formatAdjustmentDisplayDate(trades: Trade[]): string | null {
   return `${year}-${month}-${day}`;
 }
 
-function getTradeEditedAtMs(trade: Trade): number | null {
-  const match = trade.id.match(/^tr-ob-(\d{11,13})(?:-delta--?\d+)?$/);
+function getLatestTradeEventAtMs(trades: Trade[]): number | null {
+  return [...trades]
+    .map((trade) => getTradeEventAtMs(trade))
+    .filter((value): value is number => value !== null)
+    .sort((a, b) => b - a)[0] ?? null;
+}
+
+function getTradeEventAtMs(trade: Trade): number | null {
+  const match = trade.id.match(
+    /^tr-(?:user|user-holding|ob|csv)-(\d{11,13})(?:-\d+|(?:-delta--?\d+))?$/,
+  );
   if (!match) return null;
   const value = Number(match[1]);
   return Number.isFinite(value) && value > 0 ? value : null;
