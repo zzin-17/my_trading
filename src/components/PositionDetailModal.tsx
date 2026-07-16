@@ -41,7 +41,7 @@ export function PositionDetailModal({
   const [editQty, setEditQty] = useState('');
   const [editAvg, setEditAvg] = useState('');
   const [avgCalcQty, setAvgCalcQty] = useState('');
-  const [avgCalcPrice, setAvgCalcPrice] = useState('');
+  const [avgCalcPrice, setAvgCalcPrice] = useState<string | null>(null);
   const [todoAction, setTodoAction] = useState<'buy' | 'sell'>('buy');
   const [todoPrice, setTodoPrice] = useState('');
   const [todoQty, setTodoQty] = useState('');
@@ -68,7 +68,7 @@ export function PositionDetailModal({
     setEditQty(String(position.quantity));
     setEditAvg(String(position.avg_price));
     setAvgCalcQty('');
-    setAvgCalcPrice(String(position.current_price));
+    setAvgCalcPrice(null);
   }, [position?.id, position?.quantity, position?.avg_price, position?.current_price]);
 
   useEffect(() => {
@@ -102,7 +102,8 @@ export function PositionDetailModal({
   const avgCalcPreview = useMemo(() => {
     if (!position) return null;
     const buyQty = Number(avgCalcQty);
-    const buyPrice = Number(avgCalcPrice);
+    const effectivePrice = avgCalcPrice?.trim() ? avgCalcPrice : String(position.current_price);
+    const buyPrice = Number(effectivePrice);
     if (!Number.isInteger(buyQty) || buyQty <= 0) return null;
     if (!Number.isFinite(buyPrice) || buyPrice <= 0) return null;
     const nextQty = position.quantity + buyQty;
@@ -371,7 +372,7 @@ export function PositionDetailModal({
                 type="number"
                 min={0}
                 step="any"
-                value={avgCalcPrice}
+                value={avgCalcPrice ?? String(position.current_price)}
                 onChange={(e) => setAvgCalcPrice(e.target.value)}
                 placeholder={String(position.current_price)}
                 className="rounded border border-border bg-background px-2 py-1.5 text-sm text-textMain outline-none focus:border-accent"
