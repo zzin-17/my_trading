@@ -56,6 +56,12 @@ function krPriceStatusTone(status: KrPriceStatus): 'pos' | 'neg' {
   return status === 'upper_limit' || status === 'buy_circuit' ? 'pos' : 'neg';
 }
 
+function krPriceStatusBadgeClass(status: KrPriceStatus): string {
+  return krPriceStatusTone(status) === 'pos'
+    ? 'bg-red-500/12 text-red-400 ring-1 ring-red-500/18'
+    : 'bg-blue-500/12 text-blue-400 ring-1 ring-blue-500/18';
+}
+
 export type HoldingSortKey =
   | 'board'
   | 'ticker'
@@ -483,21 +489,8 @@ export function HoldingsTable({
                       onClick={() => onOpenDetail(p.id)}
                       className="sticky left-0 z-[11] row-span-2 min-w-0 overflow-hidden border-r border-border/60 bg-surface px-2 py-1.5 text-left shadow-[8px_0_12px_-10px_rgba(0,0,0,0.45)]"
                     >
-                      <span className="flex flex-wrap items-center gap-0.5">
-                        <span className="line-clamp-2 text-[12px] font-semibold leading-snug text-textMain underline-offset-2 hover:underline">
-                          {p.name}
-                        </span>
-                        {priceStatus ? (
-                          <span
-                            className={`shrink-0 whitespace-nowrap text-[10px] font-semibold ${
-                              krPriceStatusTone(priceStatus) === 'pos'
-                                ? 'text-red-400'
-                                : 'text-blue-400'
-                            }`}
-                          >
-                            {krPriceStatusLabel(priceStatus)}
-                          </span>
-                        ) : null}
+                      <span className="block line-clamp-2 text-[12px] font-semibold leading-snug text-textMain underline-offset-2 hover:underline">
+                        {p.name}
                       </span>
                       <span className="mt-0.5 flex flex-wrap items-center gap-0.5">
                         <span
@@ -539,6 +532,9 @@ export function HoldingsTable({
                     <HoldingValueCell
                       value={formatMoney(p.current_price, p.currency)}
                       emph={currentPriceEmph}
+                      badgeLabel={priceStatus ? krPriceStatusLabel(priceStatus) : undefined}
+                      badgeTone={priceStatus ? krPriceStatusTone(priceStatus) : undefined}
+                      badgeClassName={priceStatus ? krPriceStatusBadgeClass(priceStatus) : undefined}
                       title={openTip}
                       borderTop
                     />
@@ -742,20 +738,9 @@ export function HoldingsTable({
                     <button
                       type="button"
                       onClick={() => onOpenDetail(p.id)}
-                      className="flex w-full items-center gap-0.5 text-left text-textMain underline-offset-2 hover:underline"
+                      className="line-clamp-2 w-full text-left text-textMain underline-offset-2 hover:underline"
                     >
-                      <span className="line-clamp-2 min-w-0 flex-1">{p.name}</span>
-                      {priceStatus ? (
-                        <span
-                          className={`shrink-0 whitespace-nowrap text-[10px] font-semibold ${
-                            krPriceStatusTone(priceStatus) === 'pos'
-                              ? 'text-red-400'
-                              : 'text-blue-400'
-                          }`}
-                        >
-                          {krPriceStatusLabel(priceStatus)}
-                        </span>
-                      ) : null}
+                      {p.name}
                     </button>
                   </td>
                   <td
@@ -770,7 +755,18 @@ export function HoldingsTable({
                     }`}
                     title={openTip}
                   >
-                    {formatMoney(p.current_price, p.currency)}
+                    <span className="inline-flex items-center justify-end gap-1.5">
+                      {priceStatus ? (
+                        <span
+                          className={`shrink-0 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${krPriceStatusBadgeClass(
+                            priceStatus,
+                          )}`}
+                        >
+                          {krPriceStatusLabel(priceStatus)}
+                        </span>
+                      ) : null}
+                      <span>{formatMoney(p.current_price, p.currency)}</span>
+                    </span>
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums text-textMain">
                     {formatMoney(p.avg_price, p.currency)}
@@ -890,12 +886,18 @@ function HoldingHeaderCell({
 function HoldingValueCell({
   value,
   emph,
+  badgeLabel,
+  badgeTone,
+  badgeClassName,
   title,
   borderLeft = false,
   borderTop = false,
 }: {
   value: string;
   emph?: 'pos' | 'neg' | 'warn';
+  badgeLabel?: string;
+  badgeTone?: 'pos' | 'neg';
+  badgeClassName?: string;
   title?: string;
   borderLeft?: boolean;
   borderTop?: boolean;
@@ -907,19 +909,33 @@ function HoldingValueCell({
       }`}
       title={title}
     >
-      <p
-        className={`whitespace-nowrap text-[12px] font-semibold tabular-nums ${
-          emph === 'pos'
-            ? 'text-red-400'
-            : emph === 'neg'
-              ? 'text-blue-400'
-              : emph === 'warn'
-                ? 'text-warning'
-                : 'text-textMain'
-        }`}
-      >
-        {value}
-      </p>
+      <div className="inline-flex items-center justify-end gap-1">
+        {badgeLabel ? (
+          <span
+            className={`shrink-0 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
+              badgeClassName ??
+              (badgeTone === 'pos'
+                ? 'bg-red-500/12 text-red-400 ring-1 ring-red-500/18'
+                : 'bg-blue-500/12 text-blue-400 ring-1 ring-blue-500/18')
+            }`}
+          >
+            {badgeLabel}
+          </span>
+        ) : null}
+        <p
+          className={`whitespace-nowrap text-[12px] font-semibold tabular-nums ${
+            emph === 'pos'
+              ? 'text-red-400'
+              : emph === 'neg'
+                ? 'text-blue-400'
+                : emph === 'warn'
+                  ? 'text-warning'
+                  : 'text-textMain'
+          }`}
+        >
+          {value}
+        </p>
+      </div>
     </div>
   );
 }
