@@ -75,7 +75,10 @@ import type { TradePlanTodo } from './types/todo';
 import { parseHoldingCsv } from './lib/holdingCsv';
 import { applyKrxMetadataToKrTrades, normalizeKrTicker } from './lib/krxLookup';
 import { adjustOpeningBalanceTrade } from './lib/positionAdjust';
-import { fetchKrNaverDelayedQuote } from './lib/naverKrQuote';
+import {
+  fetchKrNaverDelayedQuote,
+  type KrPriceStatus,
+} from './lib/naverKrQuote';
 import { formatMoney, formatQuoteUpdatedLabel } from './lib/format';
 import { todayIsoLocal, withoutExpiredPendingOrders } from './lib/tradePendingExpiry';
 import {
@@ -371,6 +374,9 @@ export default function App() {
   const [krDayOpenByTicker, setKrDayOpenByTicker] = useState<
     Record<string, number>
   >(() => getInitialAppState().krDayOpenByTicker ?? {});
+  const [krPriceStatusByTicker, setKrPriceStatusByTicker] = useState<
+    Record<string, KrPriceStatus>
+  >({});
 
   const [marketTab, setMarketTab] = useState<MarketTab>('KR');
   const [mobileHomeTab, setMobileHomeTab] = useState<MobileHomeTab>('portfolio');
@@ -1970,6 +1976,7 @@ export default function App() {
     setKrSellCommissionRate(normalizeKrSellCommissionRate(undefined));
     setKrPreferExtendedQuote(false);
     setKrDayOpenByTicker({});
+    setKrPriceStatusByTicker({});
   }, [applyLocalTodoChange, applyLocalTradeChange, createGuardSnapshot, networkOnline, user]);
 
   /** 매매·보유·시세 등 전부 비움 (샘플 아님) */
@@ -1986,6 +1993,7 @@ export default function App() {
     setQuoteUpdatedAt({});
     setLastKrQuoteBulkAt(null);
     setKrDayOpenByTicker({});
+    setKrPriceStatusByTicker({});
   }, [applyLocalTodoChange, applyLocalTradeChange, createGuardSnapshot, networkOnline, user]);
 
   const refreshKrQuotes = useCallback(async (options?: { silent?: boolean }) => {
@@ -2011,6 +2019,7 @@ export default function App() {
     const nextQuotes: Record<string, number> = {};
     const nextAt: Record<string, string> = {};
     const nextOpen: Record<string, number> = {};
+    const nextPriceStatus: Record<string, KrPriceStatus> = {};
     const chunk = 5;
     for (let i = 0; i < tickers.length; i += chunk) {
       const part = tickers.slice(i, i + chunk);
@@ -2022,6 +2031,9 @@ export default function App() {
             });
             nextQuotes[t] = roundMoney(r.price, 'KRW');
             nextAt[t] = r.fetchedAt;
+            if (r.priceStatus) {
+              nextPriceStatus[t] = r.priceStatus;
+            }
             if (
               r.openPrice !== undefined &&
               Number.isFinite(r.openPrice) &&
@@ -2040,6 +2052,13 @@ export default function App() {
     if (Object.keys(nextOpen).length > 0) {
       setKrDayOpenByTicker((prev) => ({ ...prev, ...nextOpen }));
     }
+    setKrPriceStatusByTicker((prev) => {
+      const next = { ...prev };
+      tickers.forEach((ticker) => {
+        delete next[ticker];
+      });
+      return { ...next, ...nextPriceStatus };
+    });
     setQuoteUpdatedAt((prev) => ({ ...prev, ...nextAt }));
     if (ok > 0) {
       setLastKrQuoteBulkAt(new Date().toISOString());
@@ -2539,6 +2558,7 @@ export default function App() {
                 onRefreshKrQuotes={() => void refreshKrQuotes()}
                 lastKrQuoteBulkAt={lastKrQuoteBulkAt}
                 krDayOpenByTicker={krDayOpenByTicker}
+                krPriceStatusByTicker={krPriceStatusByTicker}
                 pendingTodoCountByPositionId={pendingTodoCountByPositionId}
                 reachedTodoCountByPositionId={reachedTodoCountByPositionId}
                 availableQuantityByPositionId={availableQuantityByPositionId}

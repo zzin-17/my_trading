@@ -26,6 +26,36 @@ export function parseNaverMainPrice(html) {
   return Number.isFinite(n) ? n : null;
 }
 
+export function extractKrPriceStatus(info) {
+  const name = String(info?.compareToPreviousPrice?.name ?? '').toUpperCase();
+  const text = String(info?.compareToPreviousPrice?.text ?? '');
+  if (name === 'UPPER_LIMIT' || text === '상한') return 'upper_limit';
+  if (name === 'LOWER_LIMIT' || text === '하한') return 'lower_limit';
+
+  const raw = [
+    info?.tradableStatusCode,
+    info?.tradableStatus,
+    info?.tradeStopType?.name,
+    info?.tradeStopType?.text,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  const stopLike = /stop|halt|circuit|sidecar|vi|정지|서킷|사이드카/.test(raw);
+  if (!stopLike) return undefined;
+  if (/buy|buyside|bid|매수/.test(raw)) return 'buy_circuit';
+  if (/sell|sellside|ask|매도/.test(raw)) return 'sell_circuit';
+  return undefined;
+}
+
+export async function fetchNaverMobileBasicData(code) {
+  const url = `https://m.stock.naver.com/api/stock/${code}/basic`;
+  const r = await fetch(url, { headers: UA });
+  if (!r.ok) throw new Error(`Mobile ${r.status}`);
+  return r.json();
+}
+
 /** PC 종목 메인 — 기존 지연 시세(정규장 중심) */
 export async function fetchNaverPcDelayedQuote(code) {
   const upstream = `https://finance.naver.com/item/main.naver?code=${code}`;
@@ -47,10 +77,7 @@ export async function fetchNaverPcDelayedQuote(code) {
  * 모바일 API — 장외(Over market / NXT 등) 호가가 있으면 우선, 없으면 종가 표시값
  */
 export async function fetchNaverMobileQuotePreferOver(code) {
-  const url = `https://m.stock.naver.com/api/stock/${code}/basic`;
-  const r = await fetch(url, { headers: UA });
-  if (!r.ok) throw new Error(`Mobile ${r.status}`);
-  const data = await r.json();
+  const data = await fetchNaverMobileBasicData(code);
   const overRaw = data?.overMarketPriceInfo?.overPrice;
   const over = parseCommaInt(overRaw);
   if (over != null) {
@@ -58,6 +85,7 @@ export async function fetchNaverMobileQuotePreferOver(code) {
       price: over,
       fetchedAt: new Date().toISOString(),
       source: 'naver_mobile_over_market',
+      priceStatus: extractKrPriceStatus(data?.overMarketPriceInfo ?? data),
     };
   }
   const close = parseCommaInt(data?.closePrice);
@@ -66,9 +94,17 @@ export async function fetchNaverMobileQuotePreferOver(code) {
       price: close,
       fetchedAt: new Date().toISOString(),
       source: 'naver_mobile_krx',
+      priceStatus: extractKrPriceStatus(data),
     };
   }
   throw new Error('mobile_parse_fail');
+}
+
+export async function fetchKrPriceStatus(code, { preferOver } = {}) {
+  const data = await fetchNaverMobileBasicData(code);
+  return extractKrPriceStatus(
+    preferOver && data?.overMarketPriceInfo ? data.overMarketPriceInfo : data,
+  );
 }
 
 /** 당일 시가(시초가) — 모바일 integration totalInfos */
@@ -94,12 +130,14 @@ export async function fetchKrQuote(code, { extended }) {
         fetchNaverPcDelayedQuote(code),
       )
     : fetchNaverPcDelayedQuote(code);
-  const [main, openPrice] = await Promise.all([
+  const [main, openPrice, fallbackPriceStatus] = await Promise.all([
     mainPromise,
     fetchKrDayOpenPrice(code).catch(() => null),
+    fetchKrPriceStatus(code, { preferOver: extended }).catch(() => undefined),
   ]);
   return {
     ...main,
     openPrice: openPrice != null ? openPrice : undefined,
+    priceStatus: main.priceStatus ?? fallbackPriceStatus,
   };
 }

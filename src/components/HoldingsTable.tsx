@@ -5,6 +5,7 @@ import { isConcentrationRisk, roundPercent } from '../lib/portfolioMath';
 import { fetchKrBoardByTicker } from '../lib/krxLookup';
 import { krBoardBadgeClass, krBoardDisplayLabel } from '../lib/krBoardUi';
 import { normalizeKrTicker } from '../lib/krxLookup';
+import type { KrPriceStatus } from '../lib/naverKrQuote';
 import { ExpandableText } from './ExpandableText';
 import {
   isKrOpenAttention,
@@ -36,6 +37,23 @@ function currentPriceEmphasis(
   if (currentPrice > dayOpen) return 'pos';
   if (currentPrice < dayOpen) return 'neg';
   return 'warn';
+}
+
+function krPriceStatusLabel(status: KrPriceStatus): string {
+  switch (status) {
+    case 'upper_limit':
+      return '상';
+    case 'lower_limit':
+      return '하';
+    case 'buy_circuit':
+      return '서킷';
+    case 'sell_circuit':
+      return '서킷';
+  }
+}
+
+function krPriceStatusTone(status: KrPriceStatus): 'pos' | 'neg' {
+  return status === 'upper_limit' || status === 'buy_circuit' ? 'pos' : 'neg';
 }
 
 export type HoldingSortKey =
@@ -110,6 +128,8 @@ interface HoldingsTableProps {
   lastKrQuoteBulkAt: string | null;
   /** 시세 갱신 시 받은 당일 시가(티커→원). 없으면 시가 대비 강조 없음 */
   krDayOpenByTicker?: Record<string, number>;
+  /** 현재가 앞에 붙일 상/하한가·서킷 상태 */
+  krPriceStatusByTicker?: Record<string, KrPriceStatus>;
   /** 포지션별 미완료 To-do 개수(보유와 티커·시장이 일치하는 항목) */
   pendingTodoCountByPositionId?: Record<string, number>;
   /** 포지션별 도달 상태 미완료 To-do 개수 */
@@ -131,6 +151,7 @@ export function HoldingsTable({
   onRefreshKrQuotes,
   lastKrQuoteBulkAt,
   krDayOpenByTicker = {},
+  krPriceStatusByTicker = {},
   pendingTodoCountByPositionId = {},
   reachedTodoCountByPositionId = {},
   availableQuantityByPositionId = {},
@@ -441,6 +462,8 @@ export function HoldingsTable({
                 const pendingTodoCount = pendingTodoCountByPositionId[p.id] ?? 0;
                 const reachedTodoCount = reachedTodoCountByPositionId[p.id] ?? 0;
                 const availableQty = availableQuantityByPositionId[p.id] ?? p.quantity;
+                const priceStatus =
+                  p.market === 'KR' ? krPriceStatusByTicker[p.ticker] : undefined;
                 const currentPriceEmph = currentPriceEmphasis(
                   openAttention,
                   p.current_price,
@@ -503,6 +526,8 @@ export function HoldingsTable({
                     <HoldingValueCell
                       value={formatMoney(p.current_price, p.currency)}
                       emph={currentPriceEmph}
+                      badgeLabel={priceStatus ? krPriceStatusLabel(priceStatus) : undefined}
+                      badgeTone={priceStatus ? krPriceStatusTone(priceStatus) : undefined}
                       title={openTip}
                       borderTop
                     />
@@ -661,6 +686,8 @@ export function HoldingsTable({
                 p.current_price,
                 dayOpen,
               );
+              const priceStatus =
+                p.market === 'KR' ? krPriceStatusByTicker[p.ticker] : undefined;
               return (
                 <tr
                   key={p.id}
@@ -721,7 +748,20 @@ export function HoldingsTable({
                     }`}
                     title={openTip}
                   >
-                    {formatMoney(p.current_price, p.currency)}
+                    <span className="inline-flex items-center justify-end gap-1">
+                      {priceStatus ? (
+                        <span
+                          className={`shrink-0 whitespace-nowrap text-[10px] font-semibold ${
+                            krPriceStatusTone(priceStatus) === 'pos'
+                              ? 'text-red-400'
+                              : 'text-blue-400'
+                          }`}
+                        >
+                          {krPriceStatusLabel(priceStatus)}
+                        </span>
+                      ) : null}
+                      <span>{formatMoney(p.current_price, p.currency)}</span>
+                    </span>
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums text-textMain">
                     {formatMoney(p.avg_price, p.currency)}
@@ -841,12 +881,16 @@ function HoldingHeaderCell({
 function HoldingValueCell({
   value,
   emph,
+  badgeLabel,
+  badgeTone,
   title,
   borderLeft = false,
   borderTop = false,
 }: {
   value: string;
   emph?: 'pos' | 'neg' | 'warn';
+  badgeLabel?: string;
+  badgeTone?: 'pos' | 'neg';
   title?: string;
   borderLeft?: boolean;
   borderTop?: boolean;
@@ -858,19 +902,30 @@ function HoldingValueCell({
       }`}
       title={title}
     >
-      <p
-        className={`whitespace-nowrap text-[12px] font-semibold tabular-nums ${
-          emph === 'pos'
-            ? 'text-red-400'
-            : emph === 'neg'
-              ? 'text-blue-400'
-              : emph === 'warn'
-                ? 'text-warning'
-                : 'text-textMain'
-        }`}
-      >
-        {value}
-      </p>
+      <div className="inline-flex items-center justify-end gap-1">
+        {badgeLabel ? (
+          <span
+            className={`shrink-0 whitespace-nowrap text-[9px] font-semibold ${
+              badgeTone === 'pos' ? 'text-red-400' : 'text-blue-400'
+            }`}
+          >
+            {badgeLabel}
+          </span>
+        ) : null}
+        <p
+          className={`whitespace-nowrap text-[12px] font-semibold tabular-nums ${
+            emph === 'pos'
+              ? 'text-red-400'
+              : emph === 'neg'
+                ? 'text-blue-400'
+                : emph === 'warn'
+                  ? 'text-warning'
+                  : 'text-textMain'
+          }`}
+        >
+          {value}
+        </p>
+      </div>
     </div>
   );
 }

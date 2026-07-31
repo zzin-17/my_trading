@@ -1,3 +1,9 @@
+export type KrPriceStatus =
+  | 'upper_limit'
+  | 'lower_limit'
+  | 'buy_circuit'
+  | 'sell_circuit';
+
 export interface KrNaverQuoteResponse {
   price: number;
   fetchedAt: string;
@@ -5,6 +11,8 @@ export interface KrNaverQuoteResponse {
   source?: string;
   /** 당일 시가(시초가). 시세 갱신 직후에만 내려오며, 시가 대비 ±7% 이상이면 보유표에서 강조에 사용 */
   openPrice?: number;
+  /** 상한가/하한가/매수·매도 서킷 상태가 감지되면 내려옴 */
+  priceStatus?: KrPriceStatus;
 }
 
 function quoteBaseUrl(): string {
@@ -37,6 +45,7 @@ export async function fetchKrNaverDelayedQuote(
     price?: number;
     fetchedAt?: string;
     source?: string;
+    priceStatus?: KrPriceStatus;
     message?: string;
   };
   if (!res.ok) {
@@ -55,5 +64,6 @@ export async function fetchKrNaverDelayedQuote(
     fetchedAt: data.fetchedAt ?? new Date().toISOString(),
     source: data.source,
     ...(openPrice !== undefined ? { openPrice } : {}),
+    ...(data.priceStatus ? { priceStatus: data.priceStatus } : {}),
   };
 }
