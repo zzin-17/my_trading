@@ -483,7 +483,7 @@ export function HoldingsTable({
                       onClick={() => onOpenDetail(p.id)}
                       className="sticky left-0 z-[11] row-span-2 min-w-0 overflow-hidden border-r border-border/60 bg-surface px-2 py-1.5 text-left shadow-[8px_0_12px_-10px_rgba(0,0,0,0.45)]"
                     >
-                      <span className="flex flex-wrap items-center gap-1">
+                      <span className="flex flex-wrap items-center gap-0.5">
                         <span className="line-clamp-2 text-[12px] font-semibold leading-snug text-textMain underline-offset-2 hover:underline">
                           {p.name}
                         </span>
@@ -742,7 +742,7 @@ export function HoldingsTable({
                     <button
                       type="button"
                       onClick={() => onOpenDetail(p.id)}
-                      className="flex w-full items-center gap-1.5 text-left text-textMain underline-offset-2 hover:underline"
+                      className="flex w-full items-center gap-0.5 text-left text-textMain underline-offset-2 hover:underline"
                     >
                       <span className="line-clamp-2 min-w-0 flex-1">{p.name}</span>
                       {priceStatus ? (
@@ -770,20 +770,7 @@ export function HoldingsTable({
                     }`}
                     title={openTip}
                   >
-                    <span className="inline-flex items-center justify-end gap-1">
-                      {priceStatus ? (
-                        <span
-                          className={`shrink-0 whitespace-nowrap text-[10px] font-semibold ${
-                            krPriceStatusTone(priceStatus) === 'pos'
-                              ? 'text-red-400'
-                              : 'text-blue-400'
-                          }`}
-                        >
-                          {krPriceStatusLabel(priceStatus)}
-                        </span>
-                      ) : null}
-                      <span>{formatMoney(p.current_price, p.currency)}</span>
-                    </span>
+                    {formatMoney(p.current_price, p.currency)}
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums text-textMain">
                     {formatMoney(p.avg_price, p.currency)}
