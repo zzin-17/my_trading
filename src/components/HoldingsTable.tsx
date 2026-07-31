@@ -58,8 +58,8 @@ function krPriceStatusTone(status: KrPriceStatus): 'pos' | 'neg' {
 
 function krPriceStatusBadgeClass(status: KrPriceStatus): string {
   return krPriceStatusTone(status) === 'pos'
-    ? 'bg-red-500/12 text-red-400 ring-1 ring-red-500/18'
-    : 'bg-blue-500/12 text-blue-400 ring-1 ring-blue-500/18';
+    ? 'bg-warning/20 text-red-400'
+    : 'bg-warning/20 text-blue-400';
 }
 
 export type HoldingSortKey =
@@ -758,7 +758,7 @@ export function HoldingsTable({
                     <span className="inline-flex items-center justify-end gap-1.5">
                       {priceStatus ? (
                         <span
-                          className={`shrink-0 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${krPriceStatusBadgeClass(
+                          className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium leading-none ${krPriceStatusBadgeClass(
                             priceStatus,
                           )}`}
                         >
@@ -912,11 +912,11 @@ function HoldingValueCell({
       <div className="inline-flex items-center justify-end gap-1">
         {badgeLabel ? (
           <span
-            className={`shrink-0 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
+            className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium leading-none ${
               badgeClassName ??
               (badgeTone === 'pos'
-                ? 'bg-red-500/12 text-red-400 ring-1 ring-red-500/18'
-                : 'bg-blue-500/12 text-blue-400 ring-1 ring-blue-500/18')
+                ? 'bg-warning/20 text-red-400'
+                : 'bg-warning/20 text-blue-400')
             }`}
           >
             {badgeLabel}
