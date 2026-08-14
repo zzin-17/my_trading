@@ -723,29 +723,35 @@ export default function App() {
           );
         }
 
-        if (bootstrap.missingTradeDocs.length > 0 || bootstrap.missingTodoDocs.length > 0) {
-          await Promise.all([
-            cloudPortfolioStore.syncTrades(
-              user.uid,
-              bootstrap.missingTradeDocs,
-              bootstrap.staleTradeDeletes,
-              deviceIdRef.current,
-            ),
-            cloudPortfolioStore.syncTodos(
-              user.uid,
-              bootstrap.missingTodoDocs,
-              bootstrap.staleTodoDeletes,
-              deviceIdRef.current,
-            ),
-          ]);
-        }
+        await Promise.all([
+          bootstrap.missingTradeDocs.length > 0 || bootstrap.staleTradeDeletes.length > 0
+            ? cloudPortfolioStore.syncTrades(
+                user.uid,
+                bootstrap.missingTradeDocs,
+                bootstrap.staleTradeDeletes,
+                deviceIdRef.current,
+              )
+            : Promise.resolve(),
+          bootstrap.missingTodoDocs.length > 0 || bootstrap.staleTodoDeletes.length > 0
+            ? cloudPortfolioStore.syncTodos(
+                user.uid,
+                bootstrap.missingTodoDocs,
+                bootstrap.staleTodoDeletes,
+                deviceIdRef.current,
+              )
+            : Promise.resolve(),
+        ]);
 
         cloudTradeFingerprintsRef.current = bootstrap.nextTradeFingerprints;
         cloudTodoFingerprintsRef.current = bootstrap.nextTodoFingerprints;
-        pendingTradeSyncRef.current = false;
-        pendingTodoSyncRef.current = false;
-        pendingTradeFingerprintsRef.current = null;
-        pendingTodoFingerprintsRef.current = null;
+        pendingTradeSyncRef.current = bootstrap.missingTradeDocs.length > 0;
+        pendingTodoSyncRef.current = bootstrap.missingTodoDocs.length > 0;
+        pendingTradeFingerprintsRef.current = pendingTradeSyncRef.current
+          ? bootstrap.nextTradeFingerprints
+          : null;
+        pendingTodoFingerprintsRef.current = pendingTodoSyncRef.current
+          ? bootstrap.nextTodoFingerprints
+          : null;
         pendingMetaSyncRef.current = null;
         lastAutoSnapshotFingerprintRef.current = portfolioGuardFingerprint(nextPortfolio);
         cloudMetaFingerprintRef.current = bootstrap.remoteMetaFingerprint;

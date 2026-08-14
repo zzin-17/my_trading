@@ -138,15 +138,8 @@ export function metaFingerprint(input: CloudPortfolioMetaInput): string {
 function reconcileTradesFromSources(args: {
   liveTrades: Trade[];
   fallbackTrades: Trade[];
-  preferFallback?: boolean;
 }): Trade[] {
-  const { liveTrades, fallbackTrades, preferFallback = false } = args;
-  if (preferFallback) {
-    return [...fallbackTrades].sort((a, b) => {
-      const d = a.date.localeCompare(b.date);
-      return d !== 0 ? d : a.id.localeCompare(b.id);
-    });
-  }
+  const { liveTrades, fallbackTrades } = args;
   const map = new Map<string, Trade>();
   for (const trade of fallbackTrades) map.set(trade.id, trade);
   for (const trade of liveTrades) map.set(trade.id, trade);
@@ -159,15 +152,8 @@ function reconcileTradesFromSources(args: {
 function reconcileTodosFromSources(args: {
   liveTodos: TradePlanTodo[];
   fallbackTodos: TradePlanTodo[];
-  preferFallback?: boolean;
 }): TradePlanTodo[] {
-  const { liveTodos, fallbackTodos, preferFallback = false } = args;
-  if (preferFallback) {
-    return [...fallbackTodos].sort((a, b) => {
-      const d = a.createdAt.localeCompare(b.createdAt);
-      return d !== 0 ? d : a.id.localeCompare(b.id);
-    });
-  }
+  const { liveTodos, fallbackTodos } = args;
   const map = new Map<string, TradePlanTodo>();
   for (const todo of fallbackTodos) map.set(todo.id, todo);
   for (const todo of liveTodos) map.set(todo.id, todo);
@@ -187,14 +173,6 @@ function pickMetaValue<T>(args: {
   if (remote !== null && remote !== undefined) return remote;
   if (ignoreLegacy) return local;
   return legacy ?? local;
-}
-
-function getMaxUpdatedAtMs(input: Record<string, number>): number {
-  let max = 0;
-  for (const value of Object.values(input)) {
-    if (value > max) max = value;
-  }
-  return max;
 }
 
 export function buildCloudPortfolioMetaInput(
@@ -237,30 +215,20 @@ async function loadBootstrap(args: {
     ? normalizeLoadedPortfolio(legacySnapshot.portfolio)
     : null;
 
-  const maxRemoteTradeUpdatedAtMs = getMaxUpdatedAtMs(live.tradeUpdatedAtMsById);
-  const maxRemoteTodoUpdatedAtMs = getMaxUpdatedAtMs(live.todoUpdatedAtMsById);
   const maxRemoteMetaUpdatedAtMs = remoteMeta?.updatedAtMs ?? 0;
 
-  const preferLocalTrades = localPersistedAtMs > maxRemoteTradeUpdatedAtMs;
-  const preferLocalTodos = localPersistedAtMs > maxRemoteTodoUpdatedAtMs;
   const preferLocalMeta = localPersistedAtMs > maxRemoteMetaUpdatedAtMs;
 
-  const fallbackTrades = preferLocalTrades
-    ? localPortfolio.trades
-    : (normalizedLegacy?.trades ?? localPortfolio.trades);
-  const fallbackTodos = preferLocalTodos
-    ? localPortfolio.todos
-    : (normalizedLegacy?.todos ?? localPortfolio.todos);
+  const fallbackTrades = normalizedLegacy?.trades ?? localPortfolio.trades;
+  const fallbackTodos = normalizedLegacy?.todos ?? localPortfolio.todos;
 
   const nextTrades = reconcileTradesFromSources({
     liveTrades: live.trades,
     fallbackTrades,
-    preferFallback: preferLocalTrades,
   });
   const nextTodos = reconcileTodosFromSources({
     liveTodos: live.todos,
     fallbackTodos,
-    preferFallback: preferLocalTodos,
   });
 
   const nextMeta: CloudPortfolioMetaInput = {
