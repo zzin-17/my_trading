@@ -113,7 +113,9 @@ async function getKrxList(): Promise<KrxListedStock[]> {
   if (krxListCache) return krxListCache;
   const base =
     (import.meta.env.VITE_KRX_PROXY_BASE as string | undefined) ??
-    '/api/krx-kind';
+    (import.meta.env.DEV
+      ? '/api/krx-kind'
+      : 'https://my-trading-phi.vercel.app/api/krx-kind');
 
   const res = await fetch(base);
   if (!res.ok) {

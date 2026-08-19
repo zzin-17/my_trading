@@ -235,7 +235,8 @@ export function PositionDetailModal({
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-semibold text-textMain">
               {position.name}{' '}
-              <span className="font-normal text-textMuted">({position.ticker})</span>
+              <span className="font-normal text-textMuted">({position.ticker})</span>{' '}
+              <span className="text-[11px] font-medium text-textMuted">· {position.sector}</span>
             </h2>
             <p className="mt-1 text-[12px] text-textMuted">
               <span
@@ -246,10 +247,6 @@ export function PositionDetailModal({
                 {krBoardDisplayLabel(position.market, krBoard)}
               </span>
             </p>
-            <div className="mt-2 rounded-md border border-border/80 bg-background/50 px-3 py-2">
-              <p className="text-[11px] font-medium text-textMuted">업종 (섹터)</p>
-              <p className="mt-0.5 text-[13px] leading-snug text-textMain">{position.sector}</p>
-            </div>
           </div>
           <button
             type="button"
@@ -350,9 +347,6 @@ export function PositionDetailModal({
 
         <section className="mt-3 rounded-md border border-border p-3">
           <h3 className="text-sm font-medium text-textMain">추가 매수 평단 계산기</h3>
-          <p className="mt-1 text-[11px] leading-relaxed text-textMuted">
-            현재 {position.quantity}주 · {formatMoney(position.avg_price, position.currency)} 기준
-          </p>
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[9.5rem_minmax(0,1fr)]">
             <label className="flex items-center gap-2 rounded border border-border bg-background px-2.5 py-2 text-[11px] text-textMuted">
               <span className="shrink-0">수량</span>
@@ -412,11 +406,7 @@ export function PositionDetailModal({
                 </span>
               </div>
             </div>
-          ) : (
-            <p className="mt-2 text-[11px] text-textMuted">
-              수량만 넣으면 현재가 기준 새 평단과 총 보유수량을 바로 보여줍니다.
-            </p>
-          )}
+          ) : null}
         </section>
 
         <div className="mt-3 grid grid-cols-2 gap-2">

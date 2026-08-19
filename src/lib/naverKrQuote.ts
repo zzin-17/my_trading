@@ -17,7 +17,10 @@ export interface KrNaverQuoteResponse {
 
 function quoteBaseUrl(): string {
   return (
-    (import.meta.env.VITE_KR_QUOTE_BASE as string | undefined) ?? '/api/kr-quote'
+    (import.meta.env.VITE_KR_QUOTE_BASE as string | undefined) ??
+    (import.meta.env.DEV
+      ? '/api/kr-quote'
+      : 'https://my-trading-phi.vercel.app/api/kr-quote')
   );
 }
 

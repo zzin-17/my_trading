@@ -5,6 +5,15 @@ import {
 } from './mergeListedFunds.js';
 import { enforceRateLimit } from './_rateLimit.js';
 
+const NAVER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0',
+  Accept: 'application/json,text/plain,*/*',
+};
+const NAVER_MARKETS = [
+  { category: 'KOSPI', board: '코스피' },
+  { category: 'KOSDAQ', board: '코스닥' },
+];
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
@@ -27,33 +36,86 @@ export default async function handler(req, res) {
   const upstream = `https://kind.krx.co.kr/corpgeneral/corpList.do?${qs.toString()}`;
 
   try {
-    const r = await fetch(upstream, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0',
-        Accept: 'text/html,application/xhtml+xml',
-      },
-    });
-    if (!r.ok) {
-      return res.status(502).send(`Upstream error: ${r.status}`);
+    let stockItems;
+    let useNaverFallback = false;
+    try {
+      const r = await fetch(upstream, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+          Accept: 'text/html,application/xhtml+xml',
+        },
+      });
+      if (!r.ok) throw new Error(`KRX listing error: ${r.status}`);
+
+      const body = Buffer.from(await r.arrayBuffer());
+      const html = new TextDecoder('euc-kr').decode(body);
+      stockItems = parseKrxCorpList(html);
+      if (stockItems.length === 0) throw new Error('Failed to parse KRX listing');
+    } catch {
+      // KRX는 해외 서버리스 실행 IP를 차단할 수 있으므로 네이버 전체 종목 목록으로 대체한다.
+      stockItems = await fetchNaverStockRows();
+      useNaverFallback = true;
     }
 
-    const body = Buffer.from(await r.arrayBuffer());
-    const html = new TextDecoder('euc-kr').decode(body);
-    const stockItems = parseKrxCorpList(html);
-    if (stockItems.length === 0) {
-      return res.status(502).json({ message: 'Failed to parse KRX listing' });
-    }
     const [fundItems, preferredItems] = await Promise.all([
       fetchNaverEtfEtnRows(),
-      fetchNaverPreferredStockRows(stockItems),
+      useNaverFallback ? Promise.resolve([]) : fetchNaverPreferredStockRows(stockItems),
     ]);
     const items = mergeStockAndFunds(stockItems, fundItems, preferredItems);
+    if (items.length === 0) {
+      return res.status(502).json({ message: 'Failed to fetch listing' });
+    }
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
     return res.status(200).json({ items });
   } catch {
     return res.status(502).send('Failed to fetch KRX listing');
   }
+}
+
+async function fetchNaverStockRows() {
+  const firstPages = await Promise.all(
+    NAVER_MARKETS.map(async (market) => ({
+      market,
+      payload: await fetchNaverMarketValuePage(market.category, 1),
+    })),
+  );
+  const pageRequests = firstPages.flatMap(({ market, payload }) => {
+    const totalCount = Number(payload.totalCount) || 0;
+    const pageSize = Number(payload.pageSize) || 100;
+    const pageCount = Math.ceil(totalCount / pageSize);
+    return Array.from({ length: Math.max(0, pageCount - 1) }, (_, index) => ({
+      market,
+      page: index + 2,
+    }));
+  });
+  const remainingPages = await Promise.all(
+    pageRequests.map(async ({ market, page }) => ({
+      market,
+      payload: await fetchNaverMarketValuePage(market.category, page),
+    })),
+  );
+  const items = [];
+  const seen = new Set();
+  for (const { market, payload } of [...firstPages, ...remainingPages]) {
+    for (const row of Array.isArray(payload.stocks) ? payload.stocks : []) {
+      const ticker = String(row?.itemCode ?? '').replace(/\s/g, '').toUpperCase();
+      const name = String(row?.stockName ?? '').replace(/\s+/g, ' ').trim();
+      if (!/^[A-Z0-9]{6}$/.test(ticker) || !name || seen.has(ticker)) continue;
+      seen.add(ticker);
+      items.push({ ticker, name, sector: '기타', board: market.board });
+    }
+  }
+  return items;
+}
+
+async function fetchNaverMarketValuePage(category, page) {
+  const url = new URL(`https://m.stock.naver.com/api/stocks/marketValue/${category}`);
+  url.searchParams.set('page', String(page));
+  url.searchParams.set('pageSize', '100');
+  const r = await fetch(url, { headers: NAVER_HEADERS });
+  if (!r.ok) throw new Error(`Naver listing error: ${r.status}`);
+  return r.json();
 }
 
 /** KRX KIND 상장목록: 1열 회사명, 2열 시장, 3열 종목코드, 4열 업종 */
