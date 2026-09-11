@@ -175,6 +175,18 @@ function pickMetaValue<T>(args: {
   return legacy ?? local;
 }
 
+/** 라이브 trades/todos가 비어 있을 때만 레거시 백업으로 복구한다. 삭제 이력이 있으면 빈 상태를 유지한다. */
+export function shouldHydrateFromLegacy(input: {
+  liveTradeCount: number;
+  liveTodoCount: number;
+  hasDeleteHistory: boolean;
+  legacyHasItems: boolean;
+}): boolean {
+  if (input.liveTradeCount > 0 || input.liveTodoCount > 0) return false;
+  if (input.hasDeleteHistory) return false;
+  return input.legacyHasItems;
+}
+
 export function buildCloudPortfolioMetaInput(
   portfolio: PersistedPortfolioV1,
 ): CloudPortfolioMetaInput {
@@ -208,19 +220,42 @@ async function loadBootstrap(args: {
     fetchCloudLivePortfolio(uid),
     fetchCloudPortfolioMeta(uid),
   ]);
-  const shouldUseLegacyMigration =
-    live.trades.length === 0 && live.todos.length === 0 && remoteMeta == null;
-  const legacySnapshot = shouldUseLegacyMigration ? await fetchCloudPortfolio(uid) : null;
+  const liveEmpty = live.trades.length === 0 && live.todos.length === 0;
+  const [legacySnapshot, deletedTrades, deletedTodos] = liveEmpty
+    ? await Promise.all([
+        fetchCloudPortfolio(uid),
+        listCloudDeletedTrades(uid, 1).catch(() => []),
+        listCloudDeletedTodos(uid, 1).catch(() => []),
+      ])
+    : [null, [], []];
   const normalizedLegacy = legacySnapshot
     ? normalizeLoadedPortfolio(legacySnapshot.portfolio)
     : null;
+  const shouldUseLegacyMigration = shouldHydrateFromLegacy({
+    liveTradeCount: live.trades.length,
+    liveTodoCount: live.todos.length,
+    hasDeleteHistory: deletedTrades.length > 0 || deletedTodos.length > 0,
+    legacyHasItems:
+      (normalizedLegacy?.trades.length ?? 0) > 0 ||
+      (normalizedLegacy?.todos.length ?? 0) > 0,
+  });
 
   const maxRemoteMetaUpdatedAtMs = remoteMeta?.updatedAtMs ?? 0;
+  const localHasPortfolio =
+    localPortfolio.trades.length > 0 || localPortfolio.todos.length > 0;
+  const preferLocalMeta =
+    localHasPortfolio && localPersistedAtMs > maxRemoteMetaUpdatedAtMs;
 
-  const preferLocalMeta = localPersistedAtMs > maxRemoteMetaUpdatedAtMs;
-
-  const fallbackTrades = normalizedLegacy?.trades ?? localPortfolio.trades;
-  const fallbackTodos = normalizedLegacy?.todos ?? localPortfolio.todos;
+  const fallbackTrades = localHasPortfolio
+    ? localPortfolio.trades
+    : shouldUseLegacyMigration
+      ? (normalizedLegacy?.trades ?? localPortfolio.trades)
+      : localPortfolio.trades;
+  const fallbackTodos = localHasPortfolio
+    ? localPortfolio.todos
+    : shouldUseLegacyMigration
+      ? (normalizedLegacy?.todos ?? localPortfolio.todos)
+      : localPortfolio.todos;
 
   const nextTrades = reconcileTradesFromSources({
     liveTrades: live.trades,

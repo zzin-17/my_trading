@@ -197,6 +197,52 @@ function parseCloudTrade(input: unknown, fallbackId: string): Trade | null {
   };
 }
 
+function firestoreIntQuantity(quantity: number): number {
+  if (Number.isInteger(quantity)) return quantity;
+  return Math.round(quantity);
+}
+
+function toFirestoreTradeDoc(trade: Trade) {
+  return {
+    id: trade.id,
+    date: trade.date,
+    ticker: trade.ticker,
+    name: trade.name,
+    sector: trade.sector,
+    market: trade.market,
+    side: trade.side,
+    quantity: firestoreIntQuantity(trade.quantity),
+    price: trade.price,
+    currency: trade.currency,
+    updatedAt: serverTimestamp(),
+    ...(typeof trade.note === 'string' && trade.note.trim()
+      ? { note: trade.note.trim() }
+      : {}),
+    ...(trade.excludeFromJournal === true ? { excludeFromJournal: true } : {}),
+    ...(trade.executionStatus ? { executionStatus: trade.executionStatus } : {}),
+  };
+}
+
+function toFirestoreTodoDoc(todo: TradePlanTodo) {
+  return {
+    id: todo.id,
+    market: todo.market,
+    ticker: todo.ticker,
+    action: todo.action,
+    targetPrice: todo.targetPrice,
+    quantity: firestoreIntQuantity(todo.quantity),
+    done: todo.done,
+    createdAt: todo.createdAt,
+    updatedAt: serverTimestamp(),
+    ...(typeof todo.name === 'string' && todo.name.trim()
+      ? { name: todo.name.trim() }
+      : {}),
+    ...(typeof todo.note === 'string' && todo.note.trim()
+      ? { note: todo.note.trim() }
+      : {}),
+  };
+}
+
 function parseCloudTodo(input: unknown, fallbackId: string): TradePlanTodo | null {
   if (!isRecord(input)) return null;
   const id = typeof input.id === 'string' && input.id.trim() ? input.id : fallbackId;
@@ -577,10 +623,7 @@ export async function restoreCloudDeletedTrade(
   const record = parseTradeTrashRecord(snap.data(), trashId);
   if (!record) return null;
   const batch = writeBatch(getFirebaseDb());
-  batch.set(tradeDocRef(uid, record.trade.id), {
-    ...record.trade,
-    updatedAt: serverTimestamp(),
-  });
+  batch.set(tradeDocRef(uid, record.trade.id), toFirestoreTradeDoc(record.trade));
   batch.delete(doc(tradeTrashCollectionRef(uid), trashId));
   await batch.commit();
   await appendCloudEvent(uid, {
@@ -603,10 +646,7 @@ export async function restoreCloudDeletedTodo(
   const record = parseTodoTrashRecord(snap.data(), trashId);
   if (!record) return null;
   const batch = writeBatch(getFirebaseDb());
-  batch.set(todoDocRef(uid, record.todo.id), {
-    ...record.todo,
-    updatedAt: serverTimestamp(),
-  });
+  batch.set(todoDocRef(uid, record.todo.id), toFirestoreTodoDoc(record.todo));
   batch.delete(doc(todoTrashCollectionRef(uid), trashId));
   await batch.commit();
   await appendCloudEvent(uid, {
@@ -687,10 +727,7 @@ async function commitTradeChanges(
     const batch = writeBatch(db);
     for (const op of ops.slice(i, i + 400)) {
       if (op.type === 'set') {
-        batch.set(tradeDocRef(uid, op.value.id), {
-          ...op.value,
-          updatedAt: serverTimestamp(),
-        });
+        batch.set(tradeDocRef(uid, op.value.id), toFirestoreTradeDoc(op.value));
       } else {
         const trashRef = doc(tradeTrashCollectionRef(uid), op.value.id);
         batch.set(trashRef, {
@@ -738,10 +775,7 @@ async function commitTodoChanges(
     const batch = writeBatch(db);
     for (const op of ops.slice(i, i + 400)) {
       if (op.type === 'set') {
-        batch.set(todoDocRef(uid, op.value.id), {
-          ...op.value,
-          updatedAt: serverTimestamp(),
-        });
+        batch.set(todoDocRef(uid, op.value.id), toFirestoreTodoDoc(op.value));
       } else {
         const trashRef = doc(todoTrashCollectionRef(uid), op.value.id);
         batch.set(trashRef, {
