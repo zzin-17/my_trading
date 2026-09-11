@@ -11,7 +11,7 @@ export default async function handler(req, res) {
     !enforceRateLimit(req, res, {
       bucket: 'kr-quote',
       windowMs: 60 * 1000,
-      max: 60,
+      max: 200,
     })
   ) {
     return;

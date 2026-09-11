@@ -56,21 +56,23 @@ export async function fetchNaverMobileBasicData(code) {
   return r.json();
 }
 
-/** PC 종목 메인 — 기존 지연 시세(정규장 중심) */
+/**
+ * 정규장(KRX) 중심 시세.
+ * 예전 PC HTML(`finance.naver.com/item/main.naver`)은 stock.naver.com SPA로 301/302 이전되어
+ * `오늘의시세` 파싱이 더 이상 동작하지 않는다. 모바일 basic JSON의 closePrice를 쓴다.
+ */
 export async function fetchNaverPcDelayedQuote(code) {
-  const upstream = `https://finance.naver.com/item/main.naver?code=${code}`;
-  const r = await fetch(upstream, {
-    headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'text/html,application/xhtml+xml' },
-  });
-  if (!r.ok) throw new Error(`Upstream ${r.status}`);
-  const html = await r.text();
-  const price = parseNaverMainPrice(html);
-  if (price === null) throw new Error('parse_fail');
-  return {
-    price,
-    fetchedAt: new Date().toISOString(),
-    source: 'naver_finance_delayed',
-  };
+  const data = await fetchNaverMobileBasicData(code);
+  const close = parseCommaInt(data?.closePrice);
+  if (close != null) {
+    return {
+      price: close,
+      fetchedAt: new Date().toISOString(),
+      source: 'naver_mobile_krx',
+      priceStatus: extractKrPriceStatus(data),
+    };
+  }
+  throw new Error('mobile_parse_fail');
 }
 
 /**

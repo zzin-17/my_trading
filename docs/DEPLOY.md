@@ -18,7 +18,7 @@
 - 한국 시세: `api/kr-quote.js` → 클라이언트는 기본적으로 `/api/kr-quote`로 요청합니다.
 - KRX 종목 메타: `api/krx-kind.js` → `/api/krx-kind`.
 - 두 라우트 모두 `api/_rateLimit.js`의 IP 기반 고정 윈도우 레이트리밋을 적용합니다.
-  - `kr-quote`: 1분당 60회
+  - `kr-quote`: 1분당 200회 (보유 종목 일괄 갱신)
   - `krx-kind`: 10분당 20회
 - 프로덕션에서 다른 호스트로내려면 환경 변수로 베이스 URL만 바꿉니다(비밀 아님).
   - `VITE_KR_QUOTE_BASE`
