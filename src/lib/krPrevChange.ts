@@ -17,16 +17,23 @@ export function krChangeFromPrevClose(
   return { amount, pct: (amount / prevClose) * 100 };
 }
 
-/** 주식앱 스타일: ▲ +₩1,450 +7.13% */
+export function krChangeTriangle(amount: number): string {
+  return amount > 0 ? '▲' : amount < 0 ? '▼' : '─';
+}
+
+export function formatKrChangeAmount(
+  amount: number,
+  currency: CurrencyCode,
+): string {
+  if (amount === 0) return formatMoney(0, currency);
+  return `${amount > 0 ? '+' : '-'}${formatMoney(Math.abs(amount), currency)}`;
+}
+
+/** 한 줄 표기: ▼ -₩400, -0.86% */
 export function formatKrDayChange(
   amount: number,
   pct: number,
   currency: CurrencyCode,
 ): string {
-  const tri = amount > 0 ? '▲' : amount < 0 ? '▼' : '─';
-  const signedAmt =
-    amount === 0
-      ? formatMoney(0, currency)
-      : `${amount > 0 ? '+' : '-'}${formatMoney(Math.abs(amount), currency)}`;
-  return `${tri} ${signedAmt} ${formatPercent(pct, true)}`;
+  return `${krChangeTriangle(amount)} ${formatKrChangeAmount(amount, currency)}, ${formatPercent(pct, true)}`;
 }

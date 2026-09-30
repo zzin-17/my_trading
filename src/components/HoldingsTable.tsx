@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Position, PositionMetrics, PortfolioSummary } from '../types/portfolio';
 import { formatMoney, formatPercent, formatQuoteUpdatedLabel } from '../lib/format';
 import { isConcentrationRisk, roundPercent } from '../lib/portfolioMath';
@@ -39,16 +39,37 @@ function krPriceChangeHint(
   currentPrice: number,
   prevClose: number | undefined,
   currency: Position['currency'],
-): { amount: number; pct: number; label: string; tip: string } | null {
+): { amount: number; pct: number; tip: string } | null {
   if (market !== 'KR') return null;
   const change = krChangeFromPrevClose(currentPrice, prevClose);
   if (!change || prevClose === undefined) return null;
   return {
     amount: change.amount,
     pct: change.pct,
-    label: formatKrDayChange(change.amount, change.pct, currency),
     tip: `전일 종가 ${formatMoney(prevClose, currency)} 대비`,
   };
+}
+
+function DayChangeBlock({
+  change,
+  currency,
+}: {
+  change: { amount: number; pct: number } | null;
+  currency: Position['currency'];
+}) {
+  if (!change) {
+    return <span className="text-[11px] text-textMuted">—</span>;
+  }
+  return (
+    <span
+      className={`whitespace-nowrap text-[11px] font-semibold tabular-nums ${pnlTextClass(
+        change.amount,
+        true,
+      )}`}
+    >
+      {formatKrDayChange(change.amount, change.pct, currency)}
+    </span>
+  );
 }
 
 function krPriceStatusLabel(status: KrPriceStatus): string {
@@ -79,6 +100,7 @@ export type HoldingSortKey =
   | 'ticker'
   | 'name'
   | 'current_price'
+  | 'day_change'
   | 'avg_price'
   | 'quantity'
   | 'market_value'
@@ -102,7 +124,7 @@ function SortableColumnHeader({
   sortKey: HoldingSortKey;
   sortDir: SortDir;
   onSort: (k: HoldingSortKey) => void;
-  align?: 'left' | 'right';
+  align?: 'left' | 'right' | 'center';
   className?: string;
 }) {
   const active = sortKey === columnKey;
@@ -111,13 +133,15 @@ function SortableColumnHeader({
       ? '오름차순 · 다시 클릭하면 내림차순'
       : '내림차순 · 다시 클릭하면 오름차순'
     : '클릭하여 오름차순 정렬';
+  const justify =
+    align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start';
   return (
     <th scope="col" className={className} aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
       <button
         type="button"
         onClick={() => onSort(columnKey)}
         title={sortTitle}
-        className={`inline-flex w-full min-w-0 items-center gap-0.5 rounded px-0.5 py-0.5 text-textMuted transition hover:bg-white/5 hover:text-textMain ${align === 'right' ? 'justify-end' : 'justify-start'}`}
+        className={`inline-flex w-full min-w-0 items-center gap-0.5 rounded px-0.5 py-0.5 text-textMuted transition hover:bg-white/5 hover:text-textMain ${justify}`}
       >
         <span>{label}</span>
         <span
@@ -256,6 +280,18 @@ export function HoldingsTable({
         case 'current_price':
           v = pa.current_price - pb.current_price;
           break;
+        case 'day_change': {
+          const ca = krChangeFromPrevClose(
+            pa.current_price,
+            pa.market === 'KR' ? krPrevCloseByTicker[pa.ticker] : undefined,
+          );
+          const cb = krChangeFromPrevClose(
+            pb.current_price,
+            pb.market === 'KR' ? krPrevCloseByTicker[pb.ticker] : undefined,
+          );
+          v = (ca?.pct ?? Number.NEGATIVE_INFINITY) - (cb?.pct ?? Number.NEGATIVE_INFINITY);
+          break;
+        }
         case 'avg_price':
           v = pa.avg_price - pb.avg_price;
           break;
@@ -281,7 +317,7 @@ export function HoldingsTable({
       return pa.ticker.localeCompare(pb.ticker, undefined, { numeric: true });
     });
     return arr;
-  }, [rows, sortKey, sortDir, krBoardByTicker]);
+  }, [rows, sortKey, sortDir, krBoardByTicker, krPrevCloseByTicker]);
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
@@ -555,9 +591,11 @@ export function HoldingsTable({
 
                     <HoldingValueCell
                       value={formatMoney(p.current_price, p.currency)}
-                      prefixValue={dayChange?.label}
-                      prefixClassName={
-                        dayChange ? pnlTextClass(dayChange.amount, true) : undefined
+                      below={
+                        <DayChangeBlock
+                          change={dayChange}
+                          currency={p.currency}
+                        />
                       }
                       emph={currentPriceEmph}
                       badgeLabel={priceStatus ? krPriceStatusLabel(priceStatus) : undefined}
@@ -593,7 +631,7 @@ export function HoldingsTable({
       </div>
 
       <div className="mt-3 hidden max-h-[min(65vh,720px)] overflow-auto rounded-md border border-border/60 md:block">
-        <table className="w-full min-w-[880px] border-collapse text-left text-[12px]">
+        <table className="w-full min-w-[980px] border-collapse text-left text-[12px]">
           <thead className="sticky top-0 z-10 border-b border-border bg-surface shadow-sm">
             <tr>
               <SortableColumnHeader
@@ -628,6 +666,15 @@ export function HoldingsTable({
                 onSort={handleSortHeader}
                 align="right"
                 className="py-2 pr-3 tabular-nums"
+              />
+              <SortableColumnHeader
+                label="전일대비"
+                columnKey="day_change"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSortHeader}
+                align="center"
+                className="py-2 px-2 tabular-nums"
               />
               <SortableColumnHeader
                 label="평단"
@@ -689,7 +736,7 @@ export function HoldingsTable({
             {sortedRows.length === 0 && q && (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={11}
                   className="py-10 text-center text-[13px] text-textMuted"
                 >
                   조건에 맞는 종목이 없습니다. 필터를 바꿔 보세요.
@@ -724,7 +771,6 @@ export function HoldingsTable({
                 Boolean(normalizeKrTicker(p.ticker))
                   ? `당일 시가 ${formatMoney(dayOpen, p.currency)} · 시가 대비 ${krOpenDeviationPct(p.current_price, dayOpen).toFixed(2)}% (±${KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 주목 표시)`
                   : undefined;
-              const priceTip = [dayChange?.tip, openTip].filter(Boolean).join(' · ') || undefined;
               const currentPriceEmph = currentPriceEmphasis(
                 openAttention,
                 p.current_price,
@@ -790,9 +836,9 @@ export function HoldingsTable({
                             ? 'font-semibold text-warning'
                             : 'text-textMain'
                     }`}
-                    title={priceTip}
+                    title={openTip}
                   >
-                    <span className="inline-flex items-baseline justify-end gap-1.5">
+                    <span className="inline-flex items-center justify-end gap-1.5">
                       {priceStatus ? (
                         <span
                           className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium leading-none ${krPriceStatusBadgeClass(
@@ -802,18 +848,11 @@ export function HoldingsTable({
                           {krPriceStatusLabel(priceStatus)}
                         </span>
                       ) : null}
-                      {dayChange ? (
-                        <span
-                          className={`whitespace-nowrap text-[10px] font-semibold tabular-nums ${pnlTextClass(
-                            dayChange.amount,
-                            true,
-                          )}`}
-                        >
-                          {dayChange.label}
-                        </span>
-                      ) : null}
                       <span>{formatMoney(p.current_price, p.currency)}</span>
                     </span>
+                  </td>
+                  <td className="px-2 py-2 text-center tabular-nums" title={dayChange?.tip}>
+                    <DayChangeBlock change={dayChange} currency={p.currency} />
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums text-textMain">
                     {formatMoney(p.avg_price, p.currency)}
@@ -843,7 +882,7 @@ export function HoldingsTable({
           </tbody>
           <tfoot className="sticky bottom-0 z-10 bg-surface shadow-[0_-4px_12px_-2px_rgba(0,0,0,0.25)]">
             <tr className="border-t-2 border-border font-semibold">
-              <td colSpan={6} className="py-3 pr-3 align-top text-textMuted">
+              <td colSpan={7} className="py-3 pr-3 align-top text-textMuted">
                 <div className="text-textMain">전체 합계</div>
                 <div className="mt-0.5 text-[11px] font-normal tabular-nums text-textMuted">
                   전체 {sortedRows.length}개 종목
@@ -932,8 +971,7 @@ function HoldingHeaderCell({
 
 function HoldingValueCell({
   value,
-  prefixValue,
-  prefixClassName,
+  below,
   emph,
   badgeLabel,
   badgeTone,
@@ -943,8 +981,7 @@ function HoldingValueCell({
   borderTop = false,
 }: {
   value: string;
-  prefixValue?: string;
-  prefixClassName?: string;
+  below?: ReactNode;
   emph?: 'pos' | 'neg' | 'warn';
   badgeLabel?: string;
   badgeTone?: 'pos' | 'neg';
@@ -968,31 +1005,25 @@ function HoldingValueCell({
       }`}
       title={title}
     >
-      <div className="inline-flex items-baseline justify-end gap-1">
-        {badgeLabel ? (
-          <span
-            className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium leading-none ${
-              badgeClassName ??
-              (badgeTone === 'pos'
-                ? 'bg-warning/20 text-red-400'
-                : 'bg-warning/20 text-blue-400')
-            }`}
-          >
-            {badgeLabel}
-          </span>
-        ) : null}
-        {prefixValue ? (
-          <p
-            className={`whitespace-nowrap text-[10px] font-semibold tabular-nums ${
-              prefixClassName ?? valueClass
-            }`}
-          >
-            {prefixValue}
+      <div className="inline-flex flex-col items-end gap-0.5">
+        <div className="inline-flex items-center justify-end gap-1">
+          {badgeLabel ? (
+            <span
+              className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium leading-none ${
+                badgeClassName ??
+                (badgeTone === 'pos'
+                  ? 'bg-warning/20 text-red-400'
+                  : 'bg-warning/20 text-blue-400')
+              }`}
+            >
+              {badgeLabel}
+            </span>
+          ) : null}
+          <p className={`whitespace-nowrap text-[12px] font-semibold tabular-nums ${valueClass}`}>
+            {value}
           </p>
-        ) : null}
-        <p className={`whitespace-nowrap text-[12px] font-semibold tabular-nums ${valueClass}`}>
-          {value}
-        </p>
+        </div>
+        {below}
       </div>
     </div>
   );
