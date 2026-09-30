@@ -447,6 +447,7 @@ export default function App() {
   });
   const importFileRef = useRef<HTMLInputElement>(null);
   const hadUserRef = useRef(false);
+  const cloudHydratedRef = useRef(false);
   const cloudTradeFingerprintsRef = useRef<Record<string, string>>({});
   const cloudTodoFingerprintsRef = useRef<Record<string, string>>({});
   const cloudTradeRecordsRef = useRef<Record<string, Trade>>({});
@@ -564,6 +565,7 @@ export default function App() {
 
   /** 로그아웃 시 개인정보(보유·일지·계획·메모 등) 로컬 흔적 제거 */
   const wipePrivatePortfolio = useCallback(() => {
+    cloudHydratedRef.current = false;
     cloudTradeFingerprintsRef.current = {};
     cloudTodoFingerprintsRef.current = {};
     cloudTradeRecordsRef.current = {};
@@ -654,12 +656,14 @@ export default function App() {
 
   useEffect(() => {
     if (!firebaseConfigured || !user || !authReady) return;
+    cloudHydratedRef.current = false;
     setCloudSessionReady(false);
     let cancelled = false;
     const cleanupFns: Array<() => void> = [];
     void (async () => {
       setCloudBusy(true);
       setCloudError(null);
+      let hydratedOk = false;
       try {
         const localPersistedAtMs = getPersistedUpdatedAtMs();
         const localPortfolio = portfolioRef.current;
@@ -875,12 +879,14 @@ export default function App() {
           cleanupFns.forEach((fn) => fn());
           return;
         }
+        hydratedOk = true;
       } catch (e) {
         if (!cancelled) {
           setCloudError(humanizeCloudError(e));
         }
       } finally {
         if (!cancelled) {
+          cloudHydratedRef.current = hydratedOk;
           setCloudBusy(false);
           setCloudSessionReady(true);
         }
@@ -900,6 +906,7 @@ export default function App() {
 
   useEffect(() => {
     if (!firebaseConfigured || !user || !cloudSessionReady || !networkOnline) return;
+    if (!cloudHydratedRef.current) return;
     const localMap = buildTradeFingerprintMap(trades);
     const remoteMap = cloudTradeFingerprintsRef.current;
     const upserts = trades.filter((trade) => remoteMap[trade.id] !== localMap[trade.id]);
@@ -930,6 +937,7 @@ export default function App() {
 
   useEffect(() => {
     if (!firebaseConfigured || !user || !cloudSessionReady || !networkOnline) return;
+    if (!cloudHydratedRef.current) return;
     const localMap = buildTodoFingerprintMap(todos);
     const remoteMap = cloudTodoFingerprintsRef.current;
     const upserts = todos.filter((todo) => remoteMap[todo.id] !== localMap[todo.id]);
@@ -960,6 +968,7 @@ export default function App() {
 
   useEffect(() => {
     if (!firebaseConfigured || !user || !cloudSessionReady || !networkOnline) return;
+    if (!cloudHydratedRef.current) return;
     const localMeta = buildCloudPortfolioMetaInput(portfolioRef.current);
     const localFingerprint = metaFingerprint(localMeta);
     if (cloudMetaFingerprintRef.current === localFingerprint) return;
@@ -1155,16 +1164,40 @@ export default function App() {
     if (!user) return;
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       window.alert(
-        '오프라인입니다. 네트워크 연결 후 「지금 스냅샷 백업 저장」을 다시 눌러 주세요.',
+        '오프라인입니다. 네트워크 연결 후 「지금 다른 기기와 동기화」를 다시 눌러 주세요.',
       );
       return;
     }
     setCloudBusy(true);
     setCloudError(null);
     try {
-      await cloudPortfolioStore.pushLegacyBackup(user.uid, portfolioRef.current);
+      const portfolio = portfolioRef.current;
+      const meta = buildCloudPortfolioMetaInput(portfolio);
+      await Promise.all([
+        cloudPortfolioStore.syncTrades(
+          user.uid,
+          portfolio.trades,
+          [],
+          deviceIdRef.current,
+        ),
+        cloudPortfolioStore.syncTodos(
+          user.uid,
+          portfolio.todos,
+          [],
+          deviceIdRef.current,
+        ),
+        cloudPortfolioStore.syncMeta(user.uid, meta),
+      ]);
+      cloudTradeFingerprintsRef.current = buildTradeFingerprintMap(portfolio.trades);
+      cloudTodoFingerprintsRef.current = buildTodoFingerprintMap(portfolio.todos);
+      cloudTradeRecordsRef.current = buildTradeRecordMap(portfolio.trades);
+      cloudTodoRecordsRef.current = buildTodoRecordMap(portfolio.todos);
+      cloudMetaFingerprintRef.current = metaFingerprint(meta);
+      await cloudPortfolioStore.pushLegacyBackup(user.uid, portfolio);
       await createGuardSnapshot('manual-backup');
-      window.alert('현재 상태를 클라우드 스냅샷으로 백업했습니다.');
+      window.alert(
+        '현재 매매·계획·설정을 클라우드에 올렸습니다. 다른 기기에서 새로고침 후 같은 계정으로 확인하세요.',
+      );
     } catch (e) {
       setCloudError(humanizeCloudError(e));
     } finally {

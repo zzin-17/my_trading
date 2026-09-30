@@ -248,7 +248,8 @@ export function AppSettingsModal({
               Google · 클라우드
             </h3>
             <p className="mt-1 text-[11px] leading-relaxed text-textMuted">
-              같은 계정이면 다른 기기와 자동 동기화됩니다.
+              같은 Google 계정이면 매매·계획이 다른 기기와 자동 동기화됩니다.
+              안 보이면 아래 「지금 다른 기기와 동기화」를 한 번 눌러 주세요.
             </p>
             {!networkOnline ? (
               <p
@@ -306,7 +307,7 @@ export function AppSettingsModal({
                     onClick={() => void onCloudPushNow?.()}
                     className="rounded-md border border-border bg-background px-3 py-2.5 text-left text-[13px] font-medium text-textMain hover:bg-white/5 disabled:opacity-50"
                   >
-                    {cloudBusy ? '처리 중…' : '지금 스냅샷 백업 저장'}
+                    {cloudBusy ? '처리 중…' : '지금 다른 기기와 동기화'}
                   </button>
                   <button
                     type="button"

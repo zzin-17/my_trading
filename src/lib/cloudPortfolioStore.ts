@@ -246,16 +246,39 @@ async function loadBootstrap(args: {
   const preferLocalMeta =
     localHasPortfolio && localPersistedAtMs > maxRemoteMetaUpdatedAtMs;
 
+  let snapshotPortfolio: PersistedPortfolioV1 | null = null;
+  if (
+    liveEmpty &&
+    !localHasPortfolio &&
+    !shouldUseLegacyMigration &&
+    deletedTrades.length === 0 &&
+    deletedTodos.length === 0
+  ) {
+    try {
+      const snaps = await listCloudPortfolioSnapshots(uid, 1);
+      const first = snaps[0];
+      if (first) {
+        const raw = await fetchCloudPortfolioSnapshot(uid, first.id);
+        snapshotPortfolio = raw ? normalizeLoadedPortfolio(raw) : null;
+      }
+    } catch {
+      snapshotPortfolio = null;
+    }
+  }
+  const hydratePortfolio =
+    shouldUseLegacyMigration && normalizedLegacy
+      ? normalizedLegacy
+      : snapshotPortfolio &&
+          (snapshotPortfolio.trades.length > 0 || snapshotPortfolio.todos.length > 0)
+        ? snapshotPortfolio
+        : null;
+
   const fallbackTrades = localHasPortfolio
     ? localPortfolio.trades
-    : shouldUseLegacyMigration
-      ? (normalizedLegacy?.trades ?? localPortfolio.trades)
-      : localPortfolio.trades;
+    : (hydratePortfolio?.trades ?? localPortfolio.trades);
   const fallbackTodos = localHasPortfolio
     ? localPortfolio.todos
-    : shouldUseLegacyMigration
-      ? (normalizedLegacy?.todos ?? localPortfolio.todos)
-      : localPortfolio.todos;
+    : (hydratePortfolio?.todos ?? localPortfolio.todos);
 
   const nextTrades = reconcileTradesFromSources({
     liveTrades: live.trades,
@@ -269,53 +292,53 @@ async function loadBootstrap(args: {
   const nextMeta: CloudPortfolioMetaInput = {
     quotes: pickMetaValue({
       remote: remoteMeta?.quotes,
-      legacy: normalizedLegacy?.quotes,
+      legacy: hydratePortfolio?.quotes,
       local: localPortfolio.quotes,
-      ignoreLegacy: !shouldUseLegacyMigration || preferLocalMeta,
+      ignoreLegacy: !hydratePortfolio || preferLocalMeta,
     }),
     positionIds: pickMetaValue({
       remote: remoteMeta?.positionIds,
-      legacy: normalizedLegacy?.positionIds,
+      legacy: hydratePortfolio?.positionIds,
       local: localPortfolio.positionIds,
-      ignoreLegacy: !shouldUseLegacyMigration || preferLocalMeta,
+      ignoreLegacy: !hydratePortfolio || preferLocalMeta,
     }),
     notes: pickMetaValue({
       remote: remoteMeta?.notes,
-      legacy: normalizedLegacy?.notes,
+      legacy: hydratePortfolio?.notes,
       local: localPortfolio.notes,
-      ignoreLegacy: !shouldUseLegacyMigration || preferLocalMeta,
+      ignoreLegacy: !hydratePortfolio || preferLocalMeta,
     }),
     quoteUpdatedAt: pickMetaValue({
       remote: remoteMeta?.quoteUpdatedAt,
-      legacy: normalizedLegacy?.quoteUpdatedAt,
+      legacy: hydratePortfolio?.quoteUpdatedAt,
       local: localPortfolio.quoteUpdatedAt,
-      ignoreLegacy: !shouldUseLegacyMigration || preferLocalMeta,
+      ignoreLegacy: !hydratePortfolio || preferLocalMeta,
     }),
     lastKrQuoteBulkAt: pickMetaValue({
       remote: remoteMeta?.lastKrQuoteBulkAt,
-      legacy: normalizedLegacy?.lastKrQuoteBulkAt,
+      legacy: hydratePortfolio?.lastKrQuoteBulkAt,
       local: localPortfolio.lastKrQuoteBulkAt,
-      ignoreLegacy: !shouldUseLegacyMigration || preferLocalMeta,
+      ignoreLegacy: !hydratePortfolio || preferLocalMeta,
     }),
     krSellCommissionRate: normalizeKrSellCommissionRate(
       pickMetaValue({
         remote: remoteMeta?.krSellCommissionRate,
-        legacy: normalizedLegacy?.krSellCommissionRate,
+        legacy: hydratePortfolio?.krSellCommissionRate,
         local: localPortfolio.krSellCommissionRate,
-        ignoreLegacy: !shouldUseLegacyMigration || preferLocalMeta,
+        ignoreLegacy: !hydratePortfolio || preferLocalMeta,
       }),
     ),
     krPreferExtendedQuote: pickMetaValue({
       remote: remoteMeta?.krPreferExtendedQuote,
-      legacy: normalizedLegacy?.krPreferExtendedQuote,
+      legacy: hydratePortfolio?.krPreferExtendedQuote,
       local: localPortfolio.krPreferExtendedQuote === true,
-      ignoreLegacy: !shouldUseLegacyMigration || preferLocalMeta,
+      ignoreLegacy: !hydratePortfolio || preferLocalMeta,
     }),
     krDayOpenByTicker: pickMetaValue({
       remote: remoteMeta?.krDayOpenByTicker,
-      legacy: normalizedLegacy?.krDayOpenByTicker,
+      legacy: hydratePortfolio?.krDayOpenByTicker,
       local: localPortfolio.krDayOpenByTicker ?? {},
-      ignoreLegacy: !shouldUseLegacyMigration || preferLocalMeta,
+      ignoreLegacy: !hydratePortfolio || preferLocalMeta,
     }),
   };
 
@@ -351,7 +374,7 @@ async function loadBootstrap(args: {
 
   return {
     portfolio,
-    shouldApplyPortfolio: shouldUseLegacyMigration && normalizedLegacy !== null,
+    shouldApplyPortfolio: hydratePortfolio !== null,
     remoteTradeRecords,
     remoteTodoRecords,
     nextTradeFingerprints,

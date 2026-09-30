@@ -10,8 +10,10 @@ import {
 import type { User } from 'firebase/auth';
 import {
   GoogleAuthProvider,
+  getRedirectResult,
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
 } from 'firebase/auth';
 import { getFirebaseAuth, isFirebaseConfigured } from '../lib/firebase/client';
@@ -38,6 +40,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     const auth = getFirebaseAuth();
+    void getRedirectResult(auth).catch(() => {
+      /* 팝업 로그인만 쓴 경우 무시 */
+    });
     return onAuthStateChanged(auth, (u) => {
       setUser(u);
       setAuthReady(true);
@@ -48,7 +53,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!firebaseConfigured) return;
     const auth = getFirebaseAuth();
     const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (e) {
+      const code =
+        e && typeof e === 'object' && 'code' in e
+          ? String((e as { code: unknown }).code)
+          : '';
+      const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+      const mobile = /iPhone|iPad|iPod|Android/i.test(ua);
+      const popupBlocked = code.includes('popup-blocked');
+      const cancelledPopup = code.includes('cancelled-popup-request');
+      if (mobile || popupBlocked || cancelledPopup) {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+      throw e;
+    }
   }, [firebaseConfigured]);
 
   const signOutUser = useCallback(async () => {

@@ -728,6 +728,8 @@ async function commitTradeChanges(
     for (const op of ops.slice(i, i + 400)) {
       if (op.type === 'set') {
         batch.set(tradeDocRef(uid, op.value.id), toFirestoreTradeDoc(op.value));
+        // 휴지통에 같은 id가 있으면 재업로드가 보안 규칙에 막히므로 같은 배치에서 제거
+        batch.delete(doc(tradeTrashCollectionRef(uid), op.value.id));
       } else {
         const trashRef = doc(tradeTrashCollectionRef(uid), op.value.id);
         batch.set(trashRef, {
@@ -776,6 +778,7 @@ async function commitTodoChanges(
     for (const op of ops.slice(i, i + 400)) {
       if (op.type === 'set') {
         batch.set(todoDocRef(uid, op.value.id), toFirestoreTodoDoc(op.value));
+        batch.delete(doc(todoTrashCollectionRef(uid), op.value.id));
       } else {
         const trashRef = doc(todoTrashCollectionRef(uid), op.value.id);
         batch.set(trashRef, {
