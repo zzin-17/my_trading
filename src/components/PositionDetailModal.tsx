@@ -373,10 +373,10 @@ export function PositionDetailModal({
           </section>
         ) : null}
 
-        <section className="mt-3 rounded-md border border-border p-3">
+        <section className="mt-3 rounded-md border border-border px-2.5 py-2">
           <h3 className="text-sm font-medium text-textMain">추가 매수 평단 계산기</h3>
-          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[9.5rem_minmax(0,1fr)]">
-            <label className="flex items-center gap-2 rounded border border-border bg-background px-2.5 py-2 text-[11px] text-textMuted">
+          <div className="mt-1.5 grid grid-cols-[6.75rem_minmax(0,1fr)] gap-1.5">
+            <label className="flex items-center gap-1.5 rounded border border-border bg-background px-2 py-1.5 text-[11px] text-textMuted">
               <span className="shrink-0">수량</span>
               <input
                 type="number"
@@ -388,7 +388,7 @@ export function PositionDetailModal({
                 className="min-w-0 flex-1 bg-transparent text-sm text-textMain outline-none placeholder:text-textMuted/70"
               />
             </label>
-            <label className="flex items-center gap-2 rounded border border-border bg-background px-2.5 py-2 text-[11px] text-textMuted">
+            <label className="flex items-center gap-1.5 rounded border border-border bg-background px-2 py-1.5 text-[11px] text-textMuted">
               <span className="shrink-0">단가 ({position.currency})</span>
               <input
                 type="number"
@@ -402,50 +402,52 @@ export function PositionDetailModal({
             </label>
           </div>
           {avgCalcPreview ? (
-            <div className="mt-2 grid grid-cols-1 gap-2 rounded-md border border-border bg-background p-2 sm:grid-cols-2">
-              <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-surface/40 px-3 py-2">
+            <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 rounded-md border border-border/70 bg-background px-2.5 py-1.5">
+              <div className="flex items-baseline justify-between gap-2">
                 <span className="shrink-0 text-[11px] text-textMuted">추가금액</span>
-                <span className="text-sm font-semibold text-textMain">
+                <span className="text-right text-[13px] font-semibold text-textMain">
                   {formatMoney(avgCalcPreview.addedCost, position.currency)}
                 </span>
               </div>
-              <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-surface/40 px-3 py-2">
+              <div className="flex items-baseline justify-between gap-2">
                 <span className="shrink-0 text-[11px] text-textMuted">총보유</span>
-                <span className="text-sm font-semibold text-textMain">
+                <span className="text-right text-[13px] font-semibold text-textMain">
                   {avgCalcPreview.nextQty}주
                 </span>
               </div>
-              <div className="flex flex-col gap-1.5 rounded-md border border-border/50 bg-surface/40 px-3 py-2 sm:col-span-2">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="shrink-0 whitespace-nowrap text-[11px] text-textMuted">평단 변화</span>
-                  <span
-                    className={`text-right text-sm font-semibold ${pnlTextClass(
-                      position.avg_price - avgCalcPreview.nextAvg,
-                      koreanPnl,
-                    )}`}
-                  >
-                    {formatMoney(position.avg_price, position.currency)} {'->'}{' '}
-                    {formatMoney(avgCalcPreview.nextAvg, position.currency)}{' '}
-                    <span className="whitespace-nowrap text-[11px] font-medium">
-                      ({formatSignedMoney(avgCalcPreview.avgDelta, position.currency)})
-                    </span>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="shrink-0 whitespace-nowrap text-[11px] text-textMuted">평단</span>
+                <span
+                  className={`min-w-0 text-right text-[12px] font-semibold leading-tight ${pnlTextClass(
+                    position.avg_price - avgCalcPreview.nextAvg,
+                    koreanPnl,
+                  )}`}
+                >
+                  {formatMoney(position.avg_price, position.currency)}
+                  {' → '}
+                  {formatMoney(avgCalcPreview.nextAvg, position.currency)}
+                  <span className="whitespace-nowrap font-medium">
+                    {' '}
+                    ({formatSignedMoney(avgCalcPreview.avgDelta, position.currency)})
                   </span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="shrink-0 whitespace-nowrap text-[11px] text-textMuted">수익률 변화</span>
-                  <span
-                    className={`text-right text-sm font-semibold ${pnlTextClass(
-                      avgCalcPreview.retDeltaPct,
-                      koreanPnl,
-                    )}`}
-                  >
-                    {formatPercent(avgCalcPreview.currentRetPct, true)} {'->'}{' '}
-                    {formatPercent(avgCalcPreview.nextRetPct, true)}{' '}
-                    <span className="whitespace-nowrap text-[11px] font-medium">
-                      ({formatPercent(avgCalcPreview.retDeltaPct, true)}p)
-                    </span>
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="shrink-0 whitespace-nowrap text-[11px] text-textMuted">수익률</span>
+                <span
+                  className={`min-w-0 text-right text-[12px] font-semibold leading-tight ${pnlTextClass(
+                    avgCalcPreview.retDeltaPct,
+                    koreanPnl,
+                  )}`}
+                >
+                  {formatPercent(avgCalcPreview.currentRetPct, true)}
+                  {' → '}
+                  {formatPercent(avgCalcPreview.nextRetPct, true)}
+                  <span className="whitespace-nowrap font-medium">
+                    {' '}
+                    ({formatPercent(avgCalcPreview.retDeltaPct, true)}p)
                   </span>
-                </div>
+                </span>
               </div>
             </div>
           ) : null}
