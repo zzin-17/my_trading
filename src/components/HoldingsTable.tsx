@@ -659,15 +659,6 @@ export function HoldingsTable({
                 className="min-w-[100px] py-2 pr-3"
               />
               <SortableColumnHeader
-                label="현재가"
-                columnKey="current_price"
-                sortKey={sortKey}
-                sortDir={sortDir}
-                onSort={handleSortHeader}
-                align="right"
-                className="py-2 pr-3 tabular-nums"
-              />
-              <SortableColumnHeader
                 label="전일대비"
                 columnKey="day_change"
                 sortKey={sortKey}
@@ -675,6 +666,15 @@ export function HoldingsTable({
                 onSort={handleSortHeader}
                 align="center"
                 className="py-2 px-2 tabular-nums"
+              />
+              <SortableColumnHeader
+                label="현재가"
+                columnKey="current_price"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSortHeader}
+                align="right"
+                className="py-2 pr-3 tabular-nums"
               />
               <SortableColumnHeader
                 label="평단"
@@ -826,6 +826,9 @@ export function HoldingsTable({
                       {p.name}
                     </button>
                   </td>
+                  <td className="px-2 py-2 text-center tabular-nums" title={dayChange?.tip}>
+                    <DayChangeBlock change={dayChange} currency={p.currency} />
+                  </td>
                   <td
                     className={`py-2 pr-3 text-right tabular-nums ${
                       currentPriceEmph === 'pos'
@@ -850,9 +853,6 @@ export function HoldingsTable({
                       ) : null}
                       <span>{formatMoney(p.current_price, p.currency)}</span>
                     </span>
-                  </td>
-                  <td className="px-2 py-2 text-center tabular-nums" title={dayChange?.tip}>
-                    <DayChangeBlock change={dayChange} currency={p.currency} />
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums text-textMain">
                     {formatMoney(p.avg_price, p.currency)}
