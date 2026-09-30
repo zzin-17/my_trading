@@ -3,7 +3,8 @@ import type { Position, PositionMetrics } from '../types/portfolio';
 import type { Trade } from '../types/trade';
 import type { TradePlanTodo } from '../types/todo';
 import { formatMoney, formatPercent } from '../lib/format';
-import { roundMoney } from '../lib/portfolioMath';
+import { estimateNetUnrealizedPnl, roundMoney, roundPercent } from '../lib/portfolioMath';
+import { pnlTextClass, pnlToneClass } from '../lib/pnlTone';
 import { fetchKrBoardByTicker } from '../lib/krxLookup';
 import { krBoardBadgeClass, krBoardDisplayLabel } from '../lib/krBoardUi';
 import { tradeAppliesToLedger } from '../lib/ledger';
@@ -113,6 +114,28 @@ export function PositionDetailModal({
       (currentCost + addedCost) / nextQty,
       position.currency,
     );
+    const currentCostBasis = roundMoney(currentCost, position.currency);
+    const nextCostBasis = roundMoney(nextAvg * nextQty, position.currency);
+    const currentPnl = estimateNetUnrealizedPnl(
+      position.market,
+      position.avg_price,
+      position.current_price,
+      position.quantity,
+      position.currency,
+      krSellCommissionRate,
+    );
+    const nextPnl = estimateNetUnrealizedPnl(
+      position.market,
+      nextAvg,
+      position.current_price,
+      nextQty,
+      position.currency,
+      krSellCommissionRate,
+    );
+    const currentRetPct =
+      currentCostBasis > 0 ? roundPercent((currentPnl / currentCostBasis) * 100) : 0;
+    const nextRetPct =
+      nextCostBasis > 0 ? roundPercent((nextPnl / nextCostBasis) * 100) : 0;
     return {
       buyQty,
       buyPrice: roundMoney(buyPrice, position.currency),
@@ -120,11 +143,15 @@ export function PositionDetailModal({
       nextQty,
       nextAvg,
       avgDelta: roundMoney(nextAvg - position.avg_price, position.currency),
+      currentRetPct,
+      nextRetPct,
+      retDeltaPct: roundPercent(nextRetPct - currentRetPct),
     };
-  }, [avgCalcPrice, avgCalcQty, position]);
+  }, [avgCalcPrice, avgCalcQty, krSellCommissionRate, position]);
 
   if (!position || !metric) return null;
 
+  const koreanPnl = position.market === 'KR';
   const krBoard =
     position.market === 'KR' ? krBoardByTicker.get(position.ticker) : undefined;
 
@@ -261,12 +288,13 @@ export function PositionDetailModal({
           <Mini label="보유수량" value={`${position.quantity}`} />
           <Mini label="평단" value={formatMoney(position.avg_price, position.currency)} />
           <Mini label="현재가" value={formatMoney(position.current_price, position.currency)} />
-          <Mini label="예상손익" value={formatMoney(metric.pnl, position.currency)} emph={metric.pnl >= 0 ? 'pos' : 'neg'} />
-          <Mini label="예상수익률" value={formatPercent(retPct, true)} emph={retPct >= 0 ? 'pos' : 'neg'} />
+          <Mini label="예상손익" value={formatMoney(metric.pnl, position.currency)} emph={metric.pnl >= 0 ? 'pos' : 'neg'} koreanPnl={koreanPnl} />
+          <Mini label="예상수익률" value={formatPercent(retPct, true)} emph={retPct >= 0 ? 'pos' : 'neg'} koreanPnl={koreanPnl} />
           <Mini
             label="누적 실현손익"
             value={formatMoney(realizedNetPnl, position.currency)}
             emph={realizedNetPnl >= 0 ? 'pos' : 'neg'}
+            koreanPnl={koreanPnl}
           />
         </div>
 
@@ -374,7 +402,7 @@ export function PositionDetailModal({
             </label>
           </div>
           {avgCalcPreview ? (
-            <div className="mt-2 grid grid-cols-1 gap-2 rounded-md border border-border bg-background p-2 sm:grid-cols-[9.5rem_9.5rem_minmax(0,1fr)]">
+            <div className="mt-2 grid grid-cols-1 gap-2 rounded-md border border-border bg-background p-2 sm:grid-cols-2">
               <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-surface/40 px-3 py-2">
                 <span className="shrink-0 text-[11px] text-textMuted">추가금액</span>
                 <span className="text-sm font-semibold text-textMain">
@@ -387,23 +415,37 @@ export function PositionDetailModal({
                   {avgCalcPreview.nextQty}주
                 </span>
               </div>
-              <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-surface/40 px-3 py-2">
-                <span className="shrink-0 text-[11px] text-textMuted">평단 변화</span>
-                <span
-                  className={`text-right text-sm font-semibold ${
-                    avgCalcPreview.nextAvg < position.avg_price
-                      ? 'text-positive'
-                      : avgCalcPreview.nextAvg > position.avg_price
-                        ? 'text-negative'
-                        : 'text-textMain'
-                  }`}
-                >
-                  {formatMoney(position.avg_price, position.currency)} {'->'}{' '}
-                  {formatMoney(avgCalcPreview.nextAvg, position.currency)}{' '}
-                  <span className="whitespace-nowrap text-[11px] font-medium">
-                    ({formatSignedMoney(avgCalcPreview.avgDelta, position.currency)})
+              <div className="flex flex-col gap-1.5 rounded-md border border-border/50 bg-surface/40 px-3 py-2 sm:col-span-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="shrink-0 whitespace-nowrap text-[11px] text-textMuted">평단 변화</span>
+                  <span
+                    className={`text-right text-sm font-semibold ${pnlTextClass(
+                      position.avg_price - avgCalcPreview.nextAvg,
+                      koreanPnl,
+                    )}`}
+                  >
+                    {formatMoney(position.avg_price, position.currency)} {'->'}{' '}
+                    {formatMoney(avgCalcPreview.nextAvg, position.currency)}{' '}
+                    <span className="whitespace-nowrap text-[11px] font-medium">
+                      ({formatSignedMoney(avgCalcPreview.avgDelta, position.currency)})
+                    </span>
                   </span>
-                </span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="shrink-0 whitespace-nowrap text-[11px] text-textMuted">수익률 변화</span>
+                  <span
+                    className={`text-right text-sm font-semibold ${pnlTextClass(
+                      avgCalcPreview.retDeltaPct,
+                      koreanPnl,
+                    )}`}
+                  >
+                    {formatPercent(avgCalcPreview.currentRetPct, true)} {'->'}{' '}
+                    {formatPercent(avgCalcPreview.nextRetPct, true)}{' '}
+                    <span className="whitespace-nowrap text-[11px] font-medium">
+                      ({formatPercent(avgCalcPreview.retDeltaPct, true)}p)
+                    </span>
+                  </span>
+                </div>
               </div>
             </div>
           ) : null}
@@ -669,22 +711,18 @@ function Mini({
   label,
   value,
   emph,
+  koreanPnl = false,
 }: {
   label: string;
   value: string;
   emph?: 'pos' | 'neg';
+  koreanPnl?: boolean;
 }) {
   return (
     <div className="rounded-md border border-border bg-background px-3 py-2">
       <p className="text-[11px] text-textMuted">{label}</p>
       <p
-        className={`mt-0.5 text-sm font-semibold tabular-nums ${
-          emph === 'pos'
-            ? 'text-positive'
-            : emph === 'neg'
-              ? 'text-negative'
-              : 'text-textMain'
-        }`}
+        className={`mt-0.5 text-sm font-semibold tabular-nums ${pnlToneClass(emph, koreanPnl)}`}
       >
         {value}
       </p>

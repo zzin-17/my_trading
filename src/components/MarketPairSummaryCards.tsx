@@ -1,6 +1,7 @@
 import type { PortfolioSummary } from '../types/portfolio';
 import { formatMoney, formatPercent } from '../lib/format';
 import { ExpandableText } from './ExpandableText';
+import { pnlTextClass } from '../lib/pnlTone';
 
 interface MarketPairSummaryCardsProps {
   krSummary: PortfolioSummary | null;
@@ -71,7 +72,7 @@ function MarketBlock({
     );
   }
 
-  const pnlOk = summary.total_pnl >= 0;
+  const koreanPnl = badge === 'KRW';
 
   return (
     <div className={`rounded-xl border px-4 py-2.5 ${accent}`}>
@@ -93,14 +94,14 @@ function MarketBlock({
         <Mini
           label="손익"
           value={formatMoney(summary.total_pnl, summary.currency)}
-          positive={pnlOk}
-          negative={!pnlOk}
+          pnlValue={summary.total_pnl}
+          koreanPnl={koreanPnl}
         />
         <Mini
           label="수익률"
           value={formatPercent(summary.total_return_pct, true)}
-          positive={pnlOk}
-          negative={!pnlOk}
+          pnlValue={summary.total_return_pct}
+          koreanPnl={koreanPnl}
         />
       </div>
       <div className="hidden grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-4 sm:gap-x-5 md:grid">
@@ -115,14 +116,14 @@ function MarketBlock({
         <Mini
           label="평가손익"
           value={formatMoney(summary.total_pnl, summary.currency)}
-          positive={pnlOk}
-          negative={!pnlOk}
+          pnlValue={summary.total_pnl}
+          koreanPnl={koreanPnl}
         />
         <Mini
           label="수익률"
           value={formatPercent(summary.total_return_pct, true)}
-          positive={pnlOk}
-          negative={!pnlOk}
+          pnlValue={summary.total_return_pct}
+          koreanPnl={koreanPnl}
         />
       </div>
       {footnote ? (
@@ -145,13 +146,13 @@ function MarketBlock({
 function Mini({
   label,
   value,
-  positive,
-  negative,
+  pnlValue,
+  koreanPnl = false,
 }: {
   label: string;
   value: string;
-  positive?: boolean;
-  negative?: boolean;
+  pnlValue?: number;
+  koreanPnl?: boolean;
 }) {
   return (
     <div className="inline-flex items-center gap-1 whitespace-nowrap">
@@ -160,7 +161,7 @@ function Mini({
       </p>
       <p
         className={`text-[12px] font-semibold leading-tight tabular-nums ${
-          positive ? 'text-positive' : negative ? 'text-negative' : 'text-textMain'
+          pnlValue === undefined ? 'text-textMain' : pnlTextClass(pnlValue, koreanPnl)
         }`}
       >
         {value}

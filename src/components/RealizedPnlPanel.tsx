@@ -10,6 +10,7 @@ import {
   type RealizedPeriodGranularity,
 } from '../lib/realizedPnl';
 import { KR_SELL_TAX_RATE } from '../lib/krTradingAssumptions';
+import { pnlTextClass } from '../lib/pnlTone';
 
 interface RealizedPnlPanelProps {
   trades: Trade[];
@@ -17,14 +18,7 @@ interface RealizedPnlPanelProps {
 }
 
 function pnlToneClass(value: number, currency: CurrencyCode): string {
-  if (currency === 'KRW') {
-    if (value > 0) return 'text-red-400';
-    if (value < 0) return 'text-blue-400';
-    return 'text-textMain';
-  }
-  if (value > 0) return 'text-positive';
-  if (value < 0) return 'text-negative';
-  return 'text-textMain';
+  return pnlTextClass(value, currency === 'KRW');
 }
 
 function formatSignedMoney(value: number, currency: CurrencyCode): string {

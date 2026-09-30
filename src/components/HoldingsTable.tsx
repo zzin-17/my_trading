@@ -12,13 +12,7 @@ import {
   krOpenDeviationPct,
   KR_OPEN_ATTENTION_ABS_PCT,
 } from '../lib/krOpenDeviation';
-
-/** 한국 장 관례: 플러스 빨강, 마이너스 파랑 */
-function krPnLClass(value: number): string {
-  if (value > 0) return 'text-red-400';
-  if (value < 0) return 'text-blue-400';
-  return 'text-textMain';
-}
+import { pnlTextClass } from '../lib/pnlTone';
 
 function todoBadgeLabel(pendingCount: number, reachedCount: number): string {
   if (pendingCount <= 0) return '';
@@ -778,11 +772,11 @@ export function HoldingsTable({
                     {formatMoney(m.market_value, p.currency)}
                   </td>
                   <td
-                    className={`py-2 pr-3 text-right tabular-nums ${krPnLClass(m.pnl)}`}
+                    className={`py-2 pr-3 text-right tabular-nums ${pnlTextClass(m.pnl, true)}`}
                   >
                     {formatMoney(m.pnl, p.currency)}
                   </td>
-                  <td className={`py-2 pr-3 text-right tabular-nums ${krPnLClass(ret)}`}>
+                  <td className={`py-2 pr-3 text-right tabular-nums ${pnlTextClass(ret, true)}`}>
                     {formatPercent(ret, true)}
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums">
@@ -806,12 +800,12 @@ export function HoldingsTable({
                 {formatMoney(summary.total_market_value, summary.currency)}
               </td>
               <td
-                className={`py-3 pr-3 text-right tabular-nums ${krPnLClass(summary.total_pnl)}`}
+                className={`py-3 pr-3 text-right tabular-nums ${pnlTextClass(summary.total_pnl, true)}`}
               >
                 {formatMoney(summary.total_pnl, summary.currency)}
               </td>
               <td
-                className={`py-3 pr-3 text-right tabular-nums ${krPnLClass(summary.total_return_pct)}`}
+                className={`py-3 pr-3 text-right tabular-nums ${pnlTextClass(summary.total_return_pct, true)}`}
               >
                 {formatPercent(summary.total_return_pct, true)}
               </td>

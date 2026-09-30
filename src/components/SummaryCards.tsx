@@ -1,6 +1,7 @@
 import type { PortfolioSummary } from '../types/portfolio';
 import { formatMoney, formatPercent } from '../lib/format';
 import { ExpandableText } from './ExpandableText';
+import { pnlTextClass, pnlToneClass } from '../lib/pnlTone';
 
 interface SummaryCardsProps {
   summary: PortfolioSummary;
@@ -10,7 +11,9 @@ interface SummaryCardsProps {
 
 export function SummaryCards({ summary, quoteDisclaimer }: SummaryCardsProps) {
   const { currency } = summary;
-  const pnlPositive = summary.total_pnl >= 0;
+  const koreanPnl = currency === 'KRW';
+  const pnlClass = pnlTextClass(summary.total_pnl, koreanPnl);
+  const pnlTone = summary.total_pnl >= 0 ? 'pos' : 'neg';
 
   return (
     <div className="space-y-1.5">
@@ -19,12 +22,12 @@ export function SummaryCards({ summary, quoteDisclaimer }: SummaryCardsProps) {
           <p className="text-[13px] font-semibold text-textMain">총평가손익(예상)</p>
           <div className="mt-1.5 text-right">
             <p
-              className={`max-w-full text-[clamp(20px,7vw,30px)] font-bold tabular-nums leading-none ${pnlPositive ? 'text-positive' : 'text-negative'}`}
+              className={`max-w-full text-[clamp(20px,7vw,30px)] font-bold tabular-nums leading-none ${pnlClass}`}
             >
               {formatMoney(summary.total_pnl, currency)}
             </p>
             <p
-              className={`mt-1 text-[14px] font-semibold tabular-nums leading-none ${pnlPositive ? 'text-positive' : 'text-negative'}`}
+              className={`mt-1 text-[14px] font-semibold tabular-nums leading-none ${pnlClass}`}
             >
               {formatPercent(summary.total_return_pct, true)}
             </p>
@@ -57,14 +60,16 @@ export function SummaryCards({ summary, quoteDisclaimer }: SummaryCardsProps) {
           <DesktopSummaryStat
             label="평가손익"
             value={formatMoney(summary.total_pnl, currency)}
-            tone={pnlPositive ? 'pos' : 'neg'}
+            tone={pnlTone}
+            koreanPnl={koreanPnl}
             bordered
             strong
           />
           <DesktopSummaryStat
             label="수익률"
             value={formatPercent(summary.total_return_pct, true)}
-            tone={pnlPositive ? 'pos' : 'neg'}
+            tone={pnlTone}
+            koreanPnl={koreanPnl}
             bordered
           />
         </div>
@@ -90,12 +95,14 @@ function DesktopSummaryStat({
   label,
   value,
   tone,
+  koreanPnl = false,
   bordered = false,
   strong = false,
 }: {
   label: string;
   value: string;
   tone?: 'pos' | 'neg';
+  koreanPnl?: boolean;
   bordered?: boolean;
   strong?: boolean;
 }) {
@@ -105,13 +112,7 @@ function DesktopSummaryStat({
       <p
         className={`mt-1 truncate tabular-nums ${
           strong ? 'text-[22px] font-bold' : 'text-[18px] font-semibold'
-        } ${
-          tone === 'pos'
-            ? 'text-positive'
-            : tone === 'neg'
-              ? 'text-negative'
-              : 'text-textMain'
-        }`}
+        } ${pnlToneClass(tone, koreanPnl)}`}
       >
         {value}
       </p>
@@ -123,24 +124,20 @@ function CompactSummaryCell({
   label,
   value,
   tone,
+  koreanPnl = false,
   bordered = false,
 }: {
   label: string;
   value: string;
   tone?: 'pos' | 'neg';
+  koreanPnl?: boolean;
   bordered?: boolean;
 }) {
   return (
     <div className={`px-4 py-2.5 ${bordered ? 'border-l border-border/70' : ''}`}>
       <p className="text-[12px] font-medium text-textMuted">{label}</p>
       <p
-        className={`mt-0.5 text-[15px] font-semibold tabular-nums ${
-          tone === 'pos'
-            ? 'text-positive'
-            : tone === 'neg'
-              ? 'text-negative'
-              : 'text-textMain'
-        }`}
+        className={`mt-0.5 text-[15px] font-semibold tabular-nums ${pnlToneClass(tone, koreanPnl)}`}
       >
         {value}
       </p>
