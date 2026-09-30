@@ -11,6 +11,8 @@ export interface KrNaverQuoteResponse {
   source?: string;
   /** 당일 시가(시초가). 시세 갱신 직후에만 내려오며, 시가 대비 ±7% 이상이면 보유표에서 강조에 사용 */
   openPrice?: number;
+  /** 전일 종가. 현재가 옆 등락(주식앱과 동일 기준) 표시에 사용 */
+  prevClose?: number;
   /** 상한가/하한가/매수·매도 서킷 상태가 감지되면 내려옴 */
   priceStatus?: KrPriceStatus;
 }
@@ -62,11 +64,17 @@ export async function fetchKrNaverDelayedQuote(
     typeof openRaw === 'number' && Number.isFinite(openRaw) && openRaw > 0
       ? openRaw
       : undefined;
+  const prevRaw = (data as { prevClose?: unknown }).prevClose;
+  const prevClose =
+    typeof prevRaw === 'number' && Number.isFinite(prevRaw) && prevRaw > 0
+      ? prevRaw
+      : undefined;
   return {
     price: data.price,
     fetchedAt: data.fetchedAt ?? new Date().toISOString(),
     source: data.source,
     ...(openPrice !== undefined ? { openPrice } : {}),
+    ...(prevClose !== undefined ? { prevClose } : {}),
     ...(data.priceStatus ? { priceStatus: data.priceStatus } : {}),
   };
 }

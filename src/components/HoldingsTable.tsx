@@ -13,6 +13,7 @@ import {
   KR_OPEN_ATTENTION_ABS_PCT,
 } from '../lib/krOpenDeviation';
 import { pnlTextClass } from '../lib/pnlTone';
+import { formatKrDayChange, krChangeFromPrevClose } from '../lib/krPrevChange';
 
 function todoBadgeLabel(pendingCount: number, reachedCount: number): string {
   if (pendingCount <= 0) return '';
@@ -31,6 +32,23 @@ function currentPriceEmphasis(
   if (currentPrice > dayOpen) return 'pos';
   if (currentPrice < dayOpen) return 'neg';
   return 'warn';
+}
+
+function krPriceChangeHint(
+  market: Position['market'],
+  currentPrice: number,
+  prevClose: number | undefined,
+  currency: Position['currency'],
+): { amount: number; pct: number; label: string; tip: string } | null {
+  if (market !== 'KR') return null;
+  const change = krChangeFromPrevClose(currentPrice, prevClose);
+  if (!change || prevClose === undefined) return null;
+  return {
+    amount: change.amount,
+    pct: change.pct,
+    label: formatKrDayChange(change.amount, change.pct, currency),
+    tip: `전일 종가 ${formatMoney(prevClose, currency)} 대비`,
+  };
 }
 
 function krPriceStatusLabel(status: KrPriceStatus): string {
@@ -128,6 +146,8 @@ interface HoldingsTableProps {
   lastKrQuoteBulkAt: string | null;
   /** 시세 갱신 시 받은 당일 시가(티커→원). 없으면 시가 대비 강조 없음 */
   krDayOpenByTicker?: Record<string, number>;
+  /** 시세 갱신 시 받은 전일 종가(티커→원). 있으면 현재가 옆 등락 표시 */
+  krPrevCloseByTicker?: Record<string, number>;
   /** 현재가 앞에 붙일 상/하한가·서킷 상태 */
   krPriceStatusByTicker?: Record<string, KrPriceStatus>;
   /** 포지션별 미완료 To-do 개수(보유와 티커·시장이 일치하는 항목) */
@@ -151,6 +171,7 @@ export function HoldingsTable({
   onRefreshKrQuotes,
   lastKrQuoteBulkAt,
   krDayOpenByTicker = {},
+  krPrevCloseByTicker = {},
   krPriceStatusByTicker = {},
   pendingTodoCountByPositionId = {},
   reachedTodoCountByPositionId = {},
@@ -269,10 +290,10 @@ export function HoldingsTable({
           <div className="min-w-0">
             <h3 className="text-sm font-medium text-textMain">보유 종목</h3>
             <p className="mt-0.5 hidden text-[10px] leading-relaxed text-textMuted md:block">
-              검색 · 정렬 · 상세 확인 · 시가 대비 ±{KR_OPEN_ATTENTION_ABS_PCT}% 이상 현재가 강조
+              검색 · 정렬 · 상세 확인 · 등락은 전일 종가 대비 · 시가 대비 ±{KR_OPEN_ATTENTION_ABS_PCT}% 이상 현재가 강조
             </p>
             <ExpandableText
-              text={`검색 · 정렬 · 상세 확인 · 시가 대비 ±${KR_OPEN_ATTENTION_ABS_PCT}% 이상 현재가 강조`}
+              text={`검색 · 정렬 · 상세 확인 · 등락은 전일 종가 대비 · 시가 대비 ±${KR_OPEN_ATTENTION_ABS_PCT}% 이상 현재가 강조`}
               maxChars={26}
               className="mt-0.5 md:hidden"
               textClassName="text-[12px] leading-relaxed text-textMuted"
@@ -442,6 +463,14 @@ export function HoldingsTable({
                     : 0;
                 const rowWarn = isConcentrationRisk(m.weight_pct);
                 const dayOpen = krDayOpenByTicker[p.ticker];
+                const prevClose =
+                  p.market === 'KR' ? krPrevCloseByTicker[p.ticker] : undefined;
+                const dayChange = krPriceChangeHint(
+                  p.market,
+                  p.current_price,
+                  prevClose,
+                  p.currency,
+                );
                 const openAttention = isKrOpenAttention(
                   p.market,
                   p.ticker,
@@ -455,6 +484,7 @@ export function HoldingsTable({
                   Boolean(normalizeKrTicker(p.ticker))
                     ? `당일 시가 ${formatMoney(dayOpen, p.currency)} · 시가 대비 ${krOpenDeviationPct(p.current_price, dayOpen).toFixed(2)}% (±${KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 주목 표시)`
                     : undefined;
+                const priceTip = [dayChange?.tip, openTip].filter(Boolean).join(' · ') || undefined;
                 const board = krBoardDisplayLabel(
                   p.market,
                   p.market === 'KR' ? krBoardByTicker.get(p.ticker) : undefined,
@@ -525,11 +555,15 @@ export function HoldingsTable({
 
                     <HoldingValueCell
                       value={formatMoney(p.current_price, p.currency)}
+                      prefixValue={dayChange?.label}
+                      prefixClassName={
+                        dayChange ? pnlTextClass(dayChange.amount, true) : undefined
+                      }
                       emph={currentPriceEmph}
                       badgeLabel={priceStatus ? krPriceStatusLabel(priceStatus) : undefined}
                       badgeTone={priceStatus ? krPriceStatusTone(priceStatus) : undefined}
                       badgeClassName={priceStatus ? krPriceStatusBadgeClass(priceStatus) : undefined}
-                      title={openTip}
+                      title={priceTip}
                       borderTop
                     />
                     <HoldingValueCell
@@ -669,6 +703,14 @@ export function HoldingsTable({
                   : 0;
               const rowWarn = isConcentrationRisk(m.weight_pct);
               const dayOpen = krDayOpenByTicker[p.ticker];
+              const prevClose =
+                p.market === 'KR' ? krPrevCloseByTicker[p.ticker] : undefined;
+              const dayChange = krPriceChangeHint(
+                p.market,
+                p.current_price,
+                prevClose,
+                p.currency,
+              );
               const openAttention = isKrOpenAttention(
                 p.market,
                 p.ticker,
@@ -682,6 +724,7 @@ export function HoldingsTable({
                 Boolean(normalizeKrTicker(p.ticker))
                   ? `당일 시가 ${formatMoney(dayOpen, p.currency)} · 시가 대비 ${krOpenDeviationPct(p.current_price, dayOpen).toFixed(2)}% (±${KR_OPEN_ATTENTION_ABS_PCT}% 이상이면 주목 표시)`
                   : undefined;
+              const priceTip = [dayChange?.tip, openTip].filter(Boolean).join(' · ') || undefined;
               const currentPriceEmph = currentPriceEmphasis(
                 openAttention,
                 p.current_price,
@@ -747,9 +790,9 @@ export function HoldingsTable({
                             ? 'font-semibold text-warning'
                             : 'text-textMain'
                     }`}
-                    title={openTip}
+                    title={priceTip}
                   >
-                    <span className="inline-flex items-center justify-end gap-1.5">
+                    <span className="inline-flex items-baseline justify-end gap-1.5">
                       {priceStatus ? (
                         <span
                           className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium leading-none ${krPriceStatusBadgeClass(
@@ -757,6 +800,16 @@ export function HoldingsTable({
                           )}`}
                         >
                           {krPriceStatusLabel(priceStatus)}
+                        </span>
+                      ) : null}
+                      {dayChange ? (
+                        <span
+                          className={`whitespace-nowrap text-[10px] font-semibold tabular-nums ${pnlTextClass(
+                            dayChange.amount,
+                            true,
+                          )}`}
+                        >
+                          {dayChange.label}
                         </span>
                       ) : null}
                       <span>{formatMoney(p.current_price, p.currency)}</span>
@@ -879,6 +932,8 @@ function HoldingHeaderCell({
 
 function HoldingValueCell({
   value,
+  prefixValue,
+  prefixClassName,
   emph,
   badgeLabel,
   badgeTone,
@@ -888,6 +943,8 @@ function HoldingValueCell({
   borderTop = false,
 }: {
   value: string;
+  prefixValue?: string;
+  prefixClassName?: string;
   emph?: 'pos' | 'neg' | 'warn';
   badgeLabel?: string;
   badgeTone?: 'pos' | 'neg';
@@ -896,6 +953,14 @@ function HoldingValueCell({
   borderLeft?: boolean;
   borderTop?: boolean;
 }) {
+  const valueClass =
+    emph === 'pos'
+      ? 'text-red-400'
+      : emph === 'neg'
+        ? 'text-blue-400'
+        : emph === 'warn'
+          ? 'text-warning'
+          : 'text-textMain';
   return (
     <div
       className={`px-1.5 py-1 text-right ${borderLeft ? 'border-l border-border/50' : ''} ${
@@ -903,7 +968,7 @@ function HoldingValueCell({
       }`}
       title={title}
     >
-      <div className="inline-flex items-center justify-end gap-1">
+      <div className="inline-flex items-baseline justify-end gap-1">
         {badgeLabel ? (
           <span
             className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium leading-none ${
@@ -916,17 +981,16 @@ function HoldingValueCell({
             {badgeLabel}
           </span>
         ) : null}
-        <p
-          className={`whitespace-nowrap text-[12px] font-semibold tabular-nums ${
-            emph === 'pos'
-              ? 'text-red-400'
-              : emph === 'neg'
-                ? 'text-blue-400'
-                : emph === 'warn'
-                  ? 'text-warning'
-                  : 'text-textMain'
-          }`}
-        >
+        {prefixValue ? (
+          <p
+            className={`whitespace-nowrap text-[10px] font-semibold tabular-nums ${
+              prefixClassName ?? valueClass
+            }`}
+          >
+            {prefixValue}
+          </p>
+        ) : null}
+        <p className={`whitespace-nowrap text-[12px] font-semibold tabular-nums ${valueClass}`}>
           {value}
         </p>
       </div>

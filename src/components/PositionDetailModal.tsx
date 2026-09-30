@@ -5,6 +5,7 @@ import type { TradePlanTodo } from '../types/todo';
 import { formatMoney, formatPercent } from '../lib/format';
 import { estimateNetUnrealizedPnl, roundMoney, roundPercent } from '../lib/portfolioMath';
 import { pnlTextClass, pnlToneClass } from '../lib/pnlTone';
+import { formatKrDayChange, krChangeFromPrevClose } from '../lib/krPrevChange';
 import { fetchKrBoardByTicker } from '../lib/krxLookup';
 import { krBoardBadgeClass, krBoardDisplayLabel } from '../lib/krBoardUi';
 import { tradeAppliesToLedger } from '../lib/ledger';
@@ -16,6 +17,8 @@ interface PositionDetailModalProps {
   trades: Trade[];
   todos: TradePlanTodo[];
   note: string;
+  /** 한국장 전일 종가 — 있으면 현재가 옆에 전일 대비 등락을 표시 */
+  prevClose?: number;
   onSaveNote: (next: string) => void;
   onAddTodo: (todo: Omit<TradePlanTodo, 'id' | 'done' | 'createdAt'>) => void;
   onClose: () => void;
@@ -31,6 +34,7 @@ export function PositionDetailModal({
   trades,
   todos,
   note,
+  prevClose,
   onSaveNote,
   onAddTodo,
   onClose,
@@ -152,6 +156,10 @@ export function PositionDetailModal({
   if (!position || !metric) return null;
 
   const koreanPnl = position.market === 'KR';
+  const dayChange =
+    position.market === 'KR'
+      ? krChangeFromPrevClose(position.current_price, prevClose)
+      : null;
   const krBoard =
     position.market === 'KR' ? krBoardByTicker.get(position.ticker) : undefined;
 
@@ -287,7 +295,25 @@ export function PositionDetailModal({
         <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
           <Mini label="보유수량" value={`${position.quantity}`} />
           <Mini label="평단" value={formatMoney(position.avg_price, position.currency)} />
-          <Mini label="현재가" value={formatMoney(position.current_price, position.currency)} />
+          <Mini
+            label="현재가"
+            value={formatMoney(position.current_price, position.currency)}
+            subValue={
+              dayChange
+                ? formatKrDayChange(dayChange.amount, dayChange.pct, position.currency)
+                : undefined
+            }
+            emph={
+              dayChange
+                ? dayChange.amount > 0
+                  ? 'pos'
+                  : dayChange.amount < 0
+                    ? 'neg'
+                    : undefined
+                : undefined
+            }
+            koreanPnl={koreanPnl}
+          />
           <Mini label="예상손익" value={formatMoney(metric.pnl, position.currency)} emph={metric.pnl >= 0 ? 'pos' : 'neg'} koreanPnl={koreanPnl} />
           <Mini label="예상수익률" value={formatPercent(retPct, true)} emph={retPct >= 0 ? 'pos' : 'neg'} koreanPnl={koreanPnl} />
           <Mini
@@ -712,11 +738,13 @@ function formatSignedMoney(value: number, currency: Position['currency']): strin
 function Mini({
   label,
   value,
+  subValue,
   emph,
   koreanPnl = false,
 }: {
   label: string;
   value: string;
+  subValue?: string;
   emph?: 'pos' | 'neg';
   koreanPnl?: boolean;
 }) {
@@ -728,6 +756,13 @@ function Mini({
       >
         {value}
       </p>
+      {subValue ? (
+        <p
+          className={`mt-0.5 text-[11px] font-medium leading-tight tabular-nums ${pnlToneClass(emph, koreanPnl)}`}
+        >
+          {subValue}
+        </p>
+      ) : null}
     </div>
   );
 }

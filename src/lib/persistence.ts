@@ -24,6 +24,8 @@ export interface PersistedPortfolioV1 {
   krPreferExtendedQuote?: boolean;
   /** 한국장 시세 갱신으로 수집한 당일 시가(티커→원) — 새로고침 후에도 유지 */
   krDayOpenByTicker?: Record<string, number>;
+  /** 한국장 시세 갱신으로 수집한 전일 종가(티커→원) — 현재가 등락 표시 */
+  krPrevCloseByTicker?: Record<string, number>;
 }
 
 /** 로컬·가져오기·클라우드 공통: 양의 유한 숫자만 유지 */
@@ -79,6 +81,7 @@ export function coercePersistedPortfolio(
     delete data.krPreferExtendedQuote;
   }
   data.krDayOpenByTicker = sanitizeKrDayOpenByTicker(data.krDayOpenByTicker);
+  data.krPrevCloseByTicker = sanitizeKrDayOpenByTicker(data.krPrevCloseByTicker);
   return data;
 }
 

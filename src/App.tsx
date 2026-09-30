@@ -374,6 +374,9 @@ export default function App() {
   const [krDayOpenByTicker, setKrDayOpenByTicker] = useState<
     Record<string, number>
   >(() => getInitialAppState().krDayOpenByTicker ?? {});
+  const [krPrevCloseByTicker, setKrPrevCloseByTicker] = useState<
+    Record<string, number>
+  >(() => getInitialAppState().krPrevCloseByTicker ?? {});
   const [krPriceStatusByTicker, setKrPriceStatusByTicker] = useState<
     Record<string, KrPriceStatus>
   >({});
@@ -444,6 +447,7 @@ export default function App() {
     krSellCommissionRate: initialPortfolio.krSellCommissionRate,
     krPreferExtendedQuote: initialPortfolio.krPreferExtendedQuote,
     krDayOpenByTicker: initialPortfolio.krDayOpenByTicker ?? {},
+    krPrevCloseByTicker: initialPortfolio.krPrevCloseByTicker ?? {},
   });
   const importFileRef = useRef<HTMLInputElement>(null);
   const hadUserRef = useRef(false);
@@ -517,6 +521,7 @@ export default function App() {
       krSellCommissionRate,
       krPreferExtendedQuote,
       krDayOpenByTicker,
+      krPrevCloseByTicker,
     };
     flushPortfolioToLocalStorage();
   }, [
@@ -530,6 +535,7 @@ export default function App() {
     krSellCommissionRate,
     krPreferExtendedQuote,
     krDayOpenByTicker,
+    krPrevCloseByTicker,
     flushPortfolioToLocalStorage,
   ]);
 
@@ -561,6 +567,7 @@ export default function App() {
     setKrSellCommissionRate(normalizeKrSellCommissionRate(h.krSellCommissionRate));
     setKrPreferExtendedQuote(h.krPreferExtendedQuote === true);
     setKrDayOpenByTicker(h.krDayOpenByTicker ?? {});
+    setKrPrevCloseByTicker(h.krPrevCloseByTicker ?? {});
   }, []);
 
   /** 로그아웃 시 개인정보(보유·일지·계획·메모 등) 로컬 흔적 제거 */
@@ -594,6 +601,7 @@ export default function App() {
     setKrSellCommissionRate(normalizeKrSellCommissionRate(undefined));
     setKrPreferExtendedQuote(false);
     setKrDayOpenByTicker({});
+    setKrPrevCloseByTicker({});
     setSnapshotItems([]);
     setDeletedTradeItems([]);
     setDeletedTodoItems([]);
@@ -718,6 +726,11 @@ export default function App() {
             JSON.stringify(prev) === JSON.stringify(nextMetaState.krDayOpenByTicker)
               ? prev
               : nextMetaState.krDayOpenByTicker,
+          );
+          setKrPrevCloseByTicker((prev) =>
+            JSON.stringify(prev) === JSON.stringify(nextPortfolio.krPrevCloseByTicker ?? {})
+              ? prev
+              : (nextPortfolio.krPrevCloseByTicker ?? {}),
           );
           setTrades((prev) =>
             sameTradeLists(prev, nextPortfolio.trades) ? prev : nextPortfolio.trades,
@@ -2058,6 +2071,7 @@ export default function App() {
     const nextQuotes: Record<string, number> = {};
     const nextAt: Record<string, string> = {};
     const nextOpen: Record<string, number> = {};
+    const nextPrevClose: Record<string, number> = {};
     const nextPriceStatus: Record<string, KrPriceStatus> = {};
     const chunk = 5;
     for (let i = 0; i < tickers.length; i += chunk) {
@@ -2080,6 +2094,13 @@ export default function App() {
             ) {
               nextOpen[t] = roundMoney(r.openPrice, 'KRW');
             }
+            if (
+              r.prevClose !== undefined &&
+              Number.isFinite(r.prevClose) &&
+              r.prevClose > 0
+            ) {
+              nextPrevClose[t] = roundMoney(r.prevClose, 'KRW');
+            }
             ok += 1;
           } catch {
             fail += 1;
@@ -2090,6 +2111,9 @@ export default function App() {
     setQuotes((prev) => ({ ...prev, ...nextQuotes }));
     if (Object.keys(nextOpen).length > 0) {
       setKrDayOpenByTicker((prev) => ({ ...prev, ...nextOpen }));
+    }
+    if (Object.keys(nextPrevClose).length > 0) {
+      setKrPrevCloseByTicker((prev) => ({ ...prev, ...nextPrevClose }));
     }
     setKrPriceStatusByTicker((prev) => {
       const next = { ...prev };
@@ -2597,6 +2621,7 @@ export default function App() {
                 onRefreshKrQuotes={() => void refreshKrQuotes()}
                 lastKrQuoteBulkAt={lastKrQuoteBulkAt}
                 krDayOpenByTicker={krDayOpenByTicker}
+                krPrevCloseByTicker={krPrevCloseByTicker}
                 krPriceStatusByTicker={krPriceStatusByTicker}
                 pendingTodoCountByPositionId={pendingTodoCountByPositionId}
                 reachedTodoCountByPositionId={reachedTodoCountByPositionId}
@@ -2818,6 +2843,11 @@ export default function App() {
         trades={detailTrades}
         todos={detailTodos}
         note={detailNoteKey ? notes[detailNoteKey] ?? '' : ''}
+        prevClose={
+          detailPosition?.market === 'KR'
+            ? krPrevCloseByTicker[detailPosition.ticker]
+            : undefined
+        }
         onSaveNote={(next) => {
           if (!detailNoteKey) return;
           setNotes((prev) => ({ ...prev, [detailNoteKey]: next }));

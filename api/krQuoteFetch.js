@@ -11,6 +11,37 @@ export function parseCommaInt(str) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+/** 전일 대비 등락액·등락률 — 부호·소수점·콤마 허용 */
+export function parseSignedCommaNumber(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string') return null;
+  const n = Number(value.replace(/,/g, '').trim());
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * 네이버 모바일 basic JSON의 전일 종가 대비 등락.
+ * compareToPreviousClosePrice는 시초가가 아니라 전일 종가 기준이다.
+ */
+export function extractPrevCloseChange(info, price) {
+  const changeValue = parseSignedCommaNumber(info?.compareToPreviousClosePrice);
+  const changePct = parseSignedCommaNumber(info?.fluctuationsRatio);
+  let prevClose;
+  if (
+    typeof price === 'number' &&
+    Number.isFinite(price) &&
+    changeValue != null
+  ) {
+    const pc = price - changeValue;
+    if (Number.isFinite(pc) && pc > 0) prevClose = pc;
+  }
+  return {
+    ...(prevClose != null ? { prevClose } : {}),
+    ...(changeValue != null ? { changeValue } : {}),
+    ...(changePct != null ? { changePct } : {}),
+  };
+}
+
 export function parseNaverMainPrice(html) {
   let m = html.match(/오늘의시세\s*([\d,]+)\s*포인트/);
   if (!m) {
@@ -70,6 +101,7 @@ export async function fetchNaverPcDelayedQuote(code) {
       fetchedAt: new Date().toISOString(),
       source: 'naver_mobile_krx',
       priceStatus: extractKrPriceStatus(data),
+      ...extractPrevCloseChange(data, close),
     };
   }
   throw new Error('mobile_parse_fail');
@@ -83,11 +115,13 @@ export async function fetchNaverMobileQuotePreferOver(code) {
   const overRaw = data?.overMarketPriceInfo?.overPrice;
   const over = parseCommaInt(overRaw);
   if (over != null) {
+    const overInfo = data?.overMarketPriceInfo ?? data;
     return {
       price: over,
       fetchedAt: new Date().toISOString(),
       source: 'naver_mobile_over_market',
-      priceStatus: extractKrPriceStatus(data?.overMarketPriceInfo ?? data),
+      priceStatus: extractKrPriceStatus(overInfo),
+      ...extractPrevCloseChange(overInfo, over),
     };
   }
   const close = parseCommaInt(data?.closePrice);
@@ -97,6 +131,7 @@ export async function fetchNaverMobileQuotePreferOver(code) {
       fetchedAt: new Date().toISOString(),
       source: 'naver_mobile_krx',
       priceStatus: extractKrPriceStatus(data),
+      ...extractPrevCloseChange(data, close),
     };
   }
   throw new Error('mobile_parse_fail');

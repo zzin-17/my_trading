@@ -58,6 +58,7 @@ export function normalizeLoadedPortfolio(
         ? raw.krPreferExtendedQuote
         : false,
     krDayOpenByTicker: sanitizeKrDayOpenByTicker(raw.krDayOpenByTicker),
+    krPrevCloseByTicker: sanitizeKrDayOpenByTicker(raw.krPrevCloseByTicker),
   };
 }
 
@@ -77,6 +78,7 @@ export function buildInitialAppState(): PersistedPortfolioV1 {
     krSellCommissionRate: normalizeKrSellCommissionRate(undefined),
     krPreferExtendedQuote: false,
     krDayOpenByTicker: {},
+    krPrevCloseByTicker: {},
   };
 }
 
