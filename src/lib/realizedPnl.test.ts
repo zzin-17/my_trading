@@ -7,6 +7,7 @@ import {
   computeRealizedSellEvents,
   lastNKrTradingDays,
   lastNWeekdayDates,
+  eventDateInPeriodRange,
   periodKeyForGranularity,
   summarizeRealizedByPeriod,
 } from './realizedPnl';
@@ -133,6 +134,61 @@ describe('aggregateRealizedByTickerForPeriod', () => {
 describe('periodKeyForGranularity', () => {
   it('년 키', () => {
     expect(periodKeyForGranularity('2025-03-15', 'year')).toBe('2025');
+  });
+});
+
+describe('eventDateInPeriodRange', () => {
+  it('년 집계는 당월 1일이 시작이어도 그해 1월 매도를 포함한다', () => {
+    expect(
+      eventDateInPeriodRange('2026-01-15', 'year', '2026-10-01', ''),
+    ).toBe(true);
+    expect(
+      eventDateInPeriodRange('2026-10-15', 'year', '2026-10-01', ''),
+    ).toBe(true);
+    expect(
+      eventDateInPeriodRange('2025-12-31', 'year', '2026-10-01', ''),
+    ).toBe(false);
+  });
+
+  it('일 집계는 시작일 이전을 제외한다', () => {
+    expect(
+      eventDateInPeriodRange('2026-01-15', 'day', '2026-10-01', ''),
+    ).toBe(false);
+  });
+
+  it('년 집계는 시작·종료가 비어 있으면 연도 전체를 포함한다', () => {
+    expect(eventDateInPeriodRange('2026-01-15', 'year', '', '')).toBe(true);
+    expect(eventDateInPeriodRange('2025-12-31', 'year', '', '')).toBe(true);
+  });
+});
+
+describe('summarizeRealizedByPeriod year', () => {
+  it('같은 해 1월·10월 매도를 한 해로 합친다', () => {
+    const events = computeRealizedSellEvents(
+      [
+        tr({ id: 'b', date: '2026-01-01', side: 'buy', quantity: 10, price: 100 }),
+        tr({
+          id: 's1',
+          date: '2026-01-10',
+          side: 'sell',
+          quantity: 2,
+          price: 120,
+        }),
+        tr({
+          id: 's2',
+          date: '2026-10-10',
+          side: 'sell',
+          quantity: 2,
+          price: 90,
+        }),
+      ],
+      0,
+    );
+    const rows = summarizeRealizedByPeriod(events, 'year');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.period).toBe('2026');
+    expect(rows[0]!.netTotal).toBe(events.reduce((s, x) => s + x.netPnl, 0));
+    expect(rows[0]!.positiveTotal).not.toBe(rows[0]!.netTotal);
   });
 });
 

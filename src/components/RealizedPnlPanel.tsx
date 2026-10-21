@@ -5,6 +5,7 @@ import { formatMoney, formatPercent } from '../lib/format';
 import {
   aggregateRealizedByTickerForPeriod,
   computeRealizedSellEvents,
+  eventDateInPeriodRange,
   formatPeriodLabel,
   summarizeRealizedByPeriod,
   type RealizedPeriodGranularity,
@@ -154,6 +155,8 @@ export function RealizedPnlPanel({
     useState<RealizedPeriodGranularity>('month');
   const [monthRangeStart, setMonthRangeStart] = useState('');
   const [monthRangeEnd, setMonthRangeEnd] = useState('');
+  const [yearRangeStart, setYearRangeStart] = useState('');
+  const [yearRangeEnd, setYearRangeEnd] = useState('');
   const [dayRangeStart, setDayRangeStart] = useState(defaultDayRangeStart);
   const [dayRangeEnd, setDayRangeEnd] = useState('');
   const [drill, setDrill] = useState<{
@@ -167,18 +170,31 @@ export function RealizedPnlPanel({
   );
 
   const filteredEvents = useMemo(() => {
-    return events.filter((e) => {
-      if (granularity === 'month') {
-        const monthKey = e.date.slice(0, 7);
-        if (monthRangeStart && monthKey < monthRangeStart) return false;
-        if (monthRangeEnd && monthKey > monthRangeEnd) return false;
-        return true;
-      }
-      if (dayRangeStart && e.date < dayRangeStart) return false;
-      if (dayRangeEnd && e.date > dayRangeEnd) return false;
-      return true;
-    });
-  }, [dayRangeEnd, dayRangeStart, events, granularity, monthRangeEnd, monthRangeStart]);
+    const start =
+      granularity === 'month'
+        ? monthRangeStart
+        : granularity === 'year'
+          ? yearRangeStart
+          : dayRangeStart;
+    const end =
+      granularity === 'month'
+        ? monthRangeEnd
+        : granularity === 'year'
+          ? yearRangeEnd
+          : dayRangeEnd;
+    return events.filter((e) =>
+      eventDateInPeriodRange(e.date, granularity, start, end),
+    );
+  }, [
+    dayRangeEnd,
+    dayRangeStart,
+    events,
+    granularity,
+    monthRangeEnd,
+    monthRangeStart,
+    yearRangeEnd,
+    yearRangeStart,
+  ]);
 
   const periodRows = useMemo(
     () => summarizeRealizedByPeriod(filteredEvents, granularity),
@@ -212,21 +228,42 @@ export function RealizedPnlPanel({
         setDrill(null);
         return;
       }
-    } else {
-      if (dayRangeStart && drill.period < dayRangeStart) {
+      return;
+    }
+    if (granularity === 'year') {
+      if (yearRangeStart && drill.period < yearRangeStart) {
         setDrill(null);
         return;
       }
-      if (dayRangeEnd && drill.period > dayRangeEnd) {
+      if (yearRangeEnd && drill.period > yearRangeEnd) {
         setDrill(null);
       }
+      return;
     }
-  }, [dayRangeEnd, dayRangeStart, drill, granularity, monthRangeEnd, monthRangeStart]);
+    if (dayRangeStart && drill.period < dayRangeStart) {
+      setDrill(null);
+      return;
+    }
+    if (dayRangeEnd && drill.period > dayRangeEnd) {
+      setDrill(null);
+    }
+  }, [
+    dayRangeEnd,
+    dayRangeStart,
+    drill,
+    granularity,
+    monthRangeEnd,
+    monthRangeStart,
+    yearRangeEnd,
+    yearRangeStart,
+  ]);
 
   const hasActiveFilter =
     granularity === 'month'
       ? Boolean(monthRangeStart) || Boolean(monthRangeEnd)
-      : Boolean(dayRangeStart) || Boolean(dayRangeEnd);
+      : granularity === 'year'
+        ? Boolean(yearRangeStart) || Boolean(yearRangeEnd)
+        : Boolean(dayRangeStart) || Boolean(dayRangeEnd);
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4 sm:p-5 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
@@ -300,6 +337,41 @@ export function RealizedPnlPanel({
                 />
               </label>
             </>
+          ) : granularity === 'year' ? (
+            <>
+              <label className="flex items-center gap-1.5 text-[11px] text-textMuted">
+                <span>시작</span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1990}
+                  max={2100}
+                  placeholder="연도"
+                  value={yearRangeStart}
+                  onChange={(e) => {
+                    setYearRangeStart(e.target.value.replace(/\D/g, '').slice(0, 4));
+                    setDrill(null);
+                  }}
+                  className="w-[5.5rem] rounded-md border border-border bg-surface px-2 py-1 text-[12px] text-textMain outline-none focus:border-accent"
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-[11px] text-textMuted">
+                <span>종료</span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1990}
+                  max={2100}
+                  placeholder="연도"
+                  value={yearRangeEnd}
+                  onChange={(e) => {
+                    setYearRangeEnd(e.target.value.replace(/\D/g, '').slice(0, 4));
+                    setDrill(null);
+                  }}
+                  className="w-[5.5rem] rounded-md border border-border bg-surface px-2 py-1 text-[12px] text-textMain outline-none focus:border-accent"
+                />
+              </label>
+            </>
           ) : (
             <>
               <label className="flex items-center gap-1.5 text-[11px] text-textMuted">
@@ -336,6 +408,8 @@ export function RealizedPnlPanel({
               onClick={() => {
                 setMonthRangeStart('');
                 setMonthRangeEnd('');
+                setYearRangeStart('');
+                setYearRangeEnd('');
                 setDayRangeStart(defaultDayRangeStart);
                 setDayRangeEnd('');
                 setDrill(null);

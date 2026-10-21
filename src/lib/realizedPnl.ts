@@ -131,6 +131,28 @@ export function periodKeyForGranularity(
   return date.slice(0, 4);
 }
 
+/** 시작·종료는 집계 단위와 같은 형식(일: YYYY-MM-DD, 월: YYYY-MM, 년: YYYY) */
+export function eventDateInPeriodRange(
+  date: string,
+  g: RealizedPeriodGranularity,
+  start: string,
+  end: string,
+): boolean {
+  const key = periodKeyForGranularity(date, g);
+  const startKey = start.trim();
+  const endKey = end.trim();
+  if (g === 'year') {
+    const startY = startKey.slice(0, 4);
+    const endY = endKey.slice(0, 4);
+    if (/^\d{4}$/.test(startY) && key < startY) return false;
+    if (/^\d{4}$/.test(endY) && key > endY) return false;
+    return true;
+  }
+  if (startKey && key < startKey) return false;
+  if (endKey && key > endKey) return false;
+  return true;
+}
+
 export interface PeriodRealizedSummaryRow {
   period: string;
   currency: CurrencyCode;
