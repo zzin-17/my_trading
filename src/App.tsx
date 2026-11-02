@@ -20,6 +20,7 @@ import { AddHoldingModal, type AddHoldingPayload } from './components/AddHolding
 import { MarketTodoList } from './components/MarketTodoList';
 import { PositionDetailModal } from './components/PositionDetailModal';
 import { MarketTabs, type MarketTab } from './components/MarketTabs';
+import { KrIndexBar } from './components/KrIndexBar';
 import { MarketSplitCard } from './components/MarketSplitCard';
 import { tradeSeed } from './data/tradeSeed';
 import {
@@ -2554,7 +2555,13 @@ export default function App() {
           주세요. 이 기기의 편집은 로컬에만 반영됩니다.
         </div>
       ) : null}
-      <main className="mx-auto max-w-7xl space-y-4 px-0 py-4 pb-32 md:space-y-5 md:px-4 md:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] lg:px-6">
+      <main
+        className={`mx-auto max-w-7xl space-y-4 px-0 py-4 md:space-y-5 md:px-4 lg:px-6 ${
+          marketTab === 'US'
+            ? 'pb-32 md:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]'
+            : 'pb-40 md:pb-16'
+        }`}
+      >
         <div className="md:hidden">
           <MarketTabs
             value={marketTab}
@@ -2739,7 +2746,17 @@ export default function App() {
           </section>
         </div>
       </main>
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/96 px-2 pb-[max(0.625rem,env(safe-area-inset-bottom,0px))] pt-1.5 backdrop-blur md:hidden">
+      <div
+        className={`fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/96 backdrop-blur ${
+          marketTab === 'US' ? 'md:hidden' : ''
+        }`}
+      >
+        {marketTab !== 'US' ? (
+          <div className="mx-auto max-w-7xl px-3 pt-1.5 md:px-4 md:py-2 lg:px-6">
+            <KrIndexBar />
+          </div>
+        ) : null}
+      <nav className="px-2 pb-[max(0.625rem,env(safe-area-inset-bottom,0px))] pt-1.5 md:hidden">
         <div className="mx-auto flex max-w-7xl items-center gap-1 rounded-2xl bg-surface/72 p-1 shadow-[0_-8px_24px_rgba(0,0,0,0.18)]">
           <MobileBottomTabButton
             label="자산"
@@ -2762,6 +2779,7 @@ export default function App() {
           />
         </div>
       </nav>
+      </div>
       <input
         ref={importFileRef}
         type="file"

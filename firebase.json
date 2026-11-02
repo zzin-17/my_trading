@@ -24,6 +24,10 @@
         "function": "krQuote"
       },
       {
+        "source": "/api/kr-index",
+        "function": "krIndex"
+      },
+      {
         "source": "/api/krx-kind",
         "function": "krxKind"
       },

@@ -3,6 +3,7 @@
  */
 import { onRequest } from 'firebase-functions/v2/https';
 import krQuoteHandler from './api/kr-quote.js';
+import krIndexHandler from './api/kr-index.js';
 import krxKindHandler from './api/krx-kind.js';
 
 const opts = {
@@ -12,4 +13,5 @@ const opts = {
 };
 
 export const krQuote = onRequest(opts, (req, res) => krQuoteHandler(req, res));
+export const krIndex = onRequest(opts, (req, res) => krIndexHandler(req, res));
 export const krxKind = onRequest(opts, (req, res) => krxKindHandler(req, res));

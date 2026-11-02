@@ -1,6 +1,7 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 import { fetchKrQuote } from './api/krQuoteFetch.js';
+import { fetchKrIndices } from './api/krIndexFetch.js';
 
 export default defineConfig({
   /** 같은 Wi‑Fi의 아이폰 등에서 http://<맥 IP>:5173 접속 가능 */
@@ -69,6 +70,25 @@ export default defineConfig({
             }
             res.statusCode = 502;
             res.end(JSON.stringify({ message: '시세 조회 실패' }));
+          }
+        });
+
+        server.middlewares.use('/api/kr-index', async (_req, res) => {
+          try {
+            const result = await fetchKrIndices();
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            res.end(JSON.stringify(result));
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : '';
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            if (msg === 'index_parse_fail') {
+              res.statusCode = 422;
+              res.end(JSON.stringify({ message: '지수 파싱 실패' }));
+              return;
+            }
+            res.statusCode = 502;
+            res.end(JSON.stringify({ message: '지수 조회 실패' }));
           }
         });
 
