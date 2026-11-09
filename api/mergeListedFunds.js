@@ -17,24 +17,26 @@ function stripPreferredSuffix(name) {
   return name.replace(PREFERRED_STOCK_NAME_RE, '').trim();
 }
 
-function extractLastPage(html) {
-  const matches = [...html.matchAll(/page=(\d+)/g)];
-  let max = 1;
-  for (const match of matches) {
-    const value = Number(match[1]);
-    if (Number.isFinite(value) && value > max) max = value;
-  }
-  return max;
+/** 삼성전기우, 현대차2우B, 미래에셋증권우(전환) 같은 우선주 종목명 */
+export function isPreferredStockName(name) {
+  return PREFERRED_STOCK_NAME_RE.test(String(name ?? '').trim());
 }
 
-function parseNaverPreferredRows(html, board) {
+/**
+ * 네이버 시가총액 JSON에서 우선주만 고른다.
+ * PC 시세 HTML(`class="tltle"`)은 더 이상 종목 링크를 주지 않아 우선주가 빠졌다.
+ */
+export function preferredRowsFromMarketValueStocks(stocks, board) {
   const rows = [];
   const seen = new Set();
-  const re = /<a href="\/item\/main\.naver\?code=([A-Z0-9]{6})" class="tltle">([^<]+)<\/a>/g;
-  for (const match of html.matchAll(re)) {
-    const ticker = String(match[1] ?? '').trim().toUpperCase();
-    const name = String(match[2] ?? '').replace(/\s+/g, ' ').trim();
-    if (!ticker || !name || !PREFERRED_STOCK_NAME_RE.test(name) || seen.has(ticker)) {
+  for (const row of Array.isArray(stocks) ? stocks : []) {
+    const ticker = String(row?.itemCode ?? '')
+      .replace(/\s/g, '')
+      .toUpperCase();
+    const name = String(row?.stockName ?? '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!/^[A-Z0-9]{6}$/.test(ticker) || !name || !isPreferredStockName(name) || seen.has(ticker)) {
       continue;
     }
     seen.add(ticker);
@@ -43,18 +45,22 @@ function parseNaverPreferredRows(html, board) {
   return rows;
 }
 
-async function fetchNaverMarketPage(sosok, page) {
-  const url = `https://finance.naver.com/sise/sise_market_sum.naver?sosok=${sosok}&page=${page}`;
+async function fetchNaverMarketValuePage(category, page) {
+  const url = new URL(`https://m.stock.naver.com/api/stocks/marketValue/${category}`);
+  url.searchParams.set('page', String(page));
+  url.searchParams.set('pageSize', '100');
   const signal =
     typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
       ? AbortSignal.timeout(NAVER_FETCH_TIMEOUT_MS)
       : undefined;
-  const r = await fetch(url, { headers: NAVER_HEADERS, signal });
+  const r = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },
+    signal,
+  });
   if (!r.ok) {
-    throw new Error(`Naver market page error: ${r.status}`);
+    throw new Error(`Naver market value error: ${r.status}`);
   }
-  const buf = new Uint8Array(await r.arrayBuffer());
-  return decoder.decode(buf);
+  return r.json();
 }
 
 function enrichPreferredRows(preferredRows, stockItems) {
@@ -77,28 +83,34 @@ function enrichPreferredRows(preferredRows, stockItems) {
  */
 export async function fetchNaverPreferredStockRows(stockItems) {
   const markets = [
-    { sosok: 0, board: '코스피' },
-    { sosok: 1, board: '코스닥' },
+    { category: 'KOSPI', board: '코스피' },
+    { category: 'KOSDAQ', board: '코스닥' },
   ];
   const out = [];
   for (const market of markets) {
     try {
-      const firstHtml = await fetchNaverMarketPage(market.sosok, 1);
-      out.push(...parseNaverPreferredRows(firstHtml, market.board));
-      const lastPage = extractLastPage(firstHtml);
-      const pages = Array.from({ length: Math.max(0, lastPage - 1) }, (_, i) => i + 2);
+      const first = await fetchNaverMarketValuePage(market.category, 1);
+      out.push(...preferredRowsFromMarketValueStocks(first?.stocks, market.board));
+      const total = Number(first?.totalCount) || 0;
+      const pageSize = Number(first?.pageSize) || 100;
+      const pageCount = Math.ceil(total / pageSize);
+      const pages = Array.from({ length: Math.max(0, pageCount - 1) }, (_, i) => i + 2);
       for (let i = 0; i < pages.length; i += 8) {
         const chunk = pages.slice(i, i + 8);
-        const htmlList = await Promise.all(
-          chunk.map((page) => fetchNaverMarketPage(market.sosok, page).catch(() => '')),
+        const payloads = await Promise.all(
+          chunk.map((page) =>
+            fetchNaverMarketValuePage(market.category, page).catch(() => null),
+          ),
         );
-        for (const html of htmlList) {
-          if (!html) continue;
-          out.push(...parseNaverPreferredRows(html, market.board));
+        for (const payload of payloads) {
+          if (!payload) continue;
+          out.push(
+            ...preferredRowsFromMarketValueStocks(payload.stocks, market.board),
+          );
         }
       }
     } catch {
-      /* 한 소스 실패 시 기존 KRX 목록만 사용 */
+      /* 한 시장 실패 시 다른 시장만 사용 */
     }
   }
 
@@ -175,7 +187,12 @@ export function mergeStockAndFunds(stockItems, fundItems, preferredItems = []) {
     if (!by.has(f.ticker)) by.set(f.ticker, f);
   }
   for (const item of preferredItems) {
-    if (!by.has(item.ticker)) by.set(item.ticker, item);
+    const prev = by.get(item.ticker);
+    if (!prev) {
+      by.set(item.ticker, item);
+      continue;
+    }
+    if (!prev.board && item.board) prev.board = item.board;
   }
   return [...by.values()];
 }

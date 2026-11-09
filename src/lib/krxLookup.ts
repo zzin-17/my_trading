@@ -117,7 +117,7 @@ async function getKrxList(): Promise<KrxListedStock[]> {
       ? '/api/krx-kind'
       : 'https://my-trading-phi.vercel.app/api/krx-kind');
 
-  const res = await fetch(base);
+  const res = await fetch(`${base}${base.includes('?') ? '&' : '?'}v=2`);
   if (!res.ok) {
     throw new Error(`KRX 목록 조회 실패 (${res.status})`);
   }
@@ -131,7 +131,7 @@ async function getKrxList(): Promise<KrxListedStock[]> {
       continue;
     }
     const name = x.name.replace(/\s+/g, ' ').trim();
-    const ticker = x.ticker.replace(/\s/g, '').toUpperCase();
+    const ticker = normalizeKrTicker(x.ticker);
     if (!name || !/^[A-Z0-9]{6}$/.test(ticker)) continue;
     const sector =
       typeof x.sector === 'string' && x.sector.trim()
@@ -152,6 +152,15 @@ async function getKrxList(): Promise<KrxListedStock[]> {
 
   krxListCache = list;
   return list;
+}
+
+export function krBoardForTicker(
+  boards: Map<string, string>,
+  ticker: string,
+): string | undefined {
+  const code = normalizeKrTicker(ticker);
+  if (!code) return undefined;
+  return boards.get(code);
 }
 
 /** 티커 → 코스피/코스닥/코넥스 등 (KRX 목록 캐시 사용) */

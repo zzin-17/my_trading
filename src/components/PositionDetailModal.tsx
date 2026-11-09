@@ -6,7 +6,7 @@ import { formatMoney, formatPercent } from '../lib/format';
 import { estimateNetUnrealizedPnl, roundMoney, roundPercent } from '../lib/portfolioMath';
 import { pnlTextClass, pnlToneClass } from '../lib/pnlTone';
 import { formatKrDayChange, krChangeFromPrevClose } from '../lib/krPrevChange';
-import { fetchKrBoardByTicker } from '../lib/krxLookup';
+import { fetchKrBoardByTicker, krBoardForTicker } from '../lib/krxLookup';
 import { krBoardBadgeClass, krBoardDisplayLabel } from '../lib/krBoardUi';
 import { tradeAppliesToLedger } from '../lib/ledger';
 import { computeRealizedSellEvents } from '../lib/realizedPnl';
@@ -161,7 +161,9 @@ export function PositionDetailModal({
       ? krChangeFromPrevClose(position.current_price, prevClose)
       : null;
   const krBoard =
-    position.market === 'KR' ? krBoardByTicker.get(position.ticker) : undefined;
+    position.market === 'KR'
+    ? krBoardForTicker(krBoardByTicker, position.ticker)
+    : undefined;
 
   const journalTrades = trades.filter((t) => !t.excludeFromJournal);
   const ledgerJournalTrades = journalTrades.filter(tradeAppliesToLedger);

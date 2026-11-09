@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import type { Position, PositionMetrics, PortfolioSummary } from '../types/portfolio';
 import { formatMoney, formatPercent, formatQuoteUpdatedLabel } from '../lib/format';
 import { isConcentrationRisk, roundPercent } from '../lib/portfolioMath';
-import { fetchKrBoardByTicker } from '../lib/krxLookup';
+import { fetchKrBoardByTicker, krBoardForTicker } from '../lib/krxLookup';
 import { krBoardBadgeClass, krBoardDisplayLabel } from '../lib/krBoardUi';
 import { normalizeKrTicker } from '../lib/krxLookup';
 import type { KrPriceStatus } from '../lib/naverKrQuote';
@@ -268,11 +268,11 @@ export function HoldingsTable({
         case 'board': {
           const la = krBoardDisplayLabel(
             pa.market,
-            pa.market === 'KR' ? krBoardByTicker.get(pa.ticker) : undefined,
+            pa.market === 'KR' ? krBoardForTicker(krBoardByTicker, pa.ticker) : undefined,
           );
           const lb = krBoardDisplayLabel(
             pb.market,
-            pb.market === 'KR' ? krBoardByTicker.get(pb.ticker) : undefined,
+            pb.market === 'KR' ? krBoardForTicker(krBoardByTicker, pb.ticker) : undefined,
           );
           v = la.localeCompare(lb, 'ko');
           break;
@@ -523,7 +523,7 @@ export function HoldingsTable({
                 const priceTip = [dayChange?.tip, openTip].filter(Boolean).join(' · ') || undefined;
                 const board = krBoardDisplayLabel(
                   p.market,
-                  p.market === 'KR' ? krBoardByTicker.get(p.ticker) : undefined,
+                  p.market === 'KR' ? krBoardForTicker(krBoardByTicker, p.ticker) : undefined,
                 );
                 const pendingTodoCount = pendingTodoCountByPositionId[p.id] ?? 0;
                 const reachedTodoCount = reachedTodoCountByPositionId[p.id] ?? 0;
@@ -555,7 +555,7 @@ export function HoldingsTable({
                       <span className="mt-0.5 flex flex-wrap items-center gap-0.5">
                         <span
                           className={`inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-[9px] font-semibold ${krBoardBadgeClass(
-                            p.market === 'KR' ? krBoardByTicker.get(p.ticker) : undefined,
+                            p.market === 'KR' ? krBoardForTicker(krBoardByTicker, p.ticker) : undefined,
                           )}`}
                         >
                           {board}
@@ -787,13 +787,13 @@ export function HoldingsTable({
                     <span
                       className={`inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-semibold ${krBoardBadgeClass(
                         p.market === 'KR'
-                          ? krBoardByTicker.get(p.ticker)
+                          ? krBoardForTicker(krBoardByTicker, p.ticker)
                           : undefined,
                       )}`}
                     >
                       {krBoardDisplayLabel(
                         p.market,
-                        p.market === 'KR' ? krBoardByTicker.get(p.ticker) : undefined,
+                        p.market === 'KR' ? krBoardForTicker(krBoardByTicker, p.ticker) : undefined,
                       )}
                     </span>
                   </td>
