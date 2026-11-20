@@ -641,24 +641,33 @@ export function HoldingsTable({
       </div>
 
       <div className="mt-3 hidden max-h-[min(65vh,720px)] overflow-auto rounded-md border border-border/60 md:block">
-        <table className="w-full min-w-[1100px] border-collapse text-left text-[12px]">
+        <table className="w-full table-fixed min-w-[1180px] border-collapse text-left text-[12px]">
+          <colgroup>
+            {[
+              '7.48%',
+              '12.11%',
+              '13.09%',
+              '8.54%',
+              '9.02%',
+              '6.59%',
+              '9.02%',
+              '9.02%',
+              '8.94%',
+              '9.11%',
+              '7.08%',
+            ].map((width, index) => (
+              <col key={index} style={{ width }} />
+            ))}
+          </colgroup>
           <thead className="sticky top-0 z-10 border-b border-border bg-surface shadow-sm">
             <tr>
-              <SortableColumnHeader
-                label="소속"
-                columnKey="board"
-                sortKey={sortKey}
-                sortDir={sortDir}
-                onSort={handleSortHeader}
-                className="py-2 pr-2"
-              />
               <SortableColumnHeader
                 label="코드"
                 columnKey="ticker"
                 sortKey={sortKey}
                 sortDir={sortDir}
                 onSort={handleSortHeader}
-                className="py-2 pr-3"
+                className="whitespace-nowrap px-2 py-2"
               />
               <SortableColumnHeader
                 label="종목"
@@ -666,7 +675,7 @@ export function HoldingsTable({
                 sortKey={sortKey}
                 sortDir={sortDir}
                 onSort={handleSortHeader}
-                className="min-w-[100px] py-2 pr-3"
+                className="whitespace-nowrap px-2 py-2"
               />
               <SortableColumnHeader
                 label="전일대비"
@@ -674,8 +683,8 @@ export function HoldingsTable({
                 sortKey={sortKey}
                 sortDir={sortDir}
                 onSort={handleSortHeader}
-                align="center"
-                className="py-2 px-2 tabular-nums"
+                align="left"
+                className="whitespace-nowrap px-2 py-2 tabular-nums"
               />
               <SortableColumnHeader
                 label="현재가"
@@ -684,7 +693,7 @@ export function HoldingsTable({
                 sortDir={sortDir}
                 onSort={handleSortHeader}
                 align="right"
-                className="py-2 pr-3 tabular-nums"
+                className="whitespace-nowrap px-2 py-2 tabular-nums"
               />
               <SortableColumnHeader
                 label="평단"
@@ -693,7 +702,7 @@ export function HoldingsTable({
                 sortDir={sortDir}
                 onSort={handleSortHeader}
                 align="right"
-                className="py-2 pr-3 tabular-nums"
+                className="whitespace-nowrap px-2 py-2 tabular-nums"
               />
               <SortableColumnHeader
                 label="수량"
@@ -702,7 +711,7 @@ export function HoldingsTable({
                 sortDir={sortDir}
                 onSort={handleSortHeader}
                 align="right"
-                className="py-2 pr-3 tabular-nums"
+                className="whitespace-nowrap px-2 py-2 tabular-nums"
               />
               <SortableColumnHeader
                 label="매입금액"
@@ -711,7 +720,7 @@ export function HoldingsTable({
                 sortDir={sortDir}
                 onSort={handleSortHeader}
                 align="right"
-                className="py-2 pr-3 tabular-nums"
+                className="whitespace-nowrap px-2 py-2 tabular-nums"
               />
               <SortableColumnHeader
                 label="평가액"
@@ -720,7 +729,7 @@ export function HoldingsTable({
                 sortDir={sortDir}
                 onSort={handleSortHeader}
                 align="right"
-                className="py-2 pr-3 tabular-nums"
+                className="whitespace-nowrap px-2 py-2 tabular-nums"
               />
               <SortableColumnHeader
                 label="예상손익"
@@ -729,7 +738,7 @@ export function HoldingsTable({
                 sortDir={sortDir}
                 onSort={handleSortHeader}
                 align="right"
-                className="py-2 pr-3 tabular-nums"
+                className="whitespace-nowrap px-2 py-2 tabular-nums"
               />
               <SortableColumnHeader
                 label="예상수익률"
@@ -738,7 +747,7 @@ export function HoldingsTable({
                 sortDir={sortDir}
                 onSort={handleSortHeader}
                 align="right"
-                className="py-2 pr-3 tabular-nums"
+                className="whitespace-nowrap px-2 py-2 tabular-nums"
               />
               <SortableColumnHeader
                 label="비중"
@@ -747,7 +756,7 @@ export function HoldingsTable({
                 sortDir={sortDir}
                 onSort={handleSortHeader}
                 align="right"
-                className="py-2 pr-3 tabular-nums"
+                className="whitespace-nowrap px-2 py-2 tabular-nums"
               />
             </tr>
           </thead>
@@ -755,7 +764,7 @@ export function HoldingsTable({
             {sortedRows.length === 0 && q && (
               <tr>
                 <td
-                  colSpan={12}
+                  colSpan={11}
                   className="py-10 text-center text-[13px] text-textMuted"
                 >
                   조건에 맞는 종목이 없습니다. 필터를 바꿔 보세요.
@@ -799,21 +808,7 @@ export function HoldingsTable({
                   key={p.id}
                   className={`border-b border-border/70 ${rowWarn ? 'bg-warning/5' : ''}`}
                 >
-                  <td className="py-2 pr-2">
-                    <span
-                      className={`inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-semibold ${krBoardBadgeClass(
-                        p.market === 'KR'
-                          ? krBoardForTicker(krBoardByTicker, p.ticker)
-                          : undefined,
-                      )}`}
-                    >
-                      {krBoardDisplayLabel(
-                        p.market,
-                        p.market === 'KR' ? krBoardForTicker(krBoardByTicker, p.ticker) : undefined,
-                      )}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-3 font-medium text-textMain">
+                  <td className="whitespace-nowrap px-2 py-2 font-medium text-textMain">
                     <span className="inline-flex items-center gap-1.5">
                       <span>{p.ticker}</span>
                       {(pendingTodoCountByPositionId[p.id] ?? 0) > 0 ? (
@@ -833,20 +828,20 @@ export function HoldingsTable({
                       ) : null}
                     </span>
                   </td>
-                  <td className="max-w-[180px] py-2 pr-3">
+                  <td className="whitespace-nowrap px-2 py-2">
                     <button
                       type="button"
                       onClick={() => onOpenDetail(p.id)}
-                      className="line-clamp-2 w-full text-left text-textMain underline-offset-2 hover:underline"
+                      className="whitespace-nowrap text-left text-textMain underline-offset-2 hover:underline"
                     >
                       {p.name}
                     </button>
                   </td>
-                  <td className="px-2 py-2 text-center tabular-nums" title={dayChange?.tip}>
+                  <td className="whitespace-nowrap px-2 py-2 text-left tabular-nums" title={dayChange?.tip}>
                     <DayChangeBlock change={dayChange} currency={p.currency} />
                   </td>
                   <td
-                    className={`py-2 pr-3 text-right tabular-nums ${
+                    className={`whitespace-nowrap px-2 py-2 text-right tabular-nums ${
                       currentPriceEmph === 'pos'
                         ? 'font-semibold text-red-400'
                         : currentPriceEmph === 'neg'
@@ -870,27 +865,27 @@ export function HoldingsTable({
                       <span>{formatMoney(p.current_price, p.currency)}</span>
                     </span>
                   </td>
-                  <td className="py-2 pr-3 text-right tabular-nums text-textMain">
+                  <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-textMain">
                     {formatMoney(p.avg_price, p.currency)}
                   </td>
-                  <td className="py-2 pr-3 text-right tabular-nums text-textMain">
+                  <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-textMain">
                     {p.quantity}
                   </td>
-                  <td className="py-2 pr-3 text-right tabular-nums text-textMain">
+                  <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-textMain">
                     {formatMoney(m.cost_basis, p.currency)}
                   </td>
-                  <td className="py-2 pr-3 text-right tabular-nums text-textMain">
+                  <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-textMain">
                     {formatMoney(m.market_value, p.currency)}
                   </td>
                   <td
-                    className={`py-2 pr-3 text-right tabular-nums ${pnlTextClass(m.pnl, true)}`}
+                    className={`whitespace-nowrap px-2 py-2 text-right tabular-nums ${pnlTextClass(m.pnl, true)}`}
                   >
                     {formatMoney(m.pnl, p.currency)}
                   </td>
-                  <td className={`py-2 pr-3 text-right tabular-nums ${pnlTextClass(ret, true)}`}>
+                  <td className={`whitespace-nowrap px-2 py-2 text-right tabular-nums ${pnlTextClass(ret, true)}`}>
                     {formatPercent(ret, true)}
                   </td>
-                  <td className="py-2 pr-3 text-right tabular-nums">
+                  <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">
                     <span className={rowWarn ? 'text-warning' : 'text-textMain'}>
                       {m.weight_pct.toFixed(2)}%
                     </span>
@@ -901,29 +896,29 @@ export function HoldingsTable({
           </tbody>
           <tfoot className="sticky bottom-0 z-10 bg-surface shadow-[0_-4px_12px_-2px_rgba(0,0,0,0.25)]">
             <tr className="border-t-2 border-border font-semibold">
-              <td colSpan={7} className="py-3 pr-3 align-top text-textMuted">
+              <td colSpan={6} className="px-2 py-3 align-top text-textMuted">
                 <div className="text-textMain">전체 합계</div>
                 <div className="mt-0.5 text-[11px] font-normal tabular-nums text-textMuted">
                   전체 {sortedRows.length}개 종목
                 </div>
               </td>
-              <td className="py-3 pr-3 text-right tabular-nums text-textMain">
+              <td className="px-2 py-3 text-right tabular-nums text-textMain">
                 {formatMoney(summary.total_cost_basis, summary.currency)}
               </td>
-              <td className="py-3 pr-3 text-right tabular-nums text-textMain">
+              <td className="px-2 py-3 text-right tabular-nums text-textMain">
                 {formatMoney(summary.total_market_value, summary.currency)}
               </td>
               <td
-                className={`py-3 pr-3 text-right tabular-nums ${pnlTextClass(summary.total_pnl, true)}`}
+                className={`px-2 py-3 text-right tabular-nums ${pnlTextClass(summary.total_pnl, true)}`}
               >
                 {formatMoney(summary.total_pnl, summary.currency)}
               </td>
               <td
-                className={`py-3 pr-3 text-right tabular-nums ${pnlTextClass(summary.total_return_pct, true)}`}
+                className={`px-2 py-3 text-right tabular-nums ${pnlTextClass(summary.total_return_pct, true)}`}
               >
                 {formatPercent(summary.total_return_pct, true)}
               </td>
-              <td className="py-3 pr-3 text-right tabular-nums text-textMain">
+              <td className="px-2 py-3 text-right tabular-nums text-textMain">
                 {roundPercent(
                   metrics.reduce((s, m) => s + m.weight_pct, 0),
                 ).toFixed(2)}
