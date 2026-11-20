@@ -24,9 +24,11 @@ export function roundPercent(value: number): number {
 }
 
 /**
- * 평가손익: (현재가×수량) − (평단×수량) − 예상비용
- * - 한국장 예상비용: 매도금액 × (증거래세+농특세 0.18% + 위탁수수료율)
- * - 미국장: 예상비용 없음(기존 단순 손익)
+ * 보유 평가손익. 키움 잔고와 같은 식.
+ * - 매입금액 = 평단×수량, 평가금액 = 현재가×수량
+ * - 한국장: (현재가−평단)×수량 − 매수수수료 − 매도수수료 − 매도세
+ *   수수료는 설정한 위탁수수료율을 매입금액·평가금액에 각각 적용
+ * - 미국장: 평가금액 − 매입금액
  */
 export function estimateNetUnrealizedPnl(
   market: Market,
@@ -36,14 +38,15 @@ export function estimateNetUnrealizedPnl(
   currency: CurrencyCode,
   krSellCommissionRate: number,
 ): number {
-  const cost_basis = roundMoney(avgPrice * quantity, currency);
-  const proceeds = roundMoney(currentPrice * quantity, currency);
-  if (market === 'KR') {
-    const exitRate = KR_SELL_TAX_RATE + krSellCommissionRate;
-    const exitCosts = roundMoney(proceeds * exitRate, currency);
-    return roundMoney(proceeds - cost_basis - exitCosts, currency);
+  const costBasis = roundMoney(avgPrice * quantity, currency);
+  const marketValue = roundMoney(currentPrice * quantity, currency);
+  if (market !== 'KR') {
+    return roundMoney(marketValue - costBasis, currency);
   }
-  return roundMoney(proceeds - cost_basis, currency);
+  const buyFee = roundMoney(costBasis * krSellCommissionRate, currency);
+  const sellFee = roundMoney(marketValue * krSellCommissionRate, currency);
+  const sellTax = roundMoney(marketValue * KR_SELL_TAX_RATE, currency);
+  return roundMoney(marketValue - costBasis - buyFee - sellFee - sellTax, currency);
 }
 
 export interface BuildPositionMetricsOptions {

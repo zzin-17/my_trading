@@ -208,9 +208,9 @@ export function AppSettingsModal({
         <section className="mt-5 border-t border-border/60 pt-4">
           <h3 className="text-[12px] font-semibold text-textMain">한국장 계산</h3>
           <p className="mt-1 text-[11px] leading-relaxed text-textMuted">
-            예상손익·실현손익 계산에 쓰는 값입니다. 세금은 고정{' '}
+            보유 평가손익은 이 수수료를 매수·매도에 각각 적용하고, 매도세{' '}
             <span className="tabular-nums">{(KR_SELL_TAX_RATE * 100).toFixed(2)}%</span>
-            .
+            를 뺍니다. 실현손익은 매도 수수료와 매도세만 뺍니다.
           </p>
           <label className="mt-3 flex items-center gap-3 text-[13px] text-textMain">
             <span className="whitespace-nowrap">위탁 수수료율 (%)</span>

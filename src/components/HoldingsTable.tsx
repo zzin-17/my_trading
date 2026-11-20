@@ -103,10 +103,16 @@ export type HoldingSortKey =
   | 'day_change'
   | 'avg_price'
   | 'quantity'
+  | 'cost_basis'
   | 'market_value'
   | 'pnl'
   | 'return_pct'
   | 'weight';
+
+/** 요약 카드와 같은 평가손익. 한국장은 매수·매도 수수료와 매도세를 뺀 값 */
+function holdingNetReturnPct(m: PositionMetrics): number {
+  return m.cost_basis > 0 ? roundPercent((m.pnl / m.cost_basis) * 100) : 0;
+}
 
 export type SortDir = 'asc' | 'desc';
 
@@ -251,8 +257,7 @@ export function HoldingsTable({
 
   const sortedRows = useMemo(() => {
     const arr = [...rows];
-    const retPct = (m: PositionMetrics) =>
-      m.cost_basis > 0 ? (m.pnl / m.cost_basis) * 100 : 0;
+    const retPct = (m: PositionMetrics) => holdingNetReturnPct(m);
 
     arr.sort((a, b) => {
       const { p: pa, m: ma } = a;
@@ -297,6 +302,9 @@ export function HoldingsTable({
           break;
         case 'quantity':
           v = pa.quantity - pb.quantity;
+          break;
+        case 'cost_basis':
+          v = ma.cost_basis - mb.cost_basis;
           break;
         case 'market_value':
           v = ma.market_value - mb.market_value;
@@ -442,15 +450,19 @@ export function HoldingsTable({
                     borderLeft
                   />
                   <HoldingHeaderCell
-                    label="평가손익"
-                    columnKey="pnl"
+                    label="매입금액"
+                    columnKey="cost_basis"
                     sortKey={sortKey}
                     sortDir={sortDir}
                     onSort={handleSortHeader}
                     borderLeft
                   />
                   <HoldingHeaderCell
-                    label="매입금액"
+                    label="평가금액"
+                    columnKey="market_value"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={handleSortHeader}
                     borderLeft
                   />
                   <HoldingHeaderCell
@@ -467,8 +479,8 @@ export function HoldingsTable({
                     borderLeft
                   />
                   <HoldingHeaderCell
-                    label="수익률"
-                    columnKey="return_pct"
+                    label="평가손익"
+                    columnKey="pnl"
                     sortKey={sortKey}
                     sortDir={sortDir}
                     onSort={handleSortHeader}
@@ -476,8 +488,8 @@ export function HoldingsTable({
                     borderLeft
                   />
                   <HoldingHeaderCell
-                    label="평가금액"
-                    columnKey="market_value"
+                    label="수익률"
+                    columnKey="return_pct"
                     sortKey={sortKey}
                     sortDir={sortDir}
                     onSort={handleSortHeader}
@@ -493,10 +505,7 @@ export function HoldingsTable({
             >
               <div style={{ minWidth: mobileTotalMinWidth }}>
                 {sortedRows.map(({ p, m }) => {
-                const ret =
-                  m.cost_basis > 0
-                    ? roundPercent((m.pnl / m.cost_basis) * 100)
-                    : 0;
+                const ret = holdingNetReturnPct(m);
                 const rowWarn = isConcentrationRisk(m.weight_pct);
                 const dayOpen = krDayOpenByTicker[p.ticker];
                 const prevClose =
@@ -580,12 +589,12 @@ export function HoldingsTable({
                     />
                     <HoldingValueCell value={`${p.quantity}`} borderLeft />
                     <HoldingValueCell
-                      value={formatMoney(m.pnl, p.currency)}
-                      emph={m.pnl >= 0 ? 'pos' : 'neg'}
+                      value={formatMoney(m.cost_basis, p.currency)}
                       borderLeft
                     />
                     <HoldingValueCell
-                      value={formatMoney(m.cost_basis, p.currency)}
+                      value={formatMoney(m.market_value, p.currency)}
+                      title="평가금액"
                       borderLeft
                     />
 
@@ -610,13 +619,14 @@ export function HoldingsTable({
                       borderLeft
                     />
                     <HoldingValueCell
-                      value={formatPercent(ret, true)}
-                      emph={ret >= 0 ? 'pos' : 'neg'}
+                      value={formatMoney(m.pnl, p.currency)}
+                      emph={m.pnl >= 0 ? 'pos' : 'neg'}
                       borderTop
                       borderLeft
                     />
                     <HoldingValueCell
-                      value={formatMoney(m.market_value, p.currency)}
+                      value={formatPercent(ret, true)}
+                      emph={ret >= 0 ? 'pos' : 'neg'}
                       borderTop
                       borderLeft
                     />
@@ -631,7 +641,7 @@ export function HoldingsTable({
       </div>
 
       <div className="mt-3 hidden max-h-[min(65vh,720px)] overflow-auto rounded-md border border-border/60 md:block">
-        <table className="w-full min-w-[980px] border-collapse text-left text-[12px]">
+        <table className="w-full min-w-[1100px] border-collapse text-left text-[12px]">
           <thead className="sticky top-0 z-10 border-b border-border bg-surface shadow-sm">
             <tr>
               <SortableColumnHeader
@@ -695,6 +705,15 @@ export function HoldingsTable({
                 className="py-2 pr-3 tabular-nums"
               />
               <SortableColumnHeader
+                label="매입금액"
+                columnKey="cost_basis"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSortHeader}
+                align="right"
+                className="py-2 pr-3 tabular-nums"
+              />
+              <SortableColumnHeader
                 label="평가액"
                 columnKey="market_value"
                 sortKey={sortKey}
@@ -736,7 +755,7 @@ export function HoldingsTable({
             {sortedRows.length === 0 && q && (
               <tr>
                 <td
-                  colSpan={11}
+                  colSpan={12}
                   className="py-10 text-center text-[13px] text-textMuted"
                 >
                   조건에 맞는 종목이 없습니다. 필터를 바꿔 보세요.
@@ -744,10 +763,7 @@ export function HoldingsTable({
               </tr>
             )}
             {sortedRows.map(({ p, m }) => {
-              const ret =
-                m.cost_basis > 0
-                  ? roundPercent((m.pnl / m.cost_basis) * 100)
-                  : 0;
+              const ret = holdingNetReturnPct(m);
               const rowWarn = isConcentrationRisk(m.weight_pct);
               const dayOpen = krDayOpenByTicker[p.ticker];
               const prevClose =
@@ -861,6 +877,9 @@ export function HoldingsTable({
                     {p.quantity}
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums text-textMain">
+                    {formatMoney(m.cost_basis, p.currency)}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums text-textMain">
                     {formatMoney(m.market_value, p.currency)}
                   </td>
                   <td
@@ -887,6 +906,9 @@ export function HoldingsTable({
                 <div className="mt-0.5 text-[11px] font-normal tabular-nums text-textMuted">
                   전체 {sortedRows.length}개 종목
                 </div>
+              </td>
+              <td className="py-3 pr-3 text-right tabular-nums text-textMain">
+                {formatMoney(summary.total_cost_basis, summary.currency)}
               </td>
               <td className="py-3 pr-3 text-right tabular-nums text-textMain">
                 {formatMoney(summary.total_market_value, summary.currency)}

@@ -2301,8 +2301,7 @@ export default function App() {
     if (marketTab !== 'KR') return null;
     const suffix = '(시차·지연 가능, 예상 손익은 참고용)';
     const pnlNote =
-      `한국장 예상손익·수익률: 현재가로 전량 매도 가정 시 증권거래세+농특세 ${(KR_SELL_TAX_RATE * 100).toFixed(2)}%` +
-      ` 및 위탁 수수료 ${(krSellCommissionRate * 100).toFixed(3)}%(설정값)을 매도금액 기준으로 차감했습니다. 매수측 수수료는 평단에 포함된 것으로 보지 않고 별도로 빼지 않습니다.`;
+      `한국장 평가손익은 키움 잔고와 같이 (현재가−평단)×수량에서 매수·매도 수수료 ${(krSellCommissionRate * 100).toFixed(3)}%와 매도세 ${(KR_SELL_TAX_RATE * 100).toFixed(2)}%를 뺀 금액입니다. 매입금액은 평단×수량, 평가금액은 현재가×수량입니다.`;
     let head: string;
     const extLine = krPreferExtendedQuote
       ? '갱신 시 네이버 모바일 API로 장외(Over market·NXT 등) 호가를 우선하며, 없으면 PC 지연 시세로 대체합니다. KRX 「시간외 단일가」 전용 표기와 숫자가 다를 수 있습니다.'

@@ -78,7 +78,7 @@ describe('buildPositionMetrics', () => {
     expect(buildPositionMetrics([])).toEqual([]);
   });
 
-  it('한국장: 매도 세금·수수료를 반영한 평가손익', () => {
+  it('한국장: 매수·매도 수수료와 매도세를 뺀 평가손익', () => {
     const commission = 0.00015;
     const positions: Position[] = [
       pos({
@@ -93,9 +93,12 @@ describe('buildPositionMetrics', () => {
     const m = buildPositionMetrics(positions, {
       krSellCommissionRate: commission,
     });
+    const cost = 100_000;
     const proceeds = 110_000;
-    const exit = roundMoney(proceeds * (KR_SELL_TAX_RATE + commission), 'KRW');
-    const expectPnl = roundMoney(proceeds - 100_000 - exit, 'KRW');
+    const buyFee = roundMoney(cost * commission, 'KRW');
+    const sellFee = roundMoney(proceeds * commission, 'KRW');
+    const sellTax = roundMoney(proceeds * KR_SELL_TAX_RATE, 'KRW');
+    const expectPnl = roundMoney(proceeds - cost - buyFee - sellFee - sellTax, 'KRW');
     expect(m[0].pnl).toBe(expectPnl);
     expect(m[0].pnl).toBe(
       estimateNetUnrealizedPnl('KR', 10_000, 11_000, 10, 'KRW', commission),
