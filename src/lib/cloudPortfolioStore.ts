@@ -147,7 +147,10 @@ export function shouldKeepLocalOnlyRecord(args: {
   cloudHasRecords: boolean;
   acceptedCloudAtMs: number | null;
   createdAtMs: number | null;
+  /** 이 브라우저가 클라우드에서 이 id를 본 적이 있으면, 지금 없는 것은 다른 기기 삭제다. */
+  previouslySeen?: boolean;
 }): boolean {
+  if (args.previouslySeen) return false;
   if (!args.cloudHasRecords) return true;
   if (args.acceptedCloudAtMs == null || args.createdAtMs == null) return false;
   return args.createdAtMs > args.acceptedCloudAtMs;
@@ -157,8 +160,9 @@ export function reconcileTradesFromSources(args: {
   liveTrades: Trade[];
   fallbackTrades: Trade[];
   acceptedCloudAtMs: number | null;
+  seenTradeIds?: ReadonlySet<string>;
 }): Trade[] {
-  const { liveTrades, fallbackTrades, acceptedCloudAtMs } = args;
+  const { liveTrades, fallbackTrades, acceptedCloudAtMs, seenTradeIds } = args;
   const map = new Map<string, Trade>();
   for (const trade of liveTrades) map.set(trade.id, trade);
   const cloudHasRecords = liveTrades.length > 0;
@@ -169,6 +173,7 @@ export function reconcileTradesFromSources(args: {
         cloudHasRecords,
         acceptedCloudAtMs,
         createdAtMs: idCreatedAtMs(trade.id),
+        previouslySeen: seenTradeIds?.has(trade.id) === true,
       })
     ) {
       continue;
@@ -185,8 +190,9 @@ export function reconcileTodosFromSources(args: {
   liveTodos: TradePlanTodo[];
   fallbackTodos: TradePlanTodo[];
   acceptedCloudAtMs: number | null;
+  seenTodoIds?: ReadonlySet<string>;
 }): TradePlanTodo[] {
-  const { liveTodos, fallbackTodos, acceptedCloudAtMs } = args;
+  const { liveTodos, fallbackTodos, acceptedCloudAtMs, seenTodoIds } = args;
   const map = new Map<string, TradePlanTodo>();
   for (const todo of liveTodos) map.set(todo.id, todo);
   const cloudHasRecords = liveTodos.length > 0;
@@ -198,6 +204,7 @@ export function reconcileTodosFromSources(args: {
         cloudHasRecords,
         acceptedCloudAtMs,
         createdAtMs: Number.isFinite(parsed) ? parsed : idCreatedAtMs(todo.id),
+        previouslySeen: seenTodoIds?.has(todo.id) === true,
       })
     ) {
       continue;
@@ -208,6 +215,50 @@ export function reconcileTodosFromSources(args: {
     const d = a.createdAt.localeCompare(b.createdAt);
     return d !== 0 ? d : a.id.localeCompare(b.id);
   });
+}
+
+/**
+ * 같은 계정의 다른 기기와 맞출 때 쓰는 동기화 계획.
+ * 클라우드에만 있는 기록은 지우지 않는다. 이 기기 목록에서 빠진 id만 삭제로 본다.
+ * 클라우드에서 본 적 있는 id가 지금 클라우드에 없으면 다른 기기 삭제라서 로컬에서 뺀다.
+ */
+export function planCloudRecordSync<T extends { id: string }>(args: {
+  localRecords: readonly T[];
+  remoteFingerprints: Record<string, string>;
+  remoteRecords: Record<string, T>;
+  seenIds: ReadonlySet<string>;
+  previousLocalIds: ReadonlySet<string> | null;
+  fingerprintOf: (record: T) => string;
+  normalize?: (records: readonly T[]) => T[];
+}): { replaceLocal: T[] | null; upserts: T[]; deletes: T[] } {
+  const normalized = args.normalize ? args.normalize(args.localRecords) : [...args.localRecords];
+  if (normalized.length !== args.localRecords.length) {
+    return { replaceLocal: normalized, upserts: [], deletes: [] };
+  }
+  const removedOnAnotherDevice = normalized.filter(
+    (record) => args.remoteFingerprints[record.id] === undefined && args.seenIds.has(record.id),
+  );
+  if (removedOnAnotherDevice.length > 0) {
+    const drop = new Set(removedOnAnotherDevice.map((record) => record.id));
+    return {
+      replaceLocal: normalized.filter((record) => !drop.has(record.id)),
+      upserts: [],
+      deletes: [],
+    };
+  }
+  const currentIds = new Set(normalized.map((record) => record.id));
+  const deletes = args.previousLocalIds
+    ? [...args.previousLocalIds]
+        .filter((id) => !currentIds.has(id))
+        .map((id) => args.remoteRecords[id])
+        .filter((record): record is T => Boolean(record))
+    : [];
+  const upserts = normalized.filter((record) => {
+    const remoteFingerprint = args.remoteFingerprints[record.id];
+    if (remoteFingerprint === undefined) return !args.seenIds.has(record.id);
+    return remoteFingerprint !== args.fingerprintOf(record);
+  });
+  return { replaceLocal: null, upserts, deletes };
 }
 
 function pickMetaValue<T>(args: {
@@ -269,6 +320,8 @@ async function loadBootstrap(args: {
   localPortfolio: PersistedPortfolioV1;
   localPersistedAtMs: number;
   acceptedCloudAtMs: number | null;
+  seenTradeIds?: ReadonlySet<string>;
+  seenTodoIds?: ReadonlySet<string>;
 }): Promise<CloudBootstrapResult> {
   const { uid, localPortfolio, localPersistedAtMs, acceptedCloudAtMs } = args;
   const [live, remoteMeta] = await Promise.all([
@@ -339,11 +392,13 @@ async function loadBootstrap(args: {
     liveTrades: live.trades,
     fallbackTrades,
     acceptedCloudAtMs,
+    seenTradeIds: args.seenTradeIds,
   });
   const nextTodos = reconcileTodosFromSources({
     liveTodos: live.todos,
     fallbackTodos,
     acceptedCloudAtMs,
+    seenTodoIds: args.seenTodoIds,
   });
 
   const nextMeta: CloudPortfolioMetaInput = {

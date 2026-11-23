@@ -43,6 +43,10 @@ import {
   getPersistedUpdatedAtMs,
   getCloudBookAcceptedAtMs,
   setCloudBookAcceptedAtMs,
+  getSeenTradeIds,
+  rememberSeenTradeIds,
+  getSeenTodoIds,
+  rememberSeenTodoIds,
   getOrCreateDeviceId,
   type PersistedPortfolioV1,
 } from './lib/persistence';
@@ -64,6 +68,7 @@ import {
   buildTradeFingerprintMap,
   metaFingerprint,
   portfolioGuardFingerprint,
+  planCloudRecordSync,
   sameTodoLists,
   sameTradeLists,
   cloudPortfolioStore,
@@ -475,6 +480,9 @@ export default function App() {
     typeof navigator !== 'undefined' ? navigator.onLine : false,
   );
   const deviceIdRef = useRef(getOrCreateDeviceId());
+  const syncedTradeIdsRef = useRef<Set<string> | null>(null);
+  const syncedTodoIdsRef = useRef<Set<string> | null>(null);
+  const notesDirtyRef = useRef(false);
   const [cloudSessionReady, setCloudSessionReady] = useState(false);
   const [cloudBusy, setCloudBusy] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
@@ -669,6 +677,8 @@ export default function App() {
   useEffect(() => {
     if (!firebaseConfigured || !user || !authReady) return;
     cloudHydratedRef.current = false;
+    syncedTradeIdsRef.current = null;
+    syncedTodoIdsRef.current = null;
     setCloudSessionReady(false);
     let cancelled = false;
     const cleanupFns: Array<() => void> = [];
@@ -685,6 +695,8 @@ export default function App() {
           localPortfolio,
           localPersistedAtMs,
           acceptedCloudAtMs: getCloudBookAcceptedAtMs(),
+          seenTradeIds: getSeenTradeIds(),
+          seenTodoIds: getSeenTodoIds(),
         });
         if (cancelled) return;
         const nextPortfolio = bootstrap.portfolio;
@@ -765,6 +777,10 @@ export default function App() {
             : Promise.resolve(),
         ]);
         setCloudBookAcceptedAtMs(bootstrapStartedAtMs);
+        rememberSeenTradeIds(Object.keys(bootstrap.remoteTradeRecords));
+        rememberSeenTodoIds(Object.keys(bootstrap.remoteTodoRecords));
+        rememberSeenTradeIds(bootstrap.missingTradeDocs.map((trade) => trade.id));
+        rememberSeenTodoIds(bootstrap.missingTodoDocs.map((todo) => todo.id));
 
         cloudTradeFingerprintsRef.current = bootstrap.nextTradeFingerprints;
         cloudTodoFingerprintsRef.current = bootstrap.nextTodoFingerprints;
@@ -800,6 +816,7 @@ export default function App() {
               pendingTradeFingerprintsRef.current = null;
               cloudTradeFingerprintsRef.current = remoteFingerprints;
               cloudTradeRecordsRef.current = buildTradeRecordMap(remoteTrades);
+              rememberSeenTradeIds(remoteTrades.map((trade) => trade.id));
               const bookTrades = withoutRedundantHiddenTrades(remoteTrades);
               setTrades((prev) =>
                 sameTradeLists(prev, bookTrades) ? prev : bookTrades,
@@ -826,6 +843,7 @@ export default function App() {
               pendingTodoFingerprintsRef.current = null;
               cloudTodoFingerprintsRef.current = remoteFingerprints;
               cloudTodoRecordsRef.current = buildTodoRecordMap(remoteTodos);
+              rememberSeenTodoIds(remoteTodos.map((todo) => todo.id));
               setTodos((prev) =>
                 sameTodoLists(prev, remoteTodos) ? prev : remoteTodos,
               );
@@ -930,24 +948,29 @@ export default function App() {
   useEffect(() => {
     if (!firebaseConfigured || !user || !cloudSessionReady || !networkOnline) return;
     if (!cloudHydratedRef.current) return;
-    const bookTrades = withoutRedundantHiddenTrades(trades);
-    if (bookTrades.length !== trades.length) {
-      setTrades(bookTrades);
+    const plan = planCloudRecordSync({
+      localRecords: trades,
+      remoteFingerprints: cloudTradeFingerprintsRef.current,
+      remoteRecords: cloudTradeRecordsRef.current,
+      seenIds: getSeenTradeIds(),
+      previousLocalIds: syncedTradeIdsRef.current,
+      fingerprintOf: (trade) => buildTradeFingerprintMap([trade])[trade.id] ?? '',
+      normalize: withoutRedundantHiddenTrades,
+    });
+    if (plan.replaceLocal) {
+      setTrades(plan.replaceLocal);
       return;
     }
-    const localMap = buildTradeFingerprintMap(bookTrades);
-    const remoteMap = cloudTradeFingerprintsRef.current;
-    const upserts = bookTrades.filter((trade) => remoteMap[trade.id] !== localMap[trade.id]);
-    const deletes = Object.keys(remoteMap)
-      .filter((id) => !(id in localMap))
-      .map((id) => cloudTradeRecordsRef.current[id])
-      .filter((trade): trade is Trade => Boolean(trade));
+    syncedTradeIdsRef.current = new Set(trades.map((trade) => trade.id));
+    const { upserts, deletes } = plan;
     if (upserts.length === 0 && deletes.length === 0) return;
     pendingTradeSyncRef.current = true;
     let cancelled = false;
     void cloudPortfolioStore.syncTrades(user.uid, upserts, deletes, deviceIdRef.current)
       .then(() => {
-        if (!cancelled) setCloudError(null);
+        if (cancelled) return;
+        rememberSeenTradeIds(upserts.map((trade) => trade.id));
+        setCloudError(null);
       })
       .catch((e) => {
         if (!cancelled) setCloudError(humanizeCloudError(e));
@@ -966,19 +989,28 @@ export default function App() {
   useEffect(() => {
     if (!firebaseConfigured || !user || !cloudSessionReady || !networkOnline) return;
     if (!cloudHydratedRef.current) return;
-    const localMap = buildTodoFingerprintMap(todos);
-    const remoteMap = cloudTodoFingerprintsRef.current;
-    const upserts = todos.filter((todo) => remoteMap[todo.id] !== localMap[todo.id]);
-    const deletes = Object.keys(remoteMap)
-      .filter((id) => !(id in localMap))
-      .map((id) => cloudTodoRecordsRef.current[id])
-      .filter((todo): todo is TradePlanTodo => Boolean(todo));
+    const plan = planCloudRecordSync({
+      localRecords: todos,
+      remoteFingerprints: cloudTodoFingerprintsRef.current,
+      remoteRecords: cloudTodoRecordsRef.current,
+      seenIds: getSeenTodoIds(),
+      previousLocalIds: syncedTodoIdsRef.current,
+      fingerprintOf: (todo) => buildTodoFingerprintMap([todo])[todo.id] ?? '',
+    });
+    if (plan.replaceLocal) {
+      setTodos(plan.replaceLocal);
+      return;
+    }
+    syncedTodoIdsRef.current = new Set(todos.map((todo) => todo.id));
+    const { upserts, deletes } = plan;
     if (upserts.length === 0 && deletes.length === 0) return;
     pendingTodoSyncRef.current = true;
     let cancelled = false;
     void cloudPortfolioStore.syncTodos(user.uid, upserts, deletes, deviceIdRef.current)
       .then(() => {
-        if (!cancelled) setCloudError(null);
+        if (cancelled) return;
+        rememberSeenTodoIds(upserts.map((todo) => todo.id));
+        setCloudError(null);
       })
       .catch((e) => {
         if (!cancelled) setCloudError(humanizeCloudError(e));
@@ -1002,7 +1034,11 @@ export default function App() {
     if (cloudMetaFingerprintRef.current === localFingerprint) return;
     pendingMetaSyncRef.current = localFingerprint;
     let cancelled = false;
-    void cloudPortfolioStore.syncMeta(user.uid, localMeta)
+    const preserveRemoteNotes = !notesDirtyRef.current;
+    void cloudPortfolioStore.syncMeta(user.uid, localMeta, { preserveRemoteNotes })
+      .then(() => {
+        if (!cancelled && !preserveRemoteNotes) notesDirtyRef.current = false;
+      })
       .then(() => {
         if (!cancelled) setCloudError(null);
       })
@@ -1196,16 +1232,26 @@ export default function App() {
     try {
       const portfolio = portfolioRef.current;
       const meta = buildCloudPortfolioMetaInput(portfolio);
+      const seenTrades = getSeenTradeIds();
+      const seenTodos = getSeenTodoIds();
+      const remoteTradeIds = new Set(Object.keys(cloudTradeFingerprintsRef.current));
+      const remoteTodoIds = new Set(Object.keys(cloudTodoFingerprintsRef.current));
+      const tradesToPush = portfolio.trades.filter(
+        (trade) => remoteTradeIds.has(trade.id) || !seenTrades.has(trade.id),
+      );
+      const todosToPush = portfolio.todos.filter(
+        (todo) => remoteTodoIds.has(todo.id) || !seenTodos.has(todo.id),
+      );
       await Promise.all([
         cloudPortfolioStore.syncTrades(
           user.uid,
-          portfolio.trades,
+          tradesToPush,
           [],
           deviceIdRef.current,
         ),
         cloudPortfolioStore.syncTodos(
           user.uid,
-          portfolio.todos,
+          todosToPush,
           [],
           deviceIdRef.current,
         ),
@@ -2876,6 +2922,7 @@ export default function App() {
         }
         onSaveNote={(next) => {
           if (!detailNoteKey) return;
+          notesDirtyRef.current = true;
           setNotes((prev) => ({ ...prev, [detailNoteKey]: next }));
         }}
         onAddTodo={(payload) =>

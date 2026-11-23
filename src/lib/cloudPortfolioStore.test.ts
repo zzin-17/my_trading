@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Trade } from '../types/trade';
 import {
+  planCloudRecordSync,
   portfolioGuardFingerprint,
   reconcileTradesFromSources,
   shouldHydrateFromLegacy,
@@ -102,6 +103,17 @@ describe('shouldKeepLocalOnlyRecord', () => {
     ).toBe(true);
   });
 
+  it('다른 기기에서 지운 거래는 이 기기가 본 적이 있으면 올리지 않는다', () => {
+    expect(
+      shouldKeepLocalOnlyRecord({
+        cloudHasRecords: true,
+        acceptedCloudAtMs: 1,
+        createdAtMs: 2,
+        previouslySeen: true,
+      }),
+    ).toBe(false);
+  });
+
   it('클라우드 장부를 받은 시각이 없으면 예전 로컬 거래는 올리지 않는다', () => {
     expect(
       shouldKeepLocalOnlyRecord({
@@ -160,5 +172,63 @@ describe('reconcileTradesFromSources', () => {
       acceptedCloudAtMs: 1_779_000_000_000,
     });
     expect(merged.map((item) => item.id)).toEqual([opening.id]);
+  });
+
+  it('다른 기기가 지운 거래를 로컬에 남아 있어도 되살리지 않는다', () => {
+    const merged = reconcileTradesFromSources({
+      liveTrades: [opening],
+      fallbackTrades: [opening, staleAdd],
+      acceptedCloudAtMs: 1,
+      seenTradeIds: new Set([staleAdd.id]),
+    });
+    expect(merged.map((item) => item.id)).toEqual([opening.id]);
+  });
+});
+
+describe('planCloudRecordSync', () => {
+  const row = (id: string) => trade({ id, date: '2026-11-23', quantity: 1, price: 100 });
+
+  it('클라우드에만 있는 다른 기기 거래는 지우지 않는다', () => {
+    const local = row('local');
+    const remoteOnly = row('remote');
+    const plan = planCloudRecordSync({
+      localRecords: [local],
+      remoteFingerprints: { remote: 'remote', local: 'local' },
+      remoteRecords: { remote: remoteOnly, local },
+      seenIds: new Set(['local']),
+      previousLocalIds: new Set(['local']),
+      fingerprintOf: (item) => item.id,
+    });
+    expect(plan.deletes).toEqual([]);
+    expect(plan.upserts).toEqual([]);
+  });
+
+  it('이 기기에서 뺀 거래만 삭제로 올린다', () => {
+    const kept = row('kept');
+    const removed = row('removed');
+    const plan = planCloudRecordSync({
+      localRecords: [kept],
+      remoteFingerprints: { kept: 'kept', removed: 'removed' },
+      remoteRecords: { kept, removed },
+      seenIds: new Set(['kept', 'removed']),
+      previousLocalIds: new Set(['kept', 'removed']),
+      fingerprintOf: (item) => item.id,
+    });
+    expect(plan.deletes.map((item) => item.id)).toEqual(['removed']);
+  });
+
+  it('다른 기기가 지운 거래를 로컬에서 뺀다', () => {
+    const kept = row('kept');
+    const gone = row('gone');
+    const plan = planCloudRecordSync({
+      localRecords: [kept, gone],
+      remoteFingerprints: { kept: 'kept' },
+      remoteRecords: { kept },
+      seenIds: new Set(['kept', 'gone']),
+      previousLocalIds: new Set(['kept', 'gone']),
+      fingerprintOf: (item) => item.id,
+    });
+    expect(plan.replaceLocal?.map((item) => item.id)).toEqual(['kept']);
+    expect(plan.upserts).toEqual([]);
   });
 });

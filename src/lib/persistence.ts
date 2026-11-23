@@ -6,6 +6,8 @@ const STORAGE_UPDATED_AT_KEY = 'traderos-portfolio-v2-updated-at';
 const DEVICE_ID_KEY = 'traderos-device-id-v1';
 /** 이 브라우저가 클라우드 장부를 마지막으로 받아들인 시각 */
 const CLOUD_BOOK_ACCEPTED_AT_KEY = 'traderos-cloud-book-accepted-at-v1';
+const SEEN_TRADE_IDS_KEY = 'traderos-cloud-seen-trade-ids-v1';
+const SEEN_TODO_IDS_KEY = 'traderos-cloud-seen-todo-ids-v1';
 
 export interface PersistedPortfolioV1 {
   trades: Trade[];
@@ -128,6 +130,51 @@ export function setCloudBookAcceptedAtMs(value: number): void {
   } catch {
     /* ignore */
   }
+}
+
+function readIdSet(key: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((id): id is string => typeof id === 'string' && id.length > 0));
+  } catch {
+    return new Set();
+  }
+}
+
+function rememberIdSet(key: string, ids: Iterable<string>): void {
+  try {
+    const current = readIdSet(key);
+    let changed = false;
+    for (const id of ids) {
+      if (!id || current.has(id)) continue;
+      current.add(id);
+      changed = true;
+    }
+    if (!changed) return;
+    localStorage.setItem(key, JSON.stringify([...current]));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** 이 브라우저가 클라우드에서 실제로 본 거래 id. 다른 기기 삭제를 되살리지 않기 위해 남긴다. */
+export function getSeenTradeIds(): Set<string> {
+  return readIdSet(SEEN_TRADE_IDS_KEY);
+}
+
+export function rememberSeenTradeIds(ids: Iterable<string>): void {
+  rememberIdSet(SEEN_TRADE_IDS_KEY, ids);
+}
+
+export function getSeenTodoIds(): Set<string> {
+  return readIdSet(SEEN_TODO_IDS_KEY);
+}
+
+export function rememberSeenTodoIds(ids: Iterable<string>): void {
+  rememberIdSet(SEEN_TODO_IDS_KEY, ids);
 }
 
 function createDeviceId(): string {

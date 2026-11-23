@@ -834,9 +834,12 @@ export async function syncCloudTodos(
 export async function syncCloudPortfolioMeta(
   uid: string,
   meta: Omit<CloudPortfolioMeta, 'updatedAtMs'>,
+  options?: { preserveRemoteNotes?: boolean },
 ): Promise<void> {
-  await setDoc(metaDocRef(uid), {
+  const payload: Record<string, unknown> = {
     ...meta,
     updatedAt: serverTimestamp(),
-  });
+  };
+  if (options?.preserveRemoteNotes) delete payload.notes;
+  await setDoc(metaDocRef(uid), payload, { merge: options?.preserveRemoteNotes === true });
 }
