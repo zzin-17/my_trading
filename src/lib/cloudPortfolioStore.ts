@@ -16,9 +16,11 @@ import {
   subscribeCloudPortfolioMeta,
   subscribeCloudTodos,
   subscribeCloudTrades,
+  subscribeCloudWatchItems,
   syncCloudPortfolioMeta,
   syncCloudTodos,
   syncCloudTrades,
+  syncCloudWatchItems,
   type CloudDeletedTodoRecord,
   type CloudDeletedTradeRecord,
   type CloudPortfolioMeta,
@@ -27,6 +29,7 @@ import {
 import { idCreatedAtMs, withoutRedundantHiddenTrades } from './openingTrades';
 import type { Trade } from '../types/trade';
 import type { TradePlanTodo } from '../types/todo';
+import type { WatchItem } from '../types/watchItem';
 
 export { idCreatedAtMs } from './openingTrades';
 
@@ -49,12 +52,16 @@ export interface CloudBootstrapResult {
   shouldApplyPortfolio: boolean;
   remoteTradeRecords: Record<string, Trade>;
   remoteTodoRecords: Record<string, TradePlanTodo>;
+  remoteWatchRecords: Record<string, WatchItem>;
   nextTradeFingerprints: Record<string, string>;
   nextTodoFingerprints: Record<string, string>;
+  nextWatchFingerprints: Record<string, string>;
   missingTradeDocs: Trade[];
   missingTodoDocs: TradePlanTodo[];
+  missingWatchDocs: WatchItem[];
   staleTradeDeletes: Trade[];
   staleTodoDeletes: TradePlanTodo[];
+  staleWatchDeletes: WatchItem[];
   remoteMetaFingerprint: string;
 }
 
@@ -105,6 +112,26 @@ export function buildTodoFingerprintMap(todos: TradePlanTodo[]): Record<string, 
   const out: Record<string, string> = {};
   for (const todo of todos) out[todo.id] = todoFingerprint(todo);
   return out;
+}
+
+function watchFingerprint(item: WatchItem): string {
+  return JSON.stringify([item.market, item.ticker, item.name, item.memo, item.createdAt]);
+}
+
+export function buildWatchFingerprintMap(items: readonly WatchItem[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const item of items) out[item.id] = watchFingerprint(item);
+  return out;
+}
+
+export function buildWatchRecordMap(items: readonly WatchItem[]): Record<string, WatchItem> {
+  const out: Record<string, WatchItem> = {};
+  for (const item of items) out[item.id] = item;
+  return out;
+}
+
+export function sameWatchLists(a: readonly WatchItem[], b: readonly WatchItem[]): boolean {
+  return sameFingerprintMaps(buildWatchFingerprintMap(a), buildWatchFingerprintMap(b));
 }
 
 export function buildTodoRecordMap(todos: TradePlanTodo[]): Record<string, TradePlanTodo> {
@@ -184,6 +211,34 @@ export function reconcileTradesFromSources(args: {
     const d = a.date.localeCompare(b.date);
     return d !== 0 ? d : a.id.localeCompare(b.id);
   });
+}
+
+export function reconcileWatchItemsFromSources(args: {
+  liveItems: readonly WatchItem[];
+  fallbackItems: readonly WatchItem[];
+  acceptedCloudAtMs: number | null;
+  seenWatchIds?: ReadonlySet<string>;
+}): WatchItem[] {
+  const { liveItems, fallbackItems, acceptedCloudAtMs, seenWatchIds } = args;
+  const map = new Map<string, WatchItem>();
+  for (const item of liveItems) map.set(item.id, item);
+  const cloudHasRecords = liveItems.length > 0;
+  for (const item of fallbackItems) {
+    if (map.has(item.id)) continue;
+    const parsed = Date.parse(item.createdAt);
+    if (
+      !shouldKeepLocalOnlyRecord({
+        cloudHasRecords,
+        acceptedCloudAtMs,
+        createdAtMs: Number.isFinite(parsed) ? parsed : null,
+        previouslySeen: seenWatchIds?.has(item.id) === true,
+      })
+    ) {
+      continue;
+    }
+    map.set(item.id, item);
+  }
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'ko') || a.id.localeCompare(b.id));
 }
 
 export function reconcileTodosFromSources(args: {
@@ -322,6 +377,7 @@ async function loadBootstrap(args: {
   acceptedCloudAtMs: number | null;
   seenTradeIds?: ReadonlySet<string>;
   seenTodoIds?: ReadonlySet<string>;
+  seenWatchIds?: ReadonlySet<string>;
 }): Promise<CloudBootstrapResult> {
   const { uid, localPortfolio, localPersistedAtMs, acceptedCloudAtMs } = args;
   const [live, remoteMeta] = await Promise.all([
@@ -400,6 +456,12 @@ async function loadBootstrap(args: {
     acceptedCloudAtMs,
     seenTodoIds: args.seenTodoIds,
   });
+  const nextWatchItems = reconcileWatchItemsFromSources({
+    liveItems: live.watchItems,
+    fallbackItems: localPortfolio.watchItems ?? hydratePortfolio?.watchItems ?? [],
+    acceptedCloudAtMs,
+    seenWatchIds: args.seenWatchIds,
+  });
 
   const nextMeta: CloudPortfolioMetaInput = {
     quotes: pickMetaValue({
@@ -460,6 +522,9 @@ async function loadBootstrap(args: {
   const remoteTodoRecords = buildTodoRecordMap(live.todos);
   const nextTradeFingerprints = buildTradeFingerprintMap(nextTrades);
   const nextTodoFingerprints = buildTodoFingerprintMap(nextTodos);
+  const remoteWatchFingerprints = buildWatchFingerprintMap(live.watchItems);
+  const remoteWatchRecords = buildWatchRecordMap(live.watchItems);
+  const nextWatchFingerprints = buildWatchFingerprintMap(nextWatchItems);
 
   const staleTradeDeletes = Object.keys(remoteTradeFingerprints)
     .filter((id) => !(id in nextTradeFingerprints))
@@ -476,11 +541,19 @@ async function loadBootstrap(args: {
   const missingTodoDocs = nextTodos.filter(
     (todo) => remoteTodoFingerprints[todo.id] !== nextTodoFingerprints[todo.id],
   );
+  const staleWatchDeletes = Object.keys(remoteWatchFingerprints)
+    .filter((id) => !(id in nextWatchFingerprints))
+    .map((id) => remoteWatchRecords[id])
+    .filter((item): item is WatchItem => Boolean(item));
+  const missingWatchDocs = nextWatchItems.filter(
+    (item) => remoteWatchFingerprints[item.id] !== nextWatchFingerprints[item.id],
+  );
 
   const portfolio: PersistedPortfolioV1 = {
     ...localPortfolio,
     trades: nextTrades,
     todos: nextTodos,
+    watchItems: nextWatchItems,
     ...nextMeta,
   };
 
@@ -489,12 +562,16 @@ async function loadBootstrap(args: {
     shouldApplyPortfolio: hydratePortfolio !== null,
     remoteTradeRecords,
     remoteTodoRecords,
+    remoteWatchRecords,
     nextTradeFingerprints,
     nextTodoFingerprints,
+    nextWatchFingerprints,
     missingTradeDocs,
     missingTodoDocs,
+    missingWatchDocs,
     staleTradeDeletes,
     staleTodoDeletes,
+    staleWatchDeletes,
     remoteMetaFingerprint: remoteMeta
       ? metaFingerprint({
           quotes: remoteMeta.quotes,
@@ -533,8 +610,10 @@ export const cloudPortfolioStore = {
   pushLegacyBackup: pushCloudPortfolio,
   subscribeTrades: subscribeCloudTrades,
   subscribeTodos: subscribeCloudTodos,
+  subscribeWatchItems: subscribeCloudWatchItems,
   subscribeMeta: subscribeCloudPortfolioMeta,
   syncTrades: syncCloudTrades,
   syncTodos: syncCloudTodos,
+  syncWatchItems: syncCloudWatchItems,
   syncMeta: syncCloudPortfolioMeta,
 };

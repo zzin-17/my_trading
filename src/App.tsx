@@ -48,6 +48,8 @@ import {
   rememberSeenTradeIds,
   getSeenTodoIds,
   rememberSeenTodoIds,
+  rememberSeenWatchIds,
+  getSeenWatchIds,
   getOrCreateDeviceId,
   type PersistedPortfolioV1,
 } from './lib/persistence';
@@ -70,6 +72,9 @@ import {
   metaFingerprint,
   portfolioGuardFingerprint,
   planCloudRecordSync,
+  buildWatchFingerprintMap,
+  buildWatchRecordMap,
+  sameWatchLists,
   sameTodoLists,
   sameTradeLists,
   cloudPortfolioStore,
@@ -493,6 +498,11 @@ export default function App() {
   const deviceIdRef = useRef(getOrCreateDeviceId());
   const syncedTradeIdsRef = useRef<Set<string> | null>(null);
   const syncedTodoIdsRef = useRef<Set<string> | null>(null);
+  const syncedWatchIdsRef = useRef<Set<string> | null>(null);
+  const cloudWatchFingerprintsRef = useRef<Record<string, string>>({});
+  const cloudWatchRecordsRef = useRef<Record<string, WatchItem>>({});
+  const pendingWatchSyncRef = useRef(false);
+  const pendingWatchFingerprintsRef = useRef<Record<string, string> | null>(null);
   const notesDirtyRef = useRef(false);
   const [cloudSessionReady, setCloudSessionReady] = useState(false);
   const [cloudBusy, setCloudBusy] = useState(false);
@@ -593,7 +603,7 @@ export default function App() {
     setKrPreferExtendedQuote(h.krPreferExtendedQuote === true);
     setKrDayOpenByTicker(h.krDayOpenByTicker ?? {});
     setKrPrevCloseByTicker(h.krPrevCloseByTicker ?? {});
-    setWatchItems(h.watchItems ?? []);
+    if (Array.isArray(h.watchItems)) setWatchItems(h.watchItems);
   }, []);
 
   /** 로그아웃 시 개인정보(보유·일지·계획·메모 등) 로컬 흔적 제거 */
@@ -694,6 +704,7 @@ export default function App() {
     cloudHydratedRef.current = false;
     syncedTradeIdsRef.current = null;
     syncedTodoIdsRef.current = null;
+    syncedWatchIdsRef.current = null;
     setCloudSessionReady(false);
     let cancelled = false;
     const cleanupFns: Array<() => void> = [];
@@ -712,12 +723,14 @@ export default function App() {
           acceptedCloudAtMs: getCloudBookAcceptedAtMs(),
           seenTradeIds: getSeenTradeIds(),
           seenTodoIds: getSeenTodoIds(),
+          seenWatchIds: getSeenWatchIds(),
         });
         if (cancelled) return;
         const nextPortfolio = bootstrap.portfolio;
         const nextMetaState = buildCloudPortfolioMetaInput(nextPortfolio);
         cloudTradeRecordsRef.current = bootstrap.remoteTradeRecords;
         cloudTodoRecordsRef.current = bootstrap.remoteTodoRecords;
+        cloudWatchRecordsRef.current = bootstrap.remoteWatchRecords;
 
         if (bootstrap.shouldApplyPortfolio) {
           applyNormalizedPortfolio(nextPortfolio);
@@ -771,6 +784,11 @@ export default function App() {
           setTodos((prev) =>
             sameTodoLists(prev, nextPortfolio.todos) ? prev : nextPortfolio.todos,
           );
+          setWatchItems((prev) =>
+            sameWatchLists(prev, nextPortfolio.watchItems ?? [])
+              ? prev
+              : (nextPortfolio.watchItems ?? []),
+          );
         }
 
         await Promise.all([
@@ -790,24 +808,40 @@ export default function App() {
                 deviceIdRef.current,
               )
             : Promise.resolve(),
+          bootstrap.missingWatchDocs.length > 0 || bootstrap.staleWatchDeletes.length > 0
+            ? cloudPortfolioStore.syncWatchItems(
+                user.uid,
+                bootstrap.missingWatchDocs,
+                bootstrap.staleWatchDeletes,
+                deviceIdRef.current,
+              )
+            : Promise.resolve(),
         ]);
         setCloudBookAcceptedAtMs(bootstrapStartedAtMs);
         rememberSeenTradeIds(Object.keys(bootstrap.remoteTradeRecords));
         rememberSeenTodoIds(Object.keys(bootstrap.remoteTodoRecords));
+        rememberSeenWatchIds(Object.keys(bootstrap.remoteWatchRecords));
         rememberSeenTradeIds(bootstrap.missingTradeDocs.map((trade) => trade.id));
         rememberSeenTodoIds(bootstrap.missingTodoDocs.map((todo) => todo.id));
+        rememberSeenWatchIds(bootstrap.missingWatchDocs.map((item) => item.id));
 
         cloudTradeFingerprintsRef.current = bootstrap.nextTradeFingerprints;
         cloudTodoFingerprintsRef.current = bootstrap.nextTodoFingerprints;
+        cloudWatchFingerprintsRef.current = bootstrap.nextWatchFingerprints;
         const tradeSyncPending =
           bootstrap.missingTradeDocs.length > 0 || bootstrap.staleTradeDeletes.length > 0;
         pendingTradeSyncRef.current = tradeSyncPending;
         pendingTodoSyncRef.current = bootstrap.missingTodoDocs.length > 0;
+        pendingWatchSyncRef.current =
+          bootstrap.missingWatchDocs.length > 0 || bootstrap.staleWatchDeletes.length > 0;
         pendingTradeFingerprintsRef.current = tradeSyncPending
           ? bootstrap.nextTradeFingerprints
           : null;
         pendingTodoFingerprintsRef.current = pendingTodoSyncRef.current
           ? bootstrap.nextTodoFingerprints
+          : null;
+        pendingWatchFingerprintsRef.current = pendingWatchSyncRef.current
+          ? bootstrap.nextWatchFingerprints
           : null;
         pendingMetaSyncRef.current = null;
         lastAutoSnapshotFingerprintRef.current = portfolioGuardFingerprint(nextPortfolio);
@@ -862,6 +896,31 @@ export default function App() {
               setTodos((prev) =>
                 sameTodoLists(prev, remoteTodos) ? prev : remoteTodos,
               );
+            },
+            (e) => setCloudError(humanizeCloudError(e)),
+          ),
+        );
+        cleanupFns.push(
+          cloudPortfolioStore.subscribeWatchItems(
+            user.uid,
+            (remoteItems) => {
+              const remoteFingerprints = buildWatchFingerprintMap(remoteItems);
+              if (
+                pendingWatchSyncRef.current &&
+                !sameFingerprintMapValues(
+                  pendingWatchFingerprintsRef.current ??
+                    buildWatchFingerprintMap(portfolioRef.current.watchItems ?? []),
+                  remoteFingerprints,
+                )
+              ) {
+                return;
+              }
+              pendingWatchSyncRef.current = false;
+              pendingWatchFingerprintsRef.current = null;
+              cloudWatchFingerprintsRef.current = remoteFingerprints;
+              cloudWatchRecordsRef.current = buildWatchRecordMap(remoteItems);
+              rememberSeenWatchIds(remoteItems.map((item) => item.id));
+              setWatchItems((prev) => (sameWatchLists(prev, remoteItems) ? prev : remoteItems));
             },
             (e) => setCloudError(humanizeCloudError(e)),
           ),
@@ -1038,6 +1097,47 @@ export default function App() {
     user?.uid,
     cloudSessionReady,
     todos,
+    networkOnline,
+  ]);
+
+  useEffect(() => {
+    if (!firebaseConfigured || !user || !cloudSessionReady || !networkOnline) return;
+    if (!cloudHydratedRef.current) return;
+    const plan = planCloudRecordSync({
+      localRecords: watchItems,
+      remoteFingerprints: cloudWatchFingerprintsRef.current,
+      remoteRecords: cloudWatchRecordsRef.current,
+      seenIds: getSeenWatchIds(),
+      previousLocalIds: syncedWatchIdsRef.current,
+      fingerprintOf: (item) => buildWatchFingerprintMap([item])[item.id] ?? '',
+    });
+    if (plan.replaceLocal) {
+      setWatchItems(plan.replaceLocal);
+      return;
+    }
+    syncedWatchIdsRef.current = new Set(watchItems.map((item) => item.id));
+    const { upserts, deletes } = plan;
+    if (upserts.length === 0 && deletes.length === 0) return;
+    pendingWatchSyncRef.current = true;
+    pendingWatchFingerprintsRef.current = buildWatchFingerprintMap(watchItems);
+    let cancelled = false;
+    void cloudPortfolioStore.syncWatchItems(user.uid, upserts, deletes, deviceIdRef.current)
+      .then(() => {
+        if (cancelled) return;
+        rememberSeenWatchIds(upserts.map((item) => item.id));
+        setCloudError(null);
+      })
+      .catch((e) => {
+        if (!cancelled) setCloudError(humanizeCloudError(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    firebaseConfigured,
+    user?.uid,
+    cloudSessionReady,
+    watchItems,
     networkOnline,
   ]);
 
@@ -1249,13 +1349,18 @@ export default function App() {
       const meta = buildCloudPortfolioMetaInput(portfolio);
       const seenTrades = getSeenTradeIds();
       const seenTodos = getSeenTodoIds();
+      const seenWatches = getSeenWatchIds();
       const remoteTradeIds = new Set(Object.keys(cloudTradeFingerprintsRef.current));
       const remoteTodoIds = new Set(Object.keys(cloudTodoFingerprintsRef.current));
+      const remoteWatchIds = new Set(Object.keys(cloudWatchFingerprintsRef.current));
       const tradesToPush = portfolio.trades.filter(
         (trade) => remoteTradeIds.has(trade.id) || !seenTrades.has(trade.id),
       );
       const todosToPush = portfolio.todos.filter(
         (todo) => remoteTodoIds.has(todo.id) || !seenTodos.has(todo.id),
+      );
+      const watchesToPush = (portfolio.watchItems ?? []).filter(
+        (item) => remoteWatchIds.has(item.id) || !seenWatches.has(item.id),
       );
       await Promise.all([
         cloudPortfolioStore.syncTrades(
@@ -1270,17 +1375,25 @@ export default function App() {
           [],
           deviceIdRef.current,
         ),
+        cloudPortfolioStore.syncWatchItems(
+          user.uid,
+          watchesToPush,
+          [],
+          deviceIdRef.current,
+        ),
         cloudPortfolioStore.syncMeta(user.uid, meta),
       ]);
       cloudTradeFingerprintsRef.current = buildTradeFingerprintMap(portfolio.trades);
       cloudTodoFingerprintsRef.current = buildTodoFingerprintMap(portfolio.todos);
+      cloudWatchFingerprintsRef.current = buildWatchFingerprintMap(portfolio.watchItems ?? []);
       cloudTradeRecordsRef.current = buildTradeRecordMap(portfolio.trades);
       cloudTodoRecordsRef.current = buildTodoRecordMap(portfolio.todos);
+      cloudWatchRecordsRef.current = buildWatchRecordMap(portfolio.watchItems ?? []);
       cloudMetaFingerprintRef.current = metaFingerprint(meta);
       await cloudPortfolioStore.pushLegacyBackup(user.uid, portfolio);
       await createGuardSnapshot('manual-backup');
       window.alert(
-        '현재 매매·계획·설정을 클라우드에 올렸습니다. 다른 기기에서 새로고침 후 같은 계정으로 확인하세요.',
+        '현재 매매·계획·관심종목·설정을 클라우드에 올렸습니다. 다른 기기에서 새로고침 후 같은 계정으로 확인하세요.',
       );
     } catch (e) {
       setCloudError(humanizeCloudError(e));

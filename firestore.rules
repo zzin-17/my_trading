@@ -105,6 +105,39 @@ service cloud.firestore {
       return !existsAfter(todoTrashDocPath(userId, todoId));
     }
 
+    function validWatchDoc(watchId) {
+      return request.resource.data.keys().hasOnly([
+          'id',
+          'market',
+          'ticker',
+          'name',
+          'memo',
+          'createdAt',
+          'updatedAt',
+        ])
+        && request.resource.data.id is string
+        && request.resource.data.id == watchId
+        && request.resource.data.market == 'KR'
+        && request.resource.data.ticker is string
+        && request.resource.data.ticker.size() == 6
+        && watchId == 'watch-KR-' + request.resource.data.ticker
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.memo is string
+        && request.resource.data.memo.size() <= 80
+        && request.resource.data.createdAt is string
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    function canWriteWatchDoc(userId, watchId) {
+      return !existsAfter(watchTrashDocPath(userId, watchId));
+    }
+
+    function watchTrashDocPath(userId, watchId) {
+      return /databases/$(database)/documents/users/$(userId)/watch_trash/$(watchId);
+    }
+
     function validMetaDoc(docId) {
       return docId == 'v1'
         && request.resource.data.keys().hasOnly([
@@ -282,6 +315,14 @@ service cloud.firestore {
       allow delete: if isOwner(userId);
     }
 
+    match /users/{userId}/watch_items/{watchId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+        && validWatchDoc(watchId)
+        && canWriteWatchDoc(userId, watchId);
+      allow delete: if isOwner(userId);
+    }
+
     // 실시간 동기화용 보조 메타 상태
     match /users/{userId}/traderos_meta/{docId} {
       allow read: if isOwner(userId);
@@ -304,6 +345,38 @@ service cloud.firestore {
     match /users/{userId}/todo_trash/{docId} {
       allow read: if isOwner(userId);
       allow create, update: if isOwner(userId) && validTodoTrashDoc(docId);
+      allow delete: if isOwner(userId);
+    }
+
+    match /users/{userId}/watch_trash/{docId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+        && docId is string
+        && request.resource.data.keys().hasOnly([
+          'itemId',
+          'ticker',
+          'name',
+          'createdAtValue',
+          'body',
+          'reason',
+          'sourceDeviceId',
+          'deletedAt',
+        ])
+        && request.resource.data.itemId is string
+        && request.resource.data.itemId == docId
+        && request.resource.data.ticker is string
+        && request.resource.data.name is string
+        && request.resource.data.createdAtValue is string
+        && request.resource.data.body is string
+        && request.resource.data.body.size() > 0
+        && request.resource.data.body.size() <= 20000
+        && request.resource.data.reason is string
+        && (
+          !('sourceDeviceId' in request.resource.data) ||
+          request.resource.data.sourceDeviceId is string ||
+          request.resource.data.sourceDeviceId == null
+        )
+        && request.resource.data.deletedAt is timestamp;
       allow delete: if isOwner(userId);
     }
 

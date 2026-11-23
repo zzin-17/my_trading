@@ -10,6 +10,7 @@ const DEVICE_ID_KEY = 'traderos-device-id-v1';
 const CLOUD_BOOK_ACCEPTED_AT_KEY = 'traderos-cloud-book-accepted-at-v1';
 const SEEN_TRADE_IDS_KEY = 'traderos-cloud-seen-trade-ids-v1';
 const SEEN_TODO_IDS_KEY = 'traderos-cloud-seen-todo-ids-v1';
+const SEEN_WATCH_IDS_KEY = 'traderos-cloud-seen-watch-ids-v1';
 
 export interface PersistedPortfolioV1 {
   trades: Trade[];
@@ -32,7 +33,7 @@ export interface PersistedPortfolioV1 {
   krDayOpenByTicker?: Record<string, number>;
   /** 한국장 시세 갱신으로 수집한 전일 종가(티커→원) — 현재가 등락 표시 */
   krPrevCloseByTicker?: Record<string, number>;
-  /** 이 브라우저에만 저장하는 관심종목. 클라우드 메타에는 넣지 않는다. */
+  /** 관심종목. 클라우드 메타가 아니라 watch_items 문서로 동기화한다. */
   watchItems?: WatchItem[];
 }
 
@@ -90,7 +91,9 @@ export function coercePersistedPortfolio(
   }
   data.krDayOpenByTicker = sanitizeKrDayOpenByTicker(data.krDayOpenByTicker);
   data.krPrevCloseByTicker = sanitizeKrDayOpenByTicker(data.krPrevCloseByTicker);
-  data.watchItems = sanitizeWatchItems(data.watchItems);
+  if ('watchItems' in data) {
+    data.watchItems = sanitizeWatchItems(data.watchItems);
+  }
   return data;
 }
 
@@ -180,6 +183,14 @@ export function getSeenTodoIds(): Set<string> {
 
 export function rememberSeenTodoIds(ids: Iterable<string>): void {
   rememberIdSet(SEEN_TODO_IDS_KEY, ids);
+}
+
+export function getSeenWatchIds(): Set<string> {
+  return readIdSet(SEEN_WATCH_IDS_KEY);
+}
+
+export function rememberSeenWatchIds(ids: Iterable<string>): void {
+  rememberIdSet(SEEN_WATCH_IDS_KEY, ids);
 }
 
 function createDeviceId(): string {

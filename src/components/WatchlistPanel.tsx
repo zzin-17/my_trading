@@ -146,7 +146,7 @@ function WatchRows({
     return (
       <div className="rounded-md border border-dashed border-border px-3 py-6 text-center text-[13px] text-textMuted">
         아직 없습니다. + 관심으로 종목명이나 코드를 검색해 담아 보세요.
-        <span className="mt-1 block text-[11px]">최대 {WATCH_ITEM_LIMIT}개 · 이 브라우저에만 저장됩니다.</span>
+        <span className="mt-1 block text-[11px]">최대 {WATCH_ITEM_LIMIT}개 · 같은 계정으로 다른 기기와 맞춰집니다.</span>
       </div>
     );
   }

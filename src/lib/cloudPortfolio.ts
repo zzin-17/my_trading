@@ -18,7 +18,9 @@ import { coercePersistedPortfolio, sanitizeKrDayOpenByTicker } from './persisten
 import { getFirebaseDb } from './firebase/client';
 import type { Trade } from '../types/trade';
 import type { TradePlanTodo } from '../types/todo';
+import type { WatchItem } from '../types/watchItem';
 import type { CurrencyCode, Market } from '../types/portfolio';
+import { sanitizeWatchItems } from './watchItems';
 import { normalizeKrSellCommissionRate } from './krTradingAssumptions';
 
 function portfolioDocRef(uid: string) {
@@ -39,6 +41,18 @@ function todoCollectionRef(uid: string) {
 
 function todoDocRef(uid: string, todoId: string) {
   return doc(getFirebaseDb(), 'users', uid, 'todos', todoId);
+}
+
+function watchCollectionRef(uid: string) {
+  return collection(getFirebaseDb(), 'users', uid, 'watch_items');
+}
+
+function watchDocRef(uid: string, watchId: string) {
+  return doc(getFirebaseDb(), 'users', uid, 'watch_items', watchId);
+}
+
+function watchTrashCollectionRef(uid: string) {
+  return collection(getFirebaseDb(), 'users', uid, 'watch_trash');
 }
 
 function metaDocRef(uid: string) {
@@ -74,8 +88,10 @@ export interface CloudPortfolioSnapshot {
 export interface CloudLivePortfolio {
   trades: Trade[];
   todos: TradePlanTodo[];
+  watchItems: WatchItem[];
   tradeUpdatedAtMsById: Record<string, number>;
   todoUpdatedAtMsById: Record<string, number>;
+  watchUpdatedAtMsById: Record<string, number>;
 }
 
 export interface CloudPortfolioMeta {
@@ -221,6 +237,25 @@ function toFirestoreTradeDoc(trade: Trade) {
     ...(trade.excludeFromJournal === true ? { excludeFromJournal: true } : {}),
     ...(trade.executionStatus ? { executionStatus: trade.executionStatus } : {}),
   };
+}
+
+function toFirestoreWatchDoc(item: WatchItem) {
+  return {
+    id: item.id,
+    market: 'KR' as const,
+    ticker: item.ticker,
+    name: item.name.trim() || item.ticker,
+    memo: item.memo.trim().slice(0, 80),
+    createdAt: item.createdAt,
+    updatedAt: serverTimestamp(),
+  };
+}
+
+function parseCloudWatchItem(input: unknown, fallbackId: string): WatchItem | null {
+  const [item] = sanitizeWatchItems([
+    isRecord(input) ? { ...input, id: fallbackId } : { id: fallbackId },
+  ]);
+  return item ?? null;
 }
 
 function toFirestoreTodoDoc(todo: TradePlanTodo) {
@@ -501,12 +536,14 @@ export async function fetchCloudPortfolioMeta(
 export async function fetchCloudLivePortfolio(
   uid: string,
 ): Promise<CloudLivePortfolio> {
-  const [tradeSnap, todoSnap] = await Promise.all([
+  const [tradeSnap, todoSnap, watchSnap] = await Promise.all([
     getDocs(tradeCollectionRef(uid)),
     getDocs(todoCollectionRef(uid)),
+    getDocs(watchCollectionRef(uid)),
   ]);
   const tradeUpdatedAtMsById: Record<string, number> = {};
   const todoUpdatedAtMsById: Record<string, number> = {};
+  const watchUpdatedAtMsById: Record<string, number> = {};
   const trades = tradeSnap.docs
     .map((x) => {
       const parsed = parseCloudTrade(x.data(), x.id);
@@ -521,11 +558,20 @@ export async function fetchCloudLivePortfolio(
       return parsed;
     })
     .filter((x): x is TradePlanTodo => x !== null);
+  const watchItems = watchSnap.docs
+    .map((x) => {
+      const parsed = parseCloudWatchItem(x.data(), x.id);
+      if (parsed) watchUpdatedAtMsById[parsed.id] = updatedAtToMillis(x.data().updatedAt);
+      return parsed;
+    })
+    .filter((x): x is WatchItem => x !== null);
   return {
     trades: sortTradesForCloud(trades),
     todos: sortTodosForCloud(todos),
+    watchItems: [...watchItems].sort((a, b) => a.name.localeCompare(b.name, 'ko') || a.id.localeCompare(b.id)),
     tradeUpdatedAtMsById,
     todoUpdatedAtMsById,
+    watchUpdatedAtMsById,
   };
 }
 
@@ -819,6 +865,68 @@ export async function syncCloudTrades(
 ): Promise<void> {
   if (upserts.length === 0 && deletes.length === 0) return;
   await commitTradeChanges(uid, upserts, deletes, sourceDeviceId);
+}
+
+async function commitWatchChanges(
+  uid: string,
+  upserts: WatchItem[],
+  deletes: WatchItem[],
+  sourceDeviceId?: string | null,
+): Promise<void> {
+  const db = getFirebaseDb();
+  const ops: Array<{ type: 'set'; value: WatchItem } | { type: 'trash'; value: WatchItem }> = [
+    ...upserts.map((value) => ({ type: 'set' as const, value })),
+    ...deletes.map((value) => ({ type: 'trash' as const, value })),
+  ];
+  for (let i = 0; i < ops.length; i += 400) {
+    const batch = writeBatch(db);
+    for (const op of ops.slice(i, i + 400)) {
+      if (op.type === 'set') {
+        batch.set(watchDocRef(uid, op.value.id), toFirestoreWatchDoc(op.value));
+        batch.delete(doc(watchTrashCollectionRef(uid), op.value.id));
+      } else {
+        batch.set(doc(watchTrashCollectionRef(uid), op.value.id), {
+          itemId: op.value.id,
+          ticker: op.value.ticker,
+          name: op.value.name,
+          createdAtValue: op.value.createdAt,
+          body: JSON.stringify(op.value),
+          reason: 'user-delete',
+          sourceDeviceId: sourceDeviceId ?? null,
+          deletedAt: serverTimestamp(),
+        });
+        batch.delete(watchDocRef(uid, op.value.id));
+      }
+    }
+    await batch.commit();
+  }
+}
+
+export async function syncCloudWatchItems(
+  uid: string,
+  upserts: WatchItem[],
+  deletes: WatchItem[],
+  sourceDeviceId?: string | null,
+): Promise<void> {
+  if (upserts.length === 0 && deletes.length === 0) return;
+  await commitWatchChanges(uid, upserts, deletes, sourceDeviceId);
+}
+
+export function subscribeCloudWatchItems(
+  uid: string,
+  onValue: (items: WatchItem[]) => void,
+  onError?: (error: unknown) => void,
+): Unsubscribe {
+  return onSnapshot(
+    watchCollectionRef(uid),
+    (snap) => {
+      const items = snap.docs
+        .map((x) => parseCloudWatchItem(x.data(), x.id))
+        .filter((x): x is WatchItem => x !== null);
+      onValue(items);
+    },
+    onError,
+  );
 }
 
 export async function syncCloudTodos(

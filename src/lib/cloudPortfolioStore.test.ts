@@ -4,6 +4,7 @@ import {
   planCloudRecordSync,
   portfolioGuardFingerprint,
   reconcileTradesFromSources,
+  reconcileWatchItemsFromSources,
   shouldHydrateFromLegacy,
   shouldKeepLocalOnlyRecord,
 } from './cloudPortfolioStore';
@@ -182,6 +183,38 @@ describe('reconcileTradesFromSources', () => {
       seenTradeIds: new Set([staleAdd.id]),
     });
     expect(merged.map((item) => item.id)).toEqual([opening.id]);
+  });
+});
+
+describe('reconcileWatchItemsFromSources', () => {
+  const item = {
+    id: 'watch-KR-272450',
+    market: 'KR' as const,
+    ticker: '272450',
+    name: '진에어',
+    memo: '',
+    createdAt: '2026-11-23T01:00:00.000Z',
+  };
+
+  it('클라우드가 비어 있으면 이 기기의 관심종목을 올린다', () => {
+    expect(
+      reconcileWatchItemsFromSources({
+        liveItems: [],
+        fallbackItems: [item],
+        acceptedCloudAtMs: Date.parse('2026-11-23T02:00:00.000Z'),
+      }).map((row) => row.id),
+    ).toEqual([item.id]);
+  });
+
+  it('다른 기기에서 지운 관심종목은 다시 올리지 않는다', () => {
+    expect(
+      reconcileWatchItemsFromSources({
+        liveItems: [],
+        fallbackItems: [item],
+        acceptedCloudAtMs: 1,
+        seenWatchIds: new Set([item.id]),
+      }),
+    ).toEqual([]);
   });
 });
 

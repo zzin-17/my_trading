@@ -60,7 +60,9 @@ export function normalizeLoadedPortfolio(
         : false,
     krDayOpenByTicker: sanitizeKrDayOpenByTicker(raw.krDayOpenByTicker),
     krPrevCloseByTicker: sanitizeKrDayOpenByTicker(raw.krPrevCloseByTicker),
-    watchItems: sanitizeWatchItems(raw.watchItems),
+    ...(Array.isArray(raw.watchItems)
+      ? { watchItems: sanitizeWatchItems(raw.watchItems) }
+      : {}),
   };
 }
 
