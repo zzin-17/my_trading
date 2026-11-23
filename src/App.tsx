@@ -2904,14 +2904,14 @@ export default function App() {
     <div
       role="tablist"
       aria-label="종목 목록"
-      className="flex w-full gap-1 rounded-full border border-border bg-background/70 p-1"
+      className="inline-flex w-fit max-w-full shrink-0 gap-1 self-start rounded-full border border-border bg-background/70 p-1"
     >
       <button
         type="button"
         role="tab"
         aria-selected={assetView === 'holdings'}
         onClick={() => setAssetView('holdings')}
-        className={`flex-1 rounded-full px-3 py-1.5 text-[13px] font-medium ${
+        className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] font-medium ${
           assetView === 'holdings' ? 'bg-accent text-white' : 'text-textMuted'
         }`}
       >
@@ -2923,7 +2923,7 @@ export default function App() {
         role="tab"
         aria-selected={assetView === 'watch'}
         onClick={() => setAssetView('watch')}
-        className={`flex-1 rounded-full px-3 py-1.5 text-[13px] font-medium ${
+        className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] font-medium ${
           assetView === 'watch' ? 'bg-accent text-white' : 'text-textMuted'
         }`}
       >
@@ -3065,10 +3065,10 @@ export default function App() {
           ) : null}
           {assetView === 'watch' ? (
             <section className="rounded-lg border border-border bg-surface p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                 {assetTabs}
                 {lastKrQuoteBulkAt ? (
-                  <p className="text-[11px] tabular-nums text-textMuted/90 sm:text-right">
+                  <p className="shrink-0 text-[11px] tabular-nums text-textMuted/90 sm:pt-0.5 sm:text-right">
                     시세 갱신 {formatQuoteUpdatedLabel(lastKrQuoteBulkAt)}
                   </p>
                 ) : null}
