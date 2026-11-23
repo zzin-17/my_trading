@@ -4,6 +4,8 @@ import type { TradePlanTodo } from '../types/todo';
 const STORAGE_KEY = 'traderos-portfolio-v2';
 const STORAGE_UPDATED_AT_KEY = 'traderos-portfolio-v2-updated-at';
 const DEVICE_ID_KEY = 'traderos-device-id-v1';
+/** 이 브라우저가 클라우드 장부를 마지막으로 받아들인 시각 */
+const CLOUD_BOOK_ACCEPTED_AT_KEY = 'traderos-cloud-book-accepted-at-v1';
 
 export interface PersistedPortfolioV1 {
   trades: Trade[];
@@ -104,6 +106,27 @@ export function getPersistedUpdatedAtMs(): number {
     return Number.isFinite(value) && value > 0 ? value : 0;
   } catch {
     return 0;
+  }
+}
+
+/** 클라우드 장부를 받은 적이 없으면 null */
+export function getCloudBookAcceptedAtMs(): number | null {
+  try {
+    const raw = localStorage.getItem(CLOUD_BOOK_ACCEPTED_AT_KEY);
+    if (!raw) return null;
+    const value = Number(raw);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setCloudBookAcceptedAtMs(value: number): void {
+  try {
+    if (!Number.isFinite(value) || value <= 0) return;
+    localStorage.setItem(CLOUD_BOOK_ACCEPTED_AT_KEY, String(Math.floor(value)));
+  } catch {
+    /* ignore */
   }
 }
 

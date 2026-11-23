@@ -135,28 +135,83 @@ export function metaFingerprint(input: CloudPortfolioMetaInput): string {
   return JSON.stringify(input);
 }
 
-function reconcileTradesFromSources(args: {
+/** 아이디에 들어 있는 Date.now() 시각. 2020년~2100년만 인정한다. */
+export function idCreatedAtMs(id: string): number | null {
+  const match = id.match(/\d{13}/);
+  if (!match) return null;
+  const value = Number(match[0]);
+  if (!Number.isFinite(value) || value < 1_577_836_800_000 || value > 4_102_444_800_000) {
+    return null;
+  }
+  return value;
+}
+
+/**
+ * 클라우드에 없는 로컬 항목을 다시 올릴지.
+ * 클라우드 장부가 이미 있으면, 이 브라우저가 그 장부를 받은 뒤에 만든 항목만 올린다.
+ * 받은 시각이 없는 예전 저장본은 올리지 않는다.
+ */
+export function shouldKeepLocalOnlyRecord(args: {
+  cloudHasRecords: boolean;
+  acceptedCloudAtMs: number | null;
+  createdAtMs: number | null;
+}): boolean {
+  if (!args.cloudHasRecords) return true;
+  if (args.acceptedCloudAtMs == null || args.createdAtMs == null) return false;
+  return args.createdAtMs > args.acceptedCloudAtMs;
+}
+
+export function reconcileTradesFromSources(args: {
   liveTrades: Trade[];
   fallbackTrades: Trade[];
+  acceptedCloudAtMs: number | null;
 }): Trade[] {
-  const { liveTrades, fallbackTrades } = args;
+  const { liveTrades, fallbackTrades, acceptedCloudAtMs } = args;
   const map = new Map<string, Trade>();
-  for (const trade of fallbackTrades) map.set(trade.id, trade);
   for (const trade of liveTrades) map.set(trade.id, trade);
+  const cloudHasRecords = liveTrades.length > 0;
+  for (const trade of fallbackTrades) {
+    if (map.has(trade.id)) continue;
+    if (
+      !shouldKeepLocalOnlyRecord({
+        cloudHasRecords,
+        acceptedCloudAtMs,
+        createdAtMs: idCreatedAtMs(trade.id),
+      })
+    ) {
+      continue;
+    }
+    map.set(trade.id, trade);
+  }
   return [...map.values()].sort((a, b) => {
     const d = a.date.localeCompare(b.date);
     return d !== 0 ? d : a.id.localeCompare(b.id);
   });
 }
 
-function reconcileTodosFromSources(args: {
+export function reconcileTodosFromSources(args: {
   liveTodos: TradePlanTodo[];
   fallbackTodos: TradePlanTodo[];
+  acceptedCloudAtMs: number | null;
 }): TradePlanTodo[] {
-  const { liveTodos, fallbackTodos } = args;
+  const { liveTodos, fallbackTodos, acceptedCloudAtMs } = args;
   const map = new Map<string, TradePlanTodo>();
-  for (const todo of fallbackTodos) map.set(todo.id, todo);
   for (const todo of liveTodos) map.set(todo.id, todo);
+  const cloudHasRecords = liveTodos.length > 0;
+  for (const todo of fallbackTodos) {
+    if (map.has(todo.id)) continue;
+    const parsed = Date.parse(todo.createdAt);
+    if (
+      !shouldKeepLocalOnlyRecord({
+        cloudHasRecords,
+        acceptedCloudAtMs,
+        createdAtMs: Number.isFinite(parsed) ? parsed : idCreatedAtMs(todo.id),
+      })
+    ) {
+      continue;
+    }
+    map.set(todo.id, todo);
+  }
   return [...map.values()].sort((a, b) => {
     const d = a.createdAt.localeCompare(b.createdAt);
     return d !== 0 ? d : a.id.localeCompare(b.id);
@@ -214,8 +269,9 @@ async function loadBootstrap(args: {
   uid: string;
   localPortfolio: PersistedPortfolioV1;
   localPersistedAtMs: number;
+  acceptedCloudAtMs: number | null;
 }): Promise<CloudBootstrapResult> {
-  const { uid, localPortfolio, localPersistedAtMs } = args;
+  const { uid, localPortfolio, localPersistedAtMs, acceptedCloudAtMs } = args;
   const [live, remoteMeta] = await Promise.all([
     fetchCloudLivePortfolio(uid),
     fetchCloudPortfolioMeta(uid),
@@ -283,10 +339,12 @@ async function loadBootstrap(args: {
   const nextTrades = reconcileTradesFromSources({
     liveTrades: live.trades,
     fallbackTrades,
+    acceptedCloudAtMs,
   });
   const nextTodos = reconcileTodosFromSources({
     liveTodos: live.todos,
     fallbackTodos,
+    acceptedCloudAtMs,
   });
 
   const nextMeta: CloudPortfolioMetaInput = {

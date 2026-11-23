@@ -40,6 +40,8 @@ import {
   savePersisted,
   clearPersisted,
   getPersistedUpdatedAtMs,
+  getCloudBookAcceptedAtMs,
+  setCloudBookAcceptedAtMs,
   getOrCreateDeviceId,
   type PersistedPortfolioV1,
 } from './lib/persistence';
@@ -676,10 +678,12 @@ export default function App() {
       try {
         const localPersistedAtMs = getPersistedUpdatedAtMs();
         const localPortfolio = portfolioRef.current;
+        const bootstrapStartedAtMs = Date.now();
         const bootstrap = await cloudPortfolioStore.loadBootstrap({
           uid: user.uid,
           localPortfolio,
           localPersistedAtMs,
+          acceptedCloudAtMs: getCloudBookAcceptedAtMs(),
         });
         if (cancelled) return;
         const nextPortfolio = bootstrap.portfolio;
@@ -759,6 +763,7 @@ export default function App() {
               )
             : Promise.resolve(),
         ]);
+        setCloudBookAcceptedAtMs(bootstrapStartedAtMs);
 
         cloudTradeFingerprintsRef.current = bootstrap.nextTradeFingerprints;
         cloudTodoFingerprintsRef.current = bootstrap.nextTodoFingerprints;
