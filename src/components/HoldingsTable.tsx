@@ -328,16 +328,16 @@ export function HoldingsTable({
   return (
     <div className="rounded-lg border border-border bg-surface p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
       <div className="flex flex-col gap-1.5">
+        {heading ?? <h3 className="text-sm font-medium text-textMain">보유 종목</h3>}
         <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-          <div className="min-w-0">
-            {heading ?? <h3 className="text-sm font-medium text-textMain">보유 종목</h3>}
-            <p className="mt-0.5 hidden text-[10px] leading-relaxed text-textMuted md:block">
+          <div className="min-w-0 flex-1">
+            <p className="hidden text-[10px] leading-relaxed text-textMuted md:block">
               검색 · 정렬 · 상세 확인 · 등락은 전일 종가 대비 · 시가 대비 ±{KR_OPEN_ATTENTION_ABS_PCT}% 이상 현재가 강조
             </p>
             <ExpandableText
               text={`검색 · 정렬 · 상세 확인 · 등락은 전일 종가 대비 · 시가 대비 ±${KR_OPEN_ATTENTION_ABS_PCT}% 이상 현재가 강조`}
               maxChars={26}
-              className="mt-0.5 md:hidden"
+              className="md:hidden"
               textClassName="text-[12px] leading-relaxed text-textMuted"
             />
           </div>
