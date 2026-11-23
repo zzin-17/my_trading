@@ -9,6 +9,7 @@ import { formatKrDayChange, krChangeFromPrevClose } from '../lib/krPrevChange';
 import { fetchKrBoardByTicker, krBoardForTicker } from '../lib/krxLookup';
 import { krBoardBadgeClass, krBoardDisplayLabel } from '../lib/krBoardUi';
 import { tradeAppliesToLedger } from '../lib/ledger';
+import { withoutRedundantHiddenTrades } from '../lib/openingTrades';
 import { computeRealizedSellEvents } from '../lib/realizedPnl';
 
 interface PositionDetailModalProps {
@@ -165,9 +166,10 @@ export function PositionDetailModal({
     ? krBoardForTicker(krBoardByTicker, position.ticker)
     : undefined;
 
-  const journalTrades = trades.filter((t) => !t.excludeFromJournal);
+  const bookTrades = withoutRedundantHiddenTrades(trades);
+  const journalTrades = bookTrades.filter((t) => !t.excludeFromJournal);
   const ledgerJournalTrades = journalTrades.filter(tradeAppliesToLedger);
-  const adjustmentTrades = trades.filter(
+  const adjustmentTrades = bookTrades.filter(
     (t) => t.excludeFromJournal && tradeAppliesToLedger(t),
   );
 

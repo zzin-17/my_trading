@@ -49,6 +49,34 @@ describe('computeLedger', () => {
     expect(row?.realizedPnl).toBe(9);
   });
 
+  it('최신 초기보유보다 옛 숨은 매수는 수량·평단에 합산하지 않는다', () => {
+    const ledger = computeLedger([
+      t({
+        id: 'tr-ob-1776226310752',
+        date: '1900-01-01',
+        ticker: '272450',
+        quantity: 83,
+        price: 12005,
+        currency: 'KRW',
+        market: 'KR',
+        excludeFromJournal: true,
+      }),
+      t({
+        id: 'tr-user-holding-1776220845781',
+        date: '2026-04-15',
+        ticker: '272450',
+        quantity: 83,
+        price: 6620,
+        currency: 'KRW',
+        market: 'KR',
+        excludeFromJournal: true,
+      }),
+    ]);
+    const row = ledger.get('272450');
+    expect(row?.quantity).toBe(83);
+    expect(row?.avgCost).toBe(12005);
+  });
+
   it('미체결(pending) 거래는 장부에 반영되지 않음', () => {
     const ledger = computeLedger([
       t({ id: 'a', quantity: 10, price: 100 }),

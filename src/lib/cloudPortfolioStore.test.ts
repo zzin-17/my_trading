@@ -125,4 +125,13 @@ describe('reconcileTradesFromSources', () => {
     });
     expect(merged.map((item) => item.id)).toEqual([opening.id, offline.id]);
   });
+
+  it('클라우드에 이미 올라간 예전 보유종목 추가도 최신 초기보유만 남긴다', () => {
+    const merged = reconcileTradesFromSources({
+      liveTrades: [staleAdd, opening],
+      fallbackTrades: [staleAdd, opening],
+      acceptedCloudAtMs: 1_779_000_000_000,
+    });
+    expect(merged.map((item) => item.id)).toEqual([opening.id]);
+  });
 });

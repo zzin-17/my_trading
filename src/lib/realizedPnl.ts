@@ -2,6 +2,7 @@ import type { CurrencyCode, Market } from '../types/portfolio';
 import type { Trade } from '../types/trade';
 import { isKrMarketClosureDay } from '../data/krMarketHolidays';
 import { tradeAppliesToLedger } from './ledger';
+import { withoutRedundantHiddenTrades } from './openingTrades';
 import { KR_SELL_TAX_RATE } from './krTradingAssumptions';
 import { roundMoney, roundPercent } from './portfolioMath';
 
@@ -34,7 +35,7 @@ interface ReplayRow {
 }
 
 function sortTrades(trades: Trade[]): Trade[] {
-  return [...trades].filter(tradeAppliesToLedger).sort((a, b) => {
+  return withoutRedundantHiddenTrades(trades).filter(tradeAppliesToLedger).sort((a, b) => {
     const d = a.date.localeCompare(b.date);
     if (d !== 0) return d;
     return a.id.localeCompare(b.id);

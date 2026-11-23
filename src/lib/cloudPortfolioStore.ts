@@ -24,8 +24,11 @@ import {
   type CloudPortfolioMeta,
   type CloudPortfolioSnapshotSummary,
 } from './cloudPortfolio';
+import { idCreatedAtMs, withoutRedundantHiddenTrades } from './openingTrades';
 import type { Trade } from '../types/trade';
 import type { TradePlanTodo } from '../types/todo';
+
+export { idCreatedAtMs } from './openingTrades';
 
 export type {
   CloudDeletedTodoRecord,
@@ -135,17 +138,6 @@ export function metaFingerprint(input: CloudPortfolioMetaInput): string {
   return JSON.stringify(input);
 }
 
-/** 아이디에 들어 있는 Date.now() 시각. 2020년~2100년만 인정한다. */
-export function idCreatedAtMs(id: string): number | null {
-  const match = id.match(/\d{13}/);
-  if (!match) return null;
-  const value = Number(match[0]);
-  if (!Number.isFinite(value) || value < 1_577_836_800_000 || value > 4_102_444_800_000) {
-    return null;
-  }
-  return value;
-}
-
 /**
  * 클라우드에 없는 로컬 항목을 다시 올릴지.
  * 클라우드 장부가 이미 있으면, 이 브라우저가 그 장부를 받은 뒤에 만든 항목만 올린다.
@@ -183,7 +175,7 @@ export function reconcileTradesFromSources(args: {
     }
     map.set(trade.id, trade);
   }
-  return [...map.values()].sort((a, b) => {
+  return withoutRedundantHiddenTrades([...map.values()]).sort((a, b) => {
     const d = a.date.localeCompare(b.date);
     return d !== 0 ? d : a.id.localeCompare(b.id);
   });

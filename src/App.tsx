@@ -36,6 +36,7 @@ import {
   tickersEqual,
 } from './lib/market';
 import { computeLedger, ledgerToPositions } from './lib/ledger';
+import { withoutRedundantHiddenTrades } from './lib/openingTrades';
 import {
   savePersisted,
   clearPersisted,
@@ -767,9 +768,11 @@ export default function App() {
 
         cloudTradeFingerprintsRef.current = bootstrap.nextTradeFingerprints;
         cloudTodoFingerprintsRef.current = bootstrap.nextTodoFingerprints;
-        pendingTradeSyncRef.current = bootstrap.missingTradeDocs.length > 0;
+        const tradeSyncPending =
+          bootstrap.missingTradeDocs.length > 0 || bootstrap.staleTradeDeletes.length > 0;
+        pendingTradeSyncRef.current = tradeSyncPending;
         pendingTodoSyncRef.current = bootstrap.missingTodoDocs.length > 0;
-        pendingTradeFingerprintsRef.current = pendingTradeSyncRef.current
+        pendingTradeFingerprintsRef.current = tradeSyncPending
           ? bootstrap.nextTradeFingerprints
           : null;
         pendingTodoFingerprintsRef.current = pendingTodoSyncRef.current
@@ -797,8 +800,9 @@ export default function App() {
               pendingTradeFingerprintsRef.current = null;
               cloudTradeFingerprintsRef.current = remoteFingerprints;
               cloudTradeRecordsRef.current = buildTradeRecordMap(remoteTrades);
+              const bookTrades = withoutRedundantHiddenTrades(remoteTrades);
               setTrades((prev) =>
-                sameTradeLists(prev, remoteTrades) ? prev : remoteTrades,
+                sameTradeLists(prev, bookTrades) ? prev : bookTrades,
               );
             },
             (e) => setCloudError(humanizeCloudError(e)),
@@ -926,9 +930,14 @@ export default function App() {
   useEffect(() => {
     if (!firebaseConfigured || !user || !cloudSessionReady || !networkOnline) return;
     if (!cloudHydratedRef.current) return;
-    const localMap = buildTradeFingerprintMap(trades);
+    const bookTrades = withoutRedundantHiddenTrades(trades);
+    if (bookTrades.length !== trades.length) {
+      setTrades(bookTrades);
+      return;
+    }
+    const localMap = buildTradeFingerprintMap(bookTrades);
     const remoteMap = cloudTradeFingerprintsRef.current;
-    const upserts = trades.filter((trade) => remoteMap[trade.id] !== localMap[trade.id]);
+    const upserts = bookTrades.filter((trade) => remoteMap[trade.id] !== localMap[trade.id]);
     const deletes = Object.keys(remoteMap)
       .filter((id) => !(id in localMap))
       .map((id) => cloudTradeRecordsRef.current[id])
