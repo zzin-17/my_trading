@@ -115,7 +115,14 @@ export function buildTodoFingerprintMap(todos: TradePlanTodo[]): Record<string, 
 }
 
 function watchFingerprint(item: WatchItem): string {
-  return JSON.stringify([item.market, item.ticker, item.name, item.memo, item.createdAt]);
+  return JSON.stringify([
+    item.market,
+    item.ticker,
+    item.name,
+    item.memo,
+    item.createdAt,
+    item.alert ? [item.alert.direction, item.alert.price, item.alert.enabled] : null,
+  ]);
 }
 
 export function buildWatchFingerprintMap(items: readonly WatchItem[]): Record<string, string> {

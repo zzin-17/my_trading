@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import type { WatchItem } from '../types/watchItem';
+import type { WatchItem, WatchPriceAlert } from '../types/watchItem';
 import { formatMoney } from '../lib/format';
+import { watchAlertLevel } from '../lib/priceAlerts';
 import { searchKrStocksByName } from '../lib/krxLookup';
 import { formatKrDayChange, krChangeFromPrevClose } from '../lib/krPrevChange';
 import { pnlTextClass } from '../lib/pnlTone';
@@ -15,6 +16,7 @@ interface WatchlistPanelProps {
   onAdd: (ticker: string, name: string) => string | null;
   onRemove: (id: string) => void;
   onMemo: (id: string, memo: string) => void;
+  onAlert: (id: string, alert: WatchPriceAlert | null) => void;
   onOpenHolding: (positionId: string) => void;
   onAddHolding: (ticker: string, name: string) => void;
   /** 바깥 섹션 안에 넣을 때 카드와 제목을 빼다 */
@@ -30,6 +32,7 @@ export function WatchlistPanel({
   onAdd,
   onRemove,
   onMemo,
+  onAlert,
   onOpenHolding,
   onAddHolding,
   bare = false,
@@ -47,6 +50,7 @@ export function WatchlistPanel({
       presentation={presentation}
       onRemove={onRemove}
       onMemo={onMemo}
+      onConfigure={(item) => setSelectedId(item.id)}
       onOpen={(item) => {
         const heldId = heldPositionIdByTicker[item.ticker];
         if (presentation === 'desktop' && heldId) {
@@ -64,7 +68,7 @@ export function WatchlistPanel({
         <div className="min-w-0">
           {bare ? null : <h3 className="text-sm font-medium text-textMain">관심종목</h3>}
           <p className="mt-0.5 text-[12px] leading-relaxed text-textMuted">
-            보유하지 않은 종목의 현재가와 전일대비만 봅니다. 수량·평단은 바뀌지 않습니다.
+            현재가와 전일대비를 봅니다. 가격 알림은 상단 종 모양에 모이고, 수량·평단은 바뀌지 않습니다.
           </p>
         </div>
         <button
@@ -97,6 +101,7 @@ export function WatchlistPanel({
           heldPositionId={heldPositionIdByTicker[selected.ticker]}
           onClose={() => setSelectedId(null)}
           onMemo={(memo) => onMemo(selected.id, memo)}
+          onAlert={(alert) => onAlert(selected.id, alert)}
           onRemove={() => {
             onRemove(selected.id);
             setSelectedId(null);
@@ -131,6 +136,7 @@ function WatchRows({
   presentation,
   onRemove,
   onMemo,
+  onConfigure,
   onOpen,
 }: {
   items: WatchItem[];
@@ -140,6 +146,7 @@ function WatchRows({
   presentation: 'desktop' | 'mobile';
   onRemove: (id: string) => void;
   onMemo: (id: string, memo: string) => void;
+  onConfigure: (item: WatchItem) => void;
   onOpen: (item: WatchItem) => void;
 }) {
   if (items.length === 0) {
@@ -187,6 +194,7 @@ function WatchRows({
                 {item.memo ? (
                   <span className="mt-1 block truncate text-[12px] text-textMuted">{item.memo}</span>
                 ) : null}
+                <AlertLine item={item} quote={price} />
               </button>
             </li>
           );
@@ -204,6 +212,7 @@ function WatchRows({
             <th className="px-2 py-2 font-medium">현재가</th>
             <th className="px-2 py-2 font-medium">전일대비</th>
             <th className="px-2 py-2 font-medium">메모</th>
+            <th className="px-2 py-2 font-medium">알림</th>
             <th className="px-2 py-2 font-medium"> </th>
           </tr>
         </thead>
@@ -243,6 +252,15 @@ function WatchRows({
                     maxLength={80}
                     className="w-full min-w-[8rem] rounded-md border border-border bg-background px-2 py-1 text-[12px] text-textMain outline-none focus:border-accent"
                   />
+                </td>
+                <td className="px-2 py-2">
+                  <button
+                    type="button"
+                    onClick={() => onConfigure(item)}
+                    className="whitespace-nowrap rounded-md border border-border px-2 py-1 text-[11px] text-textMain hover:bg-white/5"
+                  >
+                    <AlertLine item={item} quote={price} />
+                  </button>
                 </td>
                 <td className="px-2 py-2 text-right">
                   <button
@@ -362,6 +380,7 @@ function WatchDetailSheet({
   heldPositionId,
   onClose,
   onMemo,
+  onAlert,
   onRemove,
   onOpenHolding,
   onAddHolding,
@@ -372,6 +391,7 @@ function WatchDetailSheet({
   heldPositionId: string | undefined;
   onClose: () => void;
   onMemo: (memo: string) => void;
+  onAlert: (alert: WatchPriceAlert | null) => void;
   onRemove: () => void;
   onOpenHolding: (positionId: string) => void;
   onAddHolding: () => void;
@@ -410,6 +430,7 @@ function WatchDetailSheet({
             className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-[14px] text-textMain outline-none focus:border-accent"
           />
         </label>
+        <WatchAlertEditor alert={item.alert} onChange={onAlert} />
         <div className="mt-4 flex flex-col gap-2">
           {heldPositionId ? (
             <button
@@ -437,6 +458,123 @@ function WatchDetailSheet({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function alertPhrase(alert: WatchPriceAlert): string {
+  return `${formatMoney(alert.price, 'KRW')} ${alert.direction === 'above' ? '이상' : '이하'}`;
+}
+
+function AlertLine({ item, quote }: { item: WatchItem; quote: number | undefined }) {
+  if (!item.alert?.enabled) {
+    return <span className="text-[11px] text-textMuted">알림 없음</span>;
+  }
+  const reached = watchAlertLevel(item, quote) === 'reached';
+  return (
+    <span className={`text-[11px] font-medium ${reached ? 'text-positive' : 'text-textMain'}`}>
+      {reached ? `도달 · ${alertPhrase(item.alert)}` : alertPhrase(item.alert)}
+    </span>
+  );
+}
+
+function WatchAlertEditor({
+  alert,
+  onChange,
+}: {
+  alert: WatchPriceAlert | undefined;
+  onChange: (alert: WatchPriceAlert | null) => void;
+}) {
+  const [priceText, setPriceText] = useState(alert ? String(alert.price) : '');
+  const [direction, setDirection] = useState<WatchPriceAlert['direction']>(alert?.direction ?? 'below');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPriceText(alert ? String(alert.price) : '');
+    setDirection(alert?.direction ?? 'below');
+    setError(null);
+  }, [alert?.direction, alert?.enabled, alert?.price]);
+
+  const commit = (
+    nextDirection: WatchPriceAlert['direction'],
+    nextPriceText: string,
+    enabled: boolean,
+  ) => {
+    const price = Math.round(Number(nextPriceText.replace(/,/g, '')));
+    if (!Number.isFinite(price) || price <= 0) {
+      if (!enabled) {
+        setError(null);
+        onChange(null);
+        return;
+      }
+      setError('1원 이상의 가격을 입력해 주세요.');
+      return;
+    }
+    setError(null);
+    onChange({ direction: nextDirection, price, enabled });
+  };
+
+  return (
+    <div className="mt-4">
+      <p className="text-[12px] text-textMuted">가격 알림</p>
+      <div className="mt-1 flex gap-1">
+        <button
+          type="button"
+          onClick={() => {
+            setDirection('below');
+            if (alert?.enabled) commit('below', priceText, true);
+          }}
+          className={`rounded-md border px-2.5 py-1.5 text-[12px] ${
+            direction === 'below' ? 'border-accent bg-accent/10 text-accent' : 'border-border text-textMuted'
+          }`}
+        >
+          이하
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setDirection('above');
+            if (alert?.enabled) commit('above', priceText, true);
+          }}
+          className={`rounded-md border px-2.5 py-1.5 text-[12px] ${
+            direction === 'above' ? 'border-accent bg-accent/10 text-accent' : 'border-border text-textMuted'
+          }`}
+        >
+          이상
+        </button>
+      </div>
+      <input
+        inputMode="numeric"
+        value={priceText}
+        onChange={(e) => setPriceText(e.target.value)}
+        onBlur={() => {
+          if (alert?.enabled || priceText.trim()) commit(direction, priceText, alert?.enabled === true);
+        }}
+        placeholder="가격"
+        className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2 text-[14px] tabular-nums text-textMain outline-none focus:border-accent"
+      />
+      {error ? <p className="mt-1 text-[12px] text-warning">{error}</p> : null}
+      <div className="mt-2 flex gap-2">
+        <button
+          type="button"
+          onClick={() => commit(direction, priceText, true)}
+          className="rounded-md bg-accent px-3 py-2 text-[13px] font-medium text-white"
+        >
+          {alert?.enabled ? '알림 갱신' : '알림 켜기'}
+        </button>
+        {alert ? (
+          <button
+            type="button"
+            onClick={() => commit(direction, priceText, false)}
+            className="rounded-md border border-border px-3 py-2 text-[13px] text-textMuted"
+          >
+            알림 끄기
+          </button>
+        ) : null}
+      </div>
+      <p className="mt-1 text-[11px] leading-relaxed text-textMuted">
+        이 탭이 열려 있고 시세가 목표를 통과할 때 상단 종 모양과 브라우저 알림으로 알려 줍니다.
+      </p>
     </div>
   );
 }

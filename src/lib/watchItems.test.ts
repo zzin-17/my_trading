@@ -13,6 +13,29 @@ describe('watchItems', () => {
     expect(items[0]?.memo).toBe('메모');
   });
 
+  it('가격 알림은 방향과 1원 이상일 때만 남긴다', () => {
+    const items = sanitizeWatchItems([
+      {
+        market: 'KR',
+        ticker: '272450',
+        name: '진에어',
+        memo: '',
+        createdAt: '2026-11-23T00:00:00.000Z',
+        alert: { direction: 'below', price: 12000.4, enabled: true },
+      },
+      {
+        market: 'KR',
+        ticker: '005930',
+        name: '삼성전자',
+        memo: '',
+        createdAt: '2026-11-23T00:00:00.000Z',
+        alert: { direction: 'sideways', price: 0, enabled: true },
+      },
+    ]);
+    expect(items[0]?.alert).toEqual({ direction: 'below', price: 12000, enabled: true });
+    expect(items[1]?.alert).toBeUndefined();
+  });
+
   it('이미 있는 종목은 다시 넣지 않는다', () => {
     const first = addWatchItem([], { ticker: '005930', name: '삼성전자' });
     const second = addWatchItem(first.items, { ticker: '005930', name: '삼성전자' });

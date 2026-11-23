@@ -1,5 +1,5 @@
 import { normalizeKrTicker } from './krxLookup';
-import type { WatchItem } from '../types/watchItem';
+import type { WatchItem, WatchPriceAlert } from '../types/watchItem';
 
 export const WATCH_ITEM_LIMIT = 50;
 const MEMO_LIMIT = 80;
@@ -25,6 +25,7 @@ export function sanitizeWatchItems(input: unknown): WatchItem[] {
         : new Date(0).toISOString();
     const id = watchItemId(ticker);
     if (byId.has(id)) continue;
+    const alert = parseWatchAlert((raw as { alert?: unknown }).alert);
     byId.set(id, {
       id,
       market: 'KR',
@@ -32,9 +33,23 @@ export function sanitizeWatchItems(input: unknown): WatchItem[] {
       name,
       memo,
       createdAt,
+      ...(alert ? { alert } : {}),
     });
   }
   return [...byId.values()].slice(0, WATCH_ITEM_LIMIT);
+}
+
+export function parseWatchAlert(input: unknown): WatchPriceAlert | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const raw = input as Partial<WatchPriceAlert>;
+  if (raw.direction !== 'above' && raw.direction !== 'below') return undefined;
+  const price = Math.round(Number(raw.price));
+  if (!Number.isFinite(price) || price <= 0 || price > 100_000_000) return undefined;
+  return {
+    direction: raw.direction,
+    price,
+    enabled: raw.enabled === true,
+  };
 }
 
 export function addWatchItem(

@@ -186,8 +186,6 @@ interface HoldingsTableProps {
   reachedTodoCountByPositionId?: Record<string, number>;
   /** 포지션별 거래 가능 수량 = 보유수량 - 미체결 매도 수량 */
   availableQuantityByPositionId?: Record<string, number>;
-  watchedTickers?: ReadonlySet<string>;
-  onToggleWatch?: (ticker: string, name: string) => void;
   /** 있으면 '보유 종목' 제목 자리에 둔다 */
   heading?: ReactNode;
 }
@@ -210,8 +208,6 @@ export function HoldingsTable({
   pendingTodoCountByPositionId = {},
   reachedTodoCountByPositionId = {},
   availableQuantityByPositionId = {},
-  watchedTickers,
-  onToggleWatch,
   heading,
 }: HoldingsTableProps) {
   const [sortKey, setSortKey] = useState<HoldingSortKey>('name');
@@ -571,24 +567,6 @@ export function HoldingsTable({
                         </span>
                       </button>
                       <span className="mt-0.5 flex flex-wrap items-center gap-0.5">
-                        {onToggleWatch ? (
-                          <button
-                            type="button"
-                            aria-label={
-                              watchedTickers?.has(normalizeKrTicker(p.ticker))
-                                ? `${p.name} 관심 해제`
-                                : `${p.name} 관심 추가`
-                            }
-                            onClick={() => onToggleWatch(p.ticker, p.name)}
-                            className={`px-0.5 text-[12px] leading-none ${
-                              watchedTickers?.has(normalizeKrTicker(p.ticker))
-                                ? 'text-accent'
-                                : 'text-textMuted'
-                            }`}
-                          >
-                            {watchedTickers?.has(normalizeKrTicker(p.ticker)) ? '★' : '☆'}
-                          </button>
-                        ) : null}
                         <span
                           className={`inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-[9px] font-semibold ${krBoardBadgeClass(
                             p.market === 'KR' ? krBoardForTicker(krBoardByTicker, p.ticker) : undefined,
@@ -857,24 +835,6 @@ export function HoldingsTable({
                   </td>
                   <td className="whitespace-nowrap px-2 py-2">
                     <span className="inline-flex items-center gap-1">
-                      {onToggleWatch ? (
-                        <button
-                          type="button"
-                          aria-label={
-                            watchedTickers?.has(normalizeKrTicker(p.ticker))
-                              ? `${p.name} 관심 해제`
-                              : `${p.name} 관심 추가`
-                          }
-                          onClick={() => onToggleWatch(p.ticker, p.name)}
-                          className={`text-[13px] leading-none ${
-                            watchedTickers?.has(normalizeKrTicker(p.ticker))
-                              ? 'text-accent'
-                              : 'text-textMuted'
-                          }`}
-                        >
-                          {watchedTickers?.has(normalizeKrTicker(p.ticker)) ? '★' : '☆'}
-                        </button>
-                      ) : null}
                       <button
                         type="button"
                         onClick={() => onOpenDetail(p.id)}

@@ -248,6 +248,15 @@ function toFirestoreWatchDoc(item: WatchItem) {
     memo: item.memo.trim().slice(0, 80),
     createdAt: item.createdAt,
     updatedAt: serverTimestamp(),
+    ...(item.alert
+      ? {
+          alert: {
+            direction: item.alert.direction,
+            price: Math.round(item.alert.price),
+            enabled: item.alert.enabled,
+          },
+        }
+      : {}),
   };
 }
 

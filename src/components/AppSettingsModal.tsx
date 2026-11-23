@@ -79,9 +79,11 @@ interface AppSettingsModalProps {
   notificationPermission?: NotificationPermission | 'unsupported';
   todoAlertsEnabled?: boolean;
   todoNearAlertsEnabled?: boolean;
+  watchAlertsEnabled?: boolean;
   notificationError?: string | null;
   onToggleTodoAlerts?: (enabled: boolean) => void | Promise<void>;
   onToggleTodoNearAlerts?: (enabled: boolean) => void;
+  onToggleWatchAlerts?: (enabled: boolean) => void | Promise<void>;
   krSellCommissionRate?: number;
   onKrSellCommissionRateChange?: (rate: number) => void;
   krPreferExtendedQuote?: boolean;
@@ -124,9 +126,11 @@ export function AppSettingsModal({
   notificationPermission = 'unsupported',
   todoAlertsEnabled = false,
   todoNearAlertsEnabled = false,
+  watchAlertsEnabled = false,
   notificationError = null,
   onToggleTodoAlerts,
   onToggleTodoNearAlerts,
+  onToggleWatchAlerts,
   krSellCommissionRate = 0.00015,
   onKrSellCommissionRateChange,
   krPreferExtendedQuote = false,
@@ -451,7 +455,7 @@ export function AppSettingsModal({
         <section className="mt-5 border-t border-border/60 pt-4">
           <h3 className="text-[12px] font-semibold text-textMain">브라우저 알림</h3>
           <p className="mt-1 text-[11px] leading-relaxed text-textMuted">
-            목표가 도달 알림을 보냅니다. 근접 알림은 2% 이내에서만 추가됩니다.
+            할 일 목표가와 관심종목 가격에 닿으면 브라우저 알림을 보냅니다. 할 일 매수는 이하, 매도는 이상입니다. 근접 알림은 할 일만 2% 이내입니다. 앱이 열려 있을 때 확인합니다.
           </p>
           <p className="mt-1 text-[12px] text-textMain">
             상태: {notificationStatusLabel}
@@ -471,7 +475,7 @@ export function AppSettingsModal({
                   : 'border-border bg-background text-textMain hover:bg-white/5'
               }`}
             >
-              {todoAlertsEnabled ? '도달 알림 켜짐' : '도달 알림 켜기'}
+              {todoAlertsEnabled ? '할 일 도달 알림 켜짐' : '할 일 도달 알림 켜기'}
             </button>
             <button
               type="button"
@@ -483,7 +487,18 @@ export function AppSettingsModal({
                   : 'border-border bg-background text-textMain hover:bg-white/5 disabled:opacity-50'
               }`}
             >
-              {todoNearAlertsEnabled ? '근접 알림 켜짐 (목표가 2% 이내)' : '근접 알림 켜기 (선택)'}
+              {todoNearAlertsEnabled ? '할 일 근접 알림 켜짐 (목표가 2% 이내)' : '할 일 근접 알림 켜기 (선택)'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void onToggleWatchAlerts?.(!watchAlertsEnabled)}
+              className={`rounded-md border px-3 py-2.5 text-left text-[13px] font-medium ${
+                watchAlertsEnabled
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'border-border bg-background text-textMain hover:bg-white/5'
+              }`}
+            >
+              {watchAlertsEnabled ? '관심종목 알림 켜짐' : '관심종목 알림 켜기'}
             </button>
           </div>
         </section>

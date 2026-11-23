@@ -105,16 +105,43 @@ service cloud.firestore {
       return !existsAfter(todoTrashDocPath(userId, todoId));
     }
 
+    function validWatchAlert() {
+      return request.resource.data.alert.keys().hasOnly(['direction', 'price', 'enabled'])
+        && (
+          request.resource.data.alert.direction == 'above' ||
+          request.resource.data.alert.direction == 'below'
+        )
+        && isMoney(request.resource.data.alert.price)
+        && request.resource.data.alert.price > 0
+        && request.resource.data.alert.price <= 100000000
+        && request.resource.data.alert.enabled is bool;
+    }
+
     function validWatchDoc(watchId) {
-      return request.resource.data.keys().hasOnly([
-          'id',
-          'market',
-          'ticker',
-          'name',
-          'memo',
-          'createdAt',
-          'updatedAt',
-        ])
+      return (
+          request.resource.data.keys().hasOnly([
+            'id',
+            'market',
+            'ticker',
+            'name',
+            'memo',
+            'createdAt',
+            'updatedAt',
+          ])
+          || (
+            request.resource.data.keys().hasOnly([
+              'id',
+              'market',
+              'ticker',
+              'name',
+              'memo',
+              'createdAt',
+              'updatedAt',
+              'alert',
+            ])
+            && validWatchAlert()
+          )
+        )
         && request.resource.data.id is string
         && request.resource.data.id == watchId
         && request.resource.data.market == 'KR'

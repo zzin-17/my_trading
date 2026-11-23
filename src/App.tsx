@@ -21,6 +21,7 @@ import { MarketTodoList } from './components/MarketTodoList';
 import { PositionDetailModal } from './components/PositionDetailModal';
 import { MarketTabs, type MarketTab } from './components/MarketTabs';
 import { WatchlistPanel } from './components/WatchlistPanel';
+import { AlertBell, type BellAlert } from './components/AlertBell';
 import { KrIndexBar } from './components/KrIndexBar';
 import { MarketSplitCard } from './components/MarketSplitCard';
 import { tradeSeed } from './data/tradeSeed';
@@ -89,8 +90,19 @@ import type { Trade } from './types/trade';
 import type { TradePlanTodo } from './types/todo';
 import { parseHoldingCsv } from './lib/holdingCsv';
 import { applyKrxMetadataToKrTrades, normalizeKrTicker } from './lib/krxLookup';
-import { addWatchItem, watchItemId } from './lib/watchItems';
-import type { WatchItem } from './types/watchItem';
+import { addWatchItem } from './lib/watchItems';
+import type { WatchItem, WatchPriceAlert } from './types/watchItem';
+import {
+  alertItemTitle,
+  crossingAlert,
+  loadAlertInbox,
+  markAlertEventsRead,
+  pushAlertEvent,
+  saveAlertInbox,
+  watchAlertLevel,
+  type AlertLevel,
+  type StoredAlertEvent,
+} from './lib/priceAlerts';
 import { adjustOpeningBalanceTrade } from './lib/positionAdjust';
 import {
   fetchKrNaverDelayedQuote,
@@ -112,6 +124,7 @@ const THEME_MODE_KEY = 'traderos-theme-mode-v1';
 const ONBOARDING_DONE_KEY = 'traderos-onboarding-done-v1';
 const TODO_ALERTS_ENABLED_KEY = 'traderos-todo-alerts-enabled-v1';
 const TODO_NEAR_ALERTS_ENABLED_KEY = 'traderos-todo-near-alerts-enabled-v1';
+const WATCH_ALERTS_ENABLED_KEY = 'traderos-watch-alerts-enabled-v1';
 const TODO_ALERT_COOLDOWN_MS = 10 * 60 * 1000;
 const PERSISTENCE_WARNING_MESSAGE =
   '브라우저에 저장하지 못했습니다. 저장 공간 부족·비공개 모드일 수 있습니다. 이 사이트의 저장 용량을 줄인 뒤 다시 시도해 주세요.';
@@ -429,6 +442,10 @@ export default function App() {
   const [todoNearAlertsEnabled, setTodoNearAlertsEnabled] = useState(() =>
     loadBooleanPreference(TODO_NEAR_ALERTS_ENABLED_KEY, false),
   );
+  const [watchAlertsEnabled, setWatchAlertsEnabled] = useState(() =>
+    loadBooleanPreference(WATCH_ALERTS_ENABLED_KEY, false),
+  );
+  const [alertInbox, setAlertInbox] = useState<StoredAlertEvent[]>(() => loadAlertInbox());
   const [notificationPermission, setNotificationPermission] = useState<
     NotificationPermission | 'unsupported'
   >(() => getBrowserNotificationPermission());
@@ -450,6 +467,9 @@ export default function App() {
   const todoAlertStatusRef = useRef<Record<string, 'reached' | 'near' | 'waiting'>>({});
   const todoAlertBaselineReadyRef = useRef(false);
   const todoAlertCooldownRef = useRef<Record<string, number>>({});
+  const watchAlertLevelRef = useRef<Record<string, AlertLevel>>({});
+  const watchAlertBaselineReadyRef = useRef(false);
+  const watchAlertCooldownRef = useRef<Record<string, number>>({});
 
   const {
     user,
@@ -1503,50 +1523,65 @@ export default function App() {
     setUnlockBlockedUntil(0);
   }, []);
 
-  const handleToggleTodoAlerts = useCallback(async (nextEnabled: boolean) => {
-    if (!nextEnabled) {
-      setTodoAlertsEnabled(false);
-      setNotificationError(null);
-      return;
-    }
+  const requestNotificationAccess = useCallback(async (): Promise<boolean> => {
     if (typeof window === 'undefined' || typeof Notification === 'undefined') {
-      setTodoAlertsEnabled(false);
       setNotificationError('이 브라우저는 알림 기능을 지원하지 않습니다.');
-      return;
+      return false;
     }
     if (Notification.permission === 'granted') {
       setNotificationPermission('granted');
-      setTodoAlertsEnabled(true);
       setNotificationError(null);
-      return;
+      return true;
     }
     if (Notification.permission === 'denied') {
       setNotificationPermission('denied');
-      setTodoAlertsEnabled(false);
       setNotificationError(
         '브라우저에서 알림이 차단되어 있습니다. 주소창의 사이트 설정에서 알림을 허용한 뒤 다시 켜 주세요.',
       );
-      return;
+      return false;
     }
     try {
       const permission = await Notification.requestPermission();
       setNotificationPermission(permission);
       if (permission === 'granted') {
-        setTodoAlertsEnabled(true);
         setNotificationError(null);
-      } else {
-        setTodoAlertsEnabled(false);
-        setNotificationError(
-          permission === 'denied'
-            ? '알림 권한이 거부되었습니다. 브라우저 설정에서 다시 허용할 수 있습니다.'
-            : '알림 권한 요청이 취소되었습니다.',
-        );
+        return true;
       }
+      setNotificationError(
+        permission === 'denied'
+          ? '알림 권한이 거부되었습니다. 브라우저 설정에서 다시 허용할 수 있습니다.'
+          : '알림 권한 요청이 취소되었습니다.',
+      );
+      return false;
     } catch {
-      setTodoAlertsEnabled(false);
       setNotificationError('알림 권한 요청 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+      return false;
     }
   }, []);
+
+  const handleToggleTodoAlerts = useCallback(
+    async (nextEnabled: boolean) => {
+      if (!nextEnabled) {
+        setTodoAlertsEnabled(false);
+        setNotificationError(null);
+        return;
+      }
+      setTodoAlertsEnabled(await requestNotificationAccess());
+    },
+    [requestNotificationAccess],
+  );
+
+  const handleToggleWatchAlerts = useCallback(
+    async (nextEnabled: boolean) => {
+      if (!nextEnabled) {
+        setWatchAlertsEnabled(false);
+        setNotificationError(null);
+        return;
+      }
+      setWatchAlertsEnabled(await requestNotificationAccess());
+    },
+    [requestNotificationAccess],
+  );
 
   const handleLockNow = useCallback(() => {
     if (!appLockEnabled) return;
@@ -1638,6 +1673,21 @@ export default function App() {
       /* ignore */
     }
   }, [todoNearAlertsEnabled]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        WATCH_ALERTS_ENABLED_KEY,
+        watchAlertsEnabled ? '1' : '0',
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [watchAlertsEnabled]);
+
+  useEffect(() => {
+    saveAlertInbox(alertInbox);
+  }, [alertInbox]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof Notification === 'undefined') return;
@@ -1853,6 +1903,62 @@ export default function App() {
     [quotes, todos],
   );
 
+  const bellAlerts = useMemo(() => {
+    const rows: BellAlert[] = [];
+    for (const item of watchItems) {
+      const ticker = normalizeKrTicker(item.ticker) ?? item.ticker;
+      if (watchAlertLevel(item, quotes[ticker]) !== 'reached' || !item.alert) continue;
+      rows.push({
+        key: `watch-${item.id}`,
+        source: 'watch',
+        sourceId: item.id,
+        ticker,
+        market: 'KR',
+        title: item.name,
+        detail: `${formatMoney(item.alert.price, 'KRW')} ${
+          item.alert.direction === 'above' ? '이상' : '이하'
+        } · 현재 ${formatMoney(quotes[ticker], 'KRW')}`,
+        status: 'reached',
+      });
+    }
+    for (const todo of todos) {
+      if (todo.done) continue;
+      const level = getTodoAlertStatus(todo, quotes);
+      if (level === 'waiting') continue;
+      if (level === 'near' && !todoNearAlertsEnabled) continue;
+      const quoteKey =
+        todo.market === 'KR' ? normalizeKrTicker(todo.ticker) ?? todo.ticker : todo.ticker;
+      const currency = defaultCurrencyForMarket(todo.market);
+      rows.push({
+        key: `todo-${todo.id}`,
+        source: 'todo',
+        sourceId: todo.id,
+        ticker: todo.ticker,
+        market: todo.market,
+        title: todo.name?.trim() || todo.ticker,
+        detail: `${todo.action === 'buy' ? '매수 이하' : '매도 이상'} ${formatMoney(
+          todo.targetPrice,
+          currency,
+        )} · 현재 ${formatMoney(quotes[quoteKey], currency)}`,
+        status: level,
+      });
+    }
+    rows.sort((a, b) =>
+      a.status === b.status ? a.title.localeCompare(b.title, 'ko') : a.status === 'reached' ? -1 : 1,
+    );
+    return rows;
+  }, [quotes, todoNearAlertsEnabled, todos, watchItems]);
+
+  const handleOpenBellItem = useCallback((item: BellAlert) => {
+    if (item.source === 'watch') {
+      setMobileHomeTab('portfolio');
+      setAssetView('watch');
+      return;
+    }
+    if (item.market === 'KR' || item.market === 'US') setMarketTab(item.market);
+    setMobileHomeTab('journal');
+  }, []);
+
   const krQuoteTargetTickers = useMemo(() => {
     const priorityByTicker = new Map<string, number>();
     todos.forEach((todo) => {
@@ -1876,8 +1982,11 @@ export default function App() {
     });
     watchItems.forEach((item) => {
       const ticker = normalizeKrTicker(item.ticker);
-      if (!ticker || priorityByTicker.has(ticker)) return;
-      priorityByTicker.set(ticker, 4);
+      if (!ticker) return;
+      const level = watchAlertLevel(item, quotes[ticker]);
+      const priority = level === 'reached' ? 0 : item.alert?.enabled ? 2 : 4;
+      const prev = priorityByTicker.get(ticker);
+      if (prev === undefined || priority < prev) priorityByTicker.set(ticker, priority);
     });
     return [...priorityByTicker.entries()]
       .sort((a, b) => (a[1] !== b[1] ? a[1] - b[1] : a[0].localeCompare(b[0])))
@@ -2402,13 +2511,21 @@ export default function App() {
       const currentPrice = quotes[quoteKey];
       const currency = defaultCurrencyForMarket(todo.market);
       const label = todo.name?.trim() || todo.ticker;
-      const title = shouldNotifyReached
-        ? `To-do 도달: ${label}`
-        : `To-do 근접: ${label}`;
+      const title = alertItemTitle('todo', label);
       const body = `${todo.action === 'buy' ? '매수' : '매도'} 목표가 ${formatMoney(
         todo.targetPrice,
         currency,
       )} · 현재가 ${formatMoney(currentPrice, currency)}`;
+      setAlertInbox((prev) =>
+        pushAlertEvent(prev, {
+          source: 'todo',
+          sourceId: todo.id,
+          title,
+          body,
+          status: shouldNotifyReached ? 'reached' : 'near',
+          at: new Date(now).toISOString(),
+        }),
+      );
       try {
         const notification = new Notification(title, {
           body,
@@ -2439,6 +2556,76 @@ export default function App() {
     todoNearAlertsEnabled,
     todos,
   ]);
+
+  useEffect(() => {
+    const nextStatusMap = Object.fromEntries(
+      watchItems.map((item) => {
+        const ticker = normalizeKrTicker(item.ticker) ?? item.ticker;
+        return [item.id, watchAlertLevel(item, quotes[ticker])];
+      }),
+    ) as Record<string, AlertLevel>;
+    const alertsActive =
+      watchAlertsEnabled &&
+      notificationPermission === 'granted' &&
+      typeof window !== 'undefined' &&
+      typeof Notification !== 'undefined';
+
+    if (!alertsActive) {
+      watchAlertLevelRef.current = nextStatusMap;
+      watchAlertBaselineReadyRef.current = false;
+      return;
+    }
+    if (!watchAlertBaselineReadyRef.current) {
+      watchAlertLevelRef.current = nextStatusMap;
+      watchAlertBaselineReadyRef.current = true;
+      return;
+    }
+
+    watchItems.forEach((item) => {
+      const currentStatus = nextStatusMap[item.id];
+      const crossed = crossingAlert(watchAlertLevelRef.current[item.id], currentStatus, false);
+      if (crossed !== 'reached' || !item.alert) return;
+      const cooldownKey = `${item.id}:reached`;
+      const now = Date.now();
+      const lastNotifiedAt = watchAlertCooldownRef.current[cooldownKey] ?? 0;
+      if (now - lastNotifiedAt < TODO_ALERT_COOLDOWN_MS) return;
+      const ticker = normalizeKrTicker(item.ticker) ?? item.ticker;
+      const phrase = `${formatMoney(item.alert.price, 'KRW')} ${
+        item.alert.direction === 'above' ? '이상' : '이하'
+      }`;
+      const title = alertItemTitle('watch', item.name);
+      const body = `${phrase} · 현재가 ${formatMoney(quotes[ticker], 'KRW')}`;
+      setAlertInbox((prev) =>
+        pushAlertEvent(prev, {
+          source: 'watch',
+          sourceId: item.id,
+          title,
+          body,
+          status: 'reached',
+          at: new Date(now).toISOString(),
+        }),
+      );
+      try {
+        const notification = new Notification(title, {
+          body,
+          tag: `watch-${item.id}-reached`,
+        });
+        notification.onclick = () => {
+          window.focus();
+          setMobileHomeTab('portfolio');
+          setAssetView('watch');
+          notification.close();
+        };
+        watchAlertCooldownRef.current[cooldownKey] = now;
+      } catch {
+        setNotificationError(
+          '브라우저 알림을 보내지 못했습니다. 브라우저 권한과 운영체제 알림 설정을 확인해 주세요.',
+        );
+      }
+    });
+
+    watchAlertLevelRef.current = nextStatusMap;
+  }, [notificationPermission, quotes, watchAlertsEnabled, watchItems]);
 
   const handleSyncKrxSectors = useCallback(async () => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -2651,11 +2838,6 @@ export default function App() {
     return map;
   }, [positions]);
 
-  const watchedTickers = useMemo(
-    () => new Set(watchItems.map((item) => item.ticker)),
-    [watchItems],
-  );
-
   const handleAddWatch = useCallback(
     (ticker: string, name: string) => {
       const result = addWatchItem(watchItems, { ticker, name });
@@ -2668,20 +2850,19 @@ export default function App() {
     [refreshKrQuotes, watchItems],
   );
 
-  const handleToggleWatch = useCallback(
-    (ticker: string, name: string) => {
-      const code = normalizeKrTicker(ticker);
-      if (!code) return;
-      const id = watchItemId(code);
-      if (watchItems.some((item) => item.id === id)) {
-        setWatchItems((prev) => prev.filter((item) => item.id !== id));
-        return;
-      }
-      const error = handleAddWatch(code, name);
-      if (error) window.alert(error);
-    },
-    [handleAddWatch, watchItems],
-  );
+  const handleWatchAlert = useCallback((id: string, alert: WatchPriceAlert | null) => {
+    setWatchItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        if (!alert) {
+          const next = { ...item };
+          delete next.alert;
+          return next;
+        }
+        return { ...item, alert };
+      }),
+    );
+  }, []);
 
   const unifiedCurrency = useMemo(
     () => getUnifiedPortfolioCurrency(visiblePositions),
@@ -2762,6 +2943,12 @@ export default function App() {
             </p>
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            <AlertBell
+              reached={bellAlerts}
+              recent={alertInbox}
+              onOpenItem={handleOpenBellItem}
+              onMarkRead={() => setAlertInbox((prev) => markAlertEventsRead(prev))}
+            />
             {user ? (
               <p className="max-w-[16rem] truncate text-[12px] text-textMuted">
                 {user.email ?? user.displayName ?? '로그인됨'}
@@ -2891,6 +3078,7 @@ export default function App() {
                       prev.map((item) => (item.id === id ? { ...item, memo: memo.slice(0, 80) } : item)),
                     )
                   }
+                  onAlert={handleWatchAlert}
                   onOpenHolding={setDetailId}
                   onAddHolding={(ticker, name) => {
                     setHoldingSeed({ ticker, name });
@@ -2913,6 +3101,7 @@ export default function App() {
                       prev.map((item) => (item.id === id ? { ...item, memo: memo.slice(0, 80) } : item)),
                     )
                   }
+                  onAlert={handleWatchAlert}
                   onOpenHolding={setDetailId}
                   onAddHolding={(ticker, name) => {
                     setHoldingSeed({ ticker, name });
@@ -2963,8 +3152,6 @@ export default function App() {
                 pendingTodoCountByPositionId={pendingTodoCountByPositionId}
                 reachedTodoCountByPositionId={reachedTodoCountByPositionId}
                 availableQuantityByPositionId={availableQuantityByPositionId}
-                watchedTickers={watchedTickers}
-                onToggleWatch={handleToggleWatch}
               />
           )}
           </div>
@@ -3163,9 +3350,11 @@ export default function App() {
         notificationPermission={notificationPermission}
         todoAlertsEnabled={todoAlertsEnabled}
         todoNearAlertsEnabled={todoNearAlertsEnabled}
+        watchAlertsEnabled={watchAlertsEnabled}
         notificationError={notificationError}
         onToggleTodoAlerts={handleToggleTodoAlerts}
         onToggleTodoNearAlerts={setTodoNearAlertsEnabled}
+        onToggleWatchAlerts={handleToggleWatchAlerts}
         krSellCommissionRate={krSellCommissionRate}
         onKrSellCommissionRateChange={setKrSellCommissionRate}
         krPreferExtendedQuote={krPreferExtendedQuote}

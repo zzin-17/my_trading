@@ -488,7 +488,7 @@ export function MarketTodoList({
           <div className="min-w-0">
             <h3 className="text-sm font-medium text-textMain">{title}</h3>
             <p className="text-[10px] text-textMuted">
-              코드·종목명 검색으로 빠르게 등록
+              매수는 목표가 이하, 매도는 목표가 이상에 닿으면 상단 종 모양에 모입니다.
             </p>
           </div>
           <div className="flex flex-wrap gap-1 text-[11px]">
