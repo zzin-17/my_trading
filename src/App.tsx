@@ -20,6 +20,7 @@ import { AddHoldingModal, type AddHoldingPayload } from './components/AddHolding
 import { MarketTodoList } from './components/MarketTodoList';
 import { PositionDetailModal } from './components/PositionDetailModal';
 import { MarketTabs, type MarketTab } from './components/MarketTabs';
+import { WatchlistPanel } from './components/WatchlistPanel';
 import { KrIndexBar } from './components/KrIndexBar';
 import { MarketSplitCard } from './components/MarketSplitCard';
 import { tradeSeed } from './data/tradeSeed';
@@ -83,6 +84,8 @@ import type { Trade } from './types/trade';
 import type { TradePlanTodo } from './types/todo';
 import { parseHoldingCsv } from './lib/holdingCsv';
 import { applyKrxMetadataToKrTrades, normalizeKrTicker } from './lib/krxLookup';
+import { addWatchItem, watchItemId } from './lib/watchItems';
+import type { WatchItem } from './types/watchItem';
 import { adjustOpeningBalanceTrade } from './lib/positionAdjust';
 import {
   fetchKrNaverDelayedQuote,
@@ -386,6 +389,13 @@ export default function App() {
   const [krPrevCloseByTicker, setKrPrevCloseByTicker] = useState<
     Record<string, number>
   >(() => getInitialAppState().krPrevCloseByTicker ?? {});
+  const [watchItems, setWatchItems] = useState<WatchItem[]>(
+    () => getInitialAppState().watchItems ?? [],
+  );
+  const [assetView, setAssetView] = useState<'holdings' | 'watch'>('holdings');
+  const [holdingSeed, setHoldingSeed] = useState<{ ticker: string; name: string } | null>(
+    null,
+  );
   const [krPriceStatusByTicker, setKrPriceStatusByTicker] = useState<
     Record<string, KrPriceStatus>
   >({});
@@ -457,6 +467,7 @@ export default function App() {
     krPreferExtendedQuote: initialPortfolio.krPreferExtendedQuote,
     krDayOpenByTicker: initialPortfolio.krDayOpenByTicker ?? {},
     krPrevCloseByTicker: initialPortfolio.krPrevCloseByTicker ?? {},
+    watchItems: initialPortfolio.watchItems ?? [],
   });
   const importFileRef = useRef<HTMLInputElement>(null);
   const hadUserRef = useRef(false);
@@ -534,6 +545,7 @@ export default function App() {
       krPreferExtendedQuote,
       krDayOpenByTicker,
       krPrevCloseByTicker,
+      watchItems,
     };
     flushPortfolioToLocalStorage();
   }, [
@@ -548,6 +560,7 @@ export default function App() {
     krPreferExtendedQuote,
     krDayOpenByTicker,
     krPrevCloseByTicker,
+    watchItems,
     flushPortfolioToLocalStorage,
   ]);
 
@@ -580,6 +593,7 @@ export default function App() {
     setKrPreferExtendedQuote(h.krPreferExtendedQuote === true);
     setKrDayOpenByTicker(h.krDayOpenByTicker ?? {});
     setKrPrevCloseByTicker(h.krPrevCloseByTicker ?? {});
+    setWatchItems(h.watchItems ?? []);
   }, []);
 
   /** 로그아웃 시 개인정보(보유·일지·계획·메모 등) 로컬 흔적 제거 */
@@ -614,6 +628,7 @@ export default function App() {
     setKrPreferExtendedQuote(false);
     setKrDayOpenByTicker({});
     setKrPrevCloseByTicker({});
+    setWatchItems([]);
     setSnapshotItems([]);
     setDeletedTradeItems([]);
     setDeletedTodoItems([]);
@@ -1746,10 +1761,15 @@ export default function App() {
         priorityByTicker.set(ticker, 3);
       }
     });
+    watchItems.forEach((item) => {
+      const ticker = normalizeKrTicker(item.ticker);
+      if (!ticker || priorityByTicker.has(ticker)) return;
+      priorityByTicker.set(ticker, 4);
+    });
     return [...priorityByTicker.entries()]
       .sort((a, b) => (a[1] !== b[1] ? a[1] - b[1] : a[0].localeCompare(b[0])))
       .map(([ticker]) => ticker);
-  }, [positions, quotes, todos]);
+  }, [positions, quotes, todos, watchItems]);
 
   const availableQuantityByPositionId = useMemo(() => {
     const map: Record<string, number> = {};
@@ -2085,6 +2105,7 @@ export default function App() {
     setKrPreferExtendedQuote(false);
     setKrDayOpenByTicker({});
     setKrPriceStatusByTicker({});
+    setWatchItems([]);
   }, [applyLocalTodoChange, applyLocalTradeChange, createGuardSnapshot, networkOnline, user]);
 
   /** 매매·보유·시세 등 전부 비움 (샘플 아님) */
@@ -2102,9 +2123,10 @@ export default function App() {
     setLastKrQuoteBulkAt(null);
     setKrDayOpenByTicker({});
     setKrPriceStatusByTicker({});
+    setWatchItems([]);
   }, [applyLocalTodoChange, applyLocalTradeChange, createGuardSnapshot, networkOnline, user]);
 
-  const refreshKrQuotes = useCallback(async (options?: { silent?: boolean }) => {
+  const refreshKrQuotes = useCallback(async (options?: { silent?: boolean; extraTickers?: string[] }) => {
     const silent = options?.silent === true;
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       if (!silent) {
@@ -2114,7 +2136,10 @@ export default function App() {
       }
       return false;
     }
-    const tickers = krQuoteTargetTickers;
+    const extra = (options?.extraTickers ?? [])
+      .map((ticker) => normalizeKrTicker(ticker))
+      .filter((ticker) => ticker.length > 0);
+    const tickers = [...new Set([...krQuoteTargetTickers, ...extra])];
     if (tickers.length === 0) {
       if (!silent) {
         window.alert('시세 갱신 대상인 한국장 종목이 없습니다.');
@@ -2503,6 +2528,48 @@ export default function App() {
     ? `${detailPosition.market}:${detailPosition.ticker}`
     : '';
 
+  const heldPositionIdByTicker = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const position of positions) {
+      if (position.market !== 'KR' || position.quantity <= 0) continue;
+      const ticker = normalizeKrTicker(position.ticker);
+      if (ticker) map[ticker] = position.id;
+    }
+    return map;
+  }, [positions]);
+
+  const watchedTickers = useMemo(
+    () => new Set(watchItems.map((item) => item.ticker)),
+    [watchItems],
+  );
+
+  const handleAddWatch = useCallback(
+    (ticker: string, name: string) => {
+      const result = addWatchItem(watchItems, { ticker, name });
+      if (result.error) return result.error;
+      setWatchItems(result.items);
+      const code = normalizeKrTicker(ticker);
+      if (code) void refreshKrQuotes({ silent: true, extraTickers: [code] });
+      return null;
+    },
+    [refreshKrQuotes, watchItems],
+  );
+
+  const handleToggleWatch = useCallback(
+    (ticker: string, name: string) => {
+      const code = normalizeKrTicker(ticker);
+      if (!code) return;
+      const id = watchItemId(code);
+      if (watchItems.some((item) => item.id === id)) {
+        setWatchItems((prev) => prev.filter((item) => item.id !== id));
+        return;
+      }
+      const error = handleAddWatch(code, name);
+      if (error) window.alert(error);
+    },
+    [handleAddWatch, watchItems],
+  );
+
   const unifiedCurrency = useMemo(
     () => getUnifiedPortfolioCurrency(visiblePositions),
     [visiblePositions],
@@ -2528,6 +2595,39 @@ export default function App() {
       setMarketTab(enabledTabs[0]);
     }
   }, [marketTab, enabledTabs]);
+
+  const assetTabs = (
+    <div
+      role="tablist"
+      aria-label="종목 목록"
+      className="flex w-full gap-1 rounded-full border border-border bg-background/70 p-1 sm:w-auto"
+    >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={assetView === 'holdings'}
+        onClick={() => setAssetView('holdings')}
+        className={`flex-1 rounded-full px-3 py-1.5 text-[13px] font-medium sm:flex-none ${
+          assetView === 'holdings' ? 'bg-accent text-white' : 'text-textMuted'
+        }`}
+      >
+        보유종목
+        <span className="ml-1.5 tabular-nums opacity-80">({visiblePositions.length})</span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={assetView === 'watch'}
+        onClick={() => setAssetView('watch')}
+        className={`flex-1 rounded-full px-3 py-1.5 text-[13px] font-medium sm:flex-none ${
+          assetView === 'watch' ? 'bg-accent text-white' : 'text-textMuted'
+        }`}
+      >
+        관심종목
+        <span className="ml-1.5 tabular-nums opacity-80">({watchItems.length})</span>
+      </button>
+    </div>
+  );
 
   return (
     <div className="min-h-screen min-h-[100dvh] bg-background">
@@ -2635,7 +2735,82 @@ export default function App() {
         ) : null}
 
         <div className={mobileHomeTab === 'portfolio' ? 'md:block' : 'hidden md:block'}>
-          {visiblePositions.length === 0 ? (
+          <div className="space-y-4 md:space-y-5">
+          {visiblePositions.length > 0 ? (
+            <>
+              {showMixedBanner && <MixedCurrencyBanner />}
+              {showSplitSummary ? (
+                <MarketPairSummaryCards
+                  krSummary={krSummaryAll}
+                  usSummary={usSummaryAll}
+                  krFootnote={krPnlCostFootnote}
+                />
+              ) : (
+                <SummaryCards
+                  summary={summary}
+                  quoteDisclaimer={krQuoteDisclaimer}
+                />
+              )}
+            </>
+          ) : null}
+          {assetView === 'watch' ? (
+            <section className="rounded-lg border border-border bg-surface p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                {assetTabs}
+                {lastKrQuoteBulkAt ? (
+                  <p className="shrink-0 text-[11px] tabular-nums text-textMuted/90 sm:pt-0.5 sm:text-right">
+                    시세 갱신 {formatQuoteUpdatedLabel(lastKrQuoteBulkAt)}
+                  </p>
+                ) : null}
+              </div>
+              <div className="mt-3 md:hidden">
+                <WatchlistPanel
+                  bare
+                  presentation="mobile"
+                  items={watchItems}
+                  quotes={quotes}
+                  krPrevCloseByTicker={krPrevCloseByTicker}
+                  heldPositionIdByTicker={heldPositionIdByTicker}
+                  onAdd={handleAddWatch}
+                  onRemove={(id) => setWatchItems((prev) => prev.filter((item) => item.id !== id))}
+                  onMemo={(id, memo) =>
+                    setWatchItems((prev) =>
+                      prev.map((item) => (item.id === id ? { ...item, memo: memo.slice(0, 80) } : item)),
+                    )
+                  }
+                  onOpenHolding={setDetailId}
+                  onAddHolding={(ticker, name) => {
+                    setHoldingSeed({ ticker, name });
+                    setAddHoldingOpen(true);
+                  }}
+                />
+              </div>
+              <div className="mt-3 hidden md:block">
+                <WatchlistPanel
+                  bare
+                  presentation="desktop"
+                  items={watchItems}
+                  quotes={quotes}
+                  krPrevCloseByTicker={krPrevCloseByTicker}
+                  heldPositionIdByTicker={heldPositionIdByTicker}
+                  onAdd={handleAddWatch}
+                  onRemove={(id) => setWatchItems((prev) => prev.filter((item) => item.id !== id))}
+                  onMemo={(id, memo) =>
+                    setWatchItems((prev) =>
+                      prev.map((item) => (item.id === id ? { ...item, memo: memo.slice(0, 80) } : item)),
+                    )
+                  }
+                  onOpenHolding={setDetailId}
+                  onAddHolding={(ticker, name) => {
+                    setHoldingSeed({ ticker, name });
+                    setAddHoldingOpen(true);
+                  }}
+                />
+              </div>
+            </section>
+          ) : visiblePositions.length === 0 ? (
+            <div className="space-y-3">
+            <div className="px-4 md:px-0">{assetTabs}</div>
             <div className="rounded-lg border border-border bg-surface px-4 py-12 text-center">
               <p className="text-sm text-textMuted">
                 {marketTab === 'all'
@@ -2654,22 +2829,10 @@ export default function App() {
                 </button>
               </div>
             </div>
+            </div>
           ) : (
-            <div className="space-y-4 md:space-y-5">
-              {showMixedBanner && <MixedCurrencyBanner />}
-              {showSplitSummary ? (
-                <MarketPairSummaryCards
-                  krSummary={krSummaryAll}
-                  usSummary={usSummaryAll}
-                  krFootnote={krPnlCostFootnote}
-                />
-              ) : (
-                <SummaryCards
-                  summary={summary}
-                  quoteDisclaimer={krQuoteDisclaimer}
-                />
-              )}
-              <HoldingsTable
+            <HoldingsTable
+                heading={assetTabs}
                 positions={visiblePositions}
                 metrics={metrics}
                 summary={summary}
@@ -2687,9 +2850,11 @@ export default function App() {
                 pendingTodoCountByPositionId={pendingTodoCountByPositionId}
                 reachedTodoCountByPositionId={reachedTodoCountByPositionId}
                 availableQuantityByPositionId={availableQuantityByPositionId}
+                watchedTickers={watchedTickers}
+                onToggleWatch={handleToggleWatch}
               />
-            </div>
           )}
+          </div>
         </div>
 
         <div className={mobileHomeTab === 'journal' ? 'space-y-4 md:block md:space-y-5' : 'hidden space-y-4 md:block md:space-y-5'}>
@@ -2906,7 +3071,11 @@ export default function App() {
       <AddHoldingModal
         open={addHoldingOpen}
         market={marketTab === 'all' ? 'KR' : marketTab}
-        onClose={() => setAddHoldingOpen(false)}
+        seed={holdingSeed}
+        onClose={() => {
+          setAddHoldingOpen(false);
+          setHoldingSeed(null);
+        }}
         onAdd={handleAddHolding}
       />
       <PositionDetailModal

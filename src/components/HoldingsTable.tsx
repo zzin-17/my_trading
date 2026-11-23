@@ -186,6 +186,10 @@ interface HoldingsTableProps {
   reachedTodoCountByPositionId?: Record<string, number>;
   /** 포지션별 거래 가능 수량 = 보유수량 - 미체결 매도 수량 */
   availableQuantityByPositionId?: Record<string, number>;
+  watchedTickers?: ReadonlySet<string>;
+  onToggleWatch?: (ticker: string, name: string) => void;
+  /** 있으면 '보유 종목' 제목 자리에 둔다 */
+  heading?: ReactNode;
 }
 
 export function HoldingsTable({
@@ -206,6 +210,9 @@ export function HoldingsTable({
   pendingTodoCountByPositionId = {},
   reachedTodoCountByPositionId = {},
   availableQuantityByPositionId = {},
+  watchedTickers,
+  onToggleWatch,
+  heading,
 }: HoldingsTableProps) {
   const [sortKey, setSortKey] = useState<HoldingSortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -332,7 +339,7 @@ export function HoldingsTable({
       <div className="flex flex-col gap-1.5">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
           <div className="min-w-0">
-            <h3 className="text-sm font-medium text-textMain">보유 종목</h3>
+            {heading ?? <h3 className="text-sm font-medium text-textMain">보유 종목</h3>}
             <p className="mt-0.5 hidden text-[10px] leading-relaxed text-textMuted md:block">
               검색 · 정렬 · 상세 확인 · 등락은 전일 종가 대비 · 시가 대비 ±{KR_OPEN_ATTENTION_ABS_PCT}% 이상 현재가 강조
             </p>
@@ -553,15 +560,35 @@ export function HoldingsTable({
                     }`}
                     style={{ gridTemplateColumns: `${mobileNameColWidth} ${mobileMetricGridTemplate}` }}
                   >
-                    <button
-                      type="button"
-                      onClick={() => onOpenDetail(p.id)}
-                      className="sticky left-0 z-[11] row-span-2 min-w-0 overflow-hidden border-r border-border/60 bg-surface px-2 py-1.5 text-left shadow-[8px_0_12px_-10px_rgba(0,0,0,0.45)]"
-                    >
-                      <span className="block line-clamp-2 text-[12px] font-semibold leading-snug text-textMain underline-offset-2 hover:underline">
-                        {p.name}
-                      </span>
+                    <div className="sticky left-0 z-[11] row-span-2 min-w-0 overflow-hidden border-r border-border/60 bg-surface px-2 py-1.5 text-left shadow-[8px_0_12px_-10px_rgba(0,0,0,0.45)]">
+                      <button
+                        type="button"
+                        onClick={() => onOpenDetail(p.id)}
+                        className="block w-full text-left"
+                      >
+                        <span className="block line-clamp-2 text-[12px] font-semibold leading-snug text-textMain underline-offset-2 hover:underline">
+                          {p.name}
+                        </span>
+                      </button>
                       <span className="mt-0.5 flex flex-wrap items-center gap-0.5">
+                        {onToggleWatch ? (
+                          <button
+                            type="button"
+                            aria-label={
+                              watchedTickers?.has(normalizeKrTicker(p.ticker))
+                                ? `${p.name} 관심 해제`
+                                : `${p.name} 관심 추가`
+                            }
+                            onClick={() => onToggleWatch(p.ticker, p.name)}
+                            className={`px-0.5 text-[12px] leading-none ${
+                              watchedTickers?.has(normalizeKrTicker(p.ticker))
+                                ? 'text-accent'
+                                : 'text-textMuted'
+                            }`}
+                          >
+                            {watchedTickers?.has(normalizeKrTicker(p.ticker)) ? '★' : '☆'}
+                          </button>
+                        ) : null}
                         <span
                           className={`inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-[9px] font-semibold ${krBoardBadgeClass(
                             p.market === 'KR' ? krBoardForTicker(krBoardByTicker, p.ticker) : undefined,
@@ -582,7 +609,7 @@ export function HoldingsTable({
                           </span>
                         ) : null}
                       </span>
-                    </button>
+                    </div>
 
                     <HoldingValueCell
                       value={formatMoney(p.avg_price, p.currency)}
@@ -829,13 +856,33 @@ export function HoldingsTable({
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-2 py-2">
-                    <button
-                      type="button"
-                      onClick={() => onOpenDetail(p.id)}
-                      className="whitespace-nowrap text-left text-textMain underline-offset-2 hover:underline"
-                    >
-                      {p.name}
-                    </button>
+                    <span className="inline-flex items-center gap-1">
+                      {onToggleWatch ? (
+                        <button
+                          type="button"
+                          aria-label={
+                            watchedTickers?.has(normalizeKrTicker(p.ticker))
+                              ? `${p.name} 관심 해제`
+                              : `${p.name} 관심 추가`
+                          }
+                          onClick={() => onToggleWatch(p.ticker, p.name)}
+                          className={`text-[13px] leading-none ${
+                            watchedTickers?.has(normalizeKrTicker(p.ticker))
+                              ? 'text-accent'
+                              : 'text-textMuted'
+                          }`}
+                        >
+                          {watchedTickers?.has(normalizeKrTicker(p.ticker)) ? '★' : '☆'}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => onOpenDetail(p.id)}
+                        className="whitespace-nowrap text-left text-textMain underline-offset-2 hover:underline"
+                      >
+                        {p.name}
+                      </button>
+                    </span>
                   </td>
                   <td className="whitespace-nowrap px-2 py-2 text-left tabular-nums" title={dayChange?.tip}>
                     <DayChangeBlock change={dayChange} currency={p.currency} />

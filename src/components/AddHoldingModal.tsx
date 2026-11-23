@@ -22,6 +22,7 @@ export interface AddHoldingPayload {
 interface AddHoldingModalProps {
   open: boolean;
   market: Market;
+  seed?: { ticker: string; name: string } | null;
   onClose: () => void;
   onAdd: (payload: AddHoldingPayload) => void;
 }
@@ -29,6 +30,7 @@ interface AddHoldingModalProps {
 export function AddHoldingModal({
   open,
   market,
+  seed = null,
   onClose,
   onAdd,
 }: AddHoldingModalProps) {
@@ -52,12 +54,16 @@ export function AddHoldingModal({
     if (!open) return;
     setError(null);
     setLookupMessage(null);
+    if (seed) {
+      setTicker(seed.ticker);
+      setName(seed.name);
+    }
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = prev;
     };
-  }, [open]);
+  }, [open, seed]);
 
   useEffect(() => {
     if (!open || market !== 'KR') return;

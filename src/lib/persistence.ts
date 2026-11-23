@@ -1,5 +1,7 @@
 import type { Trade } from '../types/trade';
 import type { TradePlanTodo } from '../types/todo';
+import type { WatchItem } from '../types/watchItem';
+import { sanitizeWatchItems } from './watchItems';
 
 const STORAGE_KEY = 'traderos-portfolio-v2';
 const STORAGE_UPDATED_AT_KEY = 'traderos-portfolio-v2-updated-at';
@@ -30,6 +32,8 @@ export interface PersistedPortfolioV1 {
   krDayOpenByTicker?: Record<string, number>;
   /** 한국장 시세 갱신으로 수집한 전일 종가(티커→원) — 현재가 등락 표시 */
   krPrevCloseByTicker?: Record<string, number>;
+  /** 이 브라우저에만 저장하는 관심종목. 클라우드 메타에는 넣지 않는다. */
+  watchItems?: WatchItem[];
 }
 
 /** 로컬·가져오기·클라우드 공통: 양의 유한 숫자만 유지 */
@@ -86,6 +90,7 @@ export function coercePersistedPortfolio(
   }
   data.krDayOpenByTicker = sanitizeKrDayOpenByTicker(data.krDayOpenByTicker);
   data.krPrevCloseByTicker = sanitizeKrDayOpenByTicker(data.krPrevCloseByTicker);
+  data.watchItems = sanitizeWatchItems(data.watchItems);
   return data;
 }
 

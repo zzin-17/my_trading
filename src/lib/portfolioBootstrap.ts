@@ -6,6 +6,7 @@ import {
   type PersistedPortfolioV1,
 } from './persistence';
 import { normalizeKrSellCommissionRate } from './krTradingAssumptions';
+import { sanitizeWatchItems } from './watchItems';
 
 /** 티커별 positionId가 없으면 자동 발급 */
 export function reconcilePositionIds(
@@ -59,6 +60,7 @@ export function normalizeLoadedPortfolio(
         : false,
     krDayOpenByTicker: sanitizeKrDayOpenByTicker(raw.krDayOpenByTicker),
     krPrevCloseByTicker: sanitizeKrDayOpenByTicker(raw.krPrevCloseByTicker),
+    watchItems: sanitizeWatchItems(raw.watchItems),
   };
 }
 
@@ -79,6 +81,7 @@ export function buildInitialAppState(): PersistedPortfolioV1 {
     krPreferExtendedQuote: false,
     krDayOpenByTicker: {},
     krPrevCloseByTicker: {},
+    watchItems: [],
   };
 }
 
