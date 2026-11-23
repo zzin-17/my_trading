@@ -249,11 +249,18 @@ export function buildCloudPortfolioMetaInput(
   };
 }
 
+/**
+ * 자동 백업을 남길지 판단하는 값.
+ * 시세·전일가·갱신 시각은 장중에도 계속 바뀌므로 빼서, 계정이 늘어도
+ * 거래 전체가 든 스냅샷이 시세마다 쌓이지 않게 한다.
+ */
 export function portfolioGuardFingerprint(input: PersistedPortfolioV1): string {
   return JSON.stringify({
     trades: buildTradeFingerprintMap(input.trades),
     todos: buildTodoFingerprintMap(input.todos),
-    meta: metaFingerprint(buildCloudPortfolioMetaInput(input)),
+    notes: input.notes,
+    krSellCommissionRate: normalizeKrSellCommissionRate(input.krSellCommissionRate),
+    krPreferExtendedQuote: input.krPreferExtendedQuote === true,
   });
 }
 

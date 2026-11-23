@@ -1062,14 +1062,9 @@ export default function App() {
     networkOnline,
     trades,
     todos,
-    quotes,
-    positionIds,
     notes,
-    quoteUpdatedAt,
-    lastKrQuoteBulkAt,
     krSellCommissionRate,
     krPreferExtendedQuote,
-    krDayOpenByTicker,
     createGuardSnapshot,
   ]);
 

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Trade } from '../types/trade';
 import {
+  portfolioGuardFingerprint,
   reconcileTradesFromSources,
   shouldHydrateFromLegacy,
   shouldKeepLocalOnlyRecord,
 } from './cloudPortfolioStore';
+import type { PersistedPortfolioV1 } from './persistence';
 
 function trade(partial: Pick<Trade, 'id' | 'date' | 'quantity' | 'price'> & Partial<Trade>): Trade {
   return {
@@ -17,6 +19,31 @@ function trade(partial: Pick<Trade, 'id' | 'date' | 'quantity' | 'price'> & Part
     ...partial,
   };
 }
+
+describe('portfolioGuardFingerprint', () => {
+  const base = {
+    trades: [],
+    quotes: { '272450': 10000 },
+    positionIds: {},
+    todos: [],
+    notes: {},
+    quoteUpdatedAt: {},
+    lastKrQuoteBulkAt: null,
+  } satisfies PersistedPortfolioV1;
+
+  it('시세만 바뀌면 자동 백업 지문이 같다', () => {
+    const next = { ...base, quotes: { '272450': 12005 }, lastKrQuoteBulkAt: '2026-11-23T01:00:00.000Z' };
+    expect(portfolioGuardFingerprint(next)).toBe(portfolioGuardFingerprint(base));
+  });
+
+  it('거래가 바뀌면 자동 백업 지문이 달라진다', () => {
+    const next = {
+      ...base,
+      trades: [trade({ id: 'tr-user-1', date: '2026-11-23', quantity: 1, price: 100 })],
+    };
+    expect(portfolioGuardFingerprint(next)).not.toBe(portfolioGuardFingerprint(base));
+  });
+});
 
 describe('shouldHydrateFromLegacy', () => {
   it('라이브 거래가 있으면 레거시를 쓰지 않는다', () => {

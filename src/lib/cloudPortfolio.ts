@@ -544,13 +544,15 @@ export async function createCloudPortfolioSnapshot(
     ...summary,
     createdAt: serverTimestamp(),
   });
-  await appendCloudEvent(uid, {
-    action: 'snapshot.created',
-    entityType: 'snapshot',
-    entityId: snapshotId,
-    sourceDeviceId,
-    summary: `${reason} · 거래 ${summary.tradeCount}건`,
-  });
+  if (reason !== 'auto-guard') {
+    await appendCloudEvent(uid, {
+      action: 'snapshot.created',
+      entityType: 'snapshot',
+      entityId: snapshotId,
+      sourceDeviceId,
+      summary: `${reason} · 거래 ${summary.tradeCount}건`,
+    });
+  }
   return snapshotId;
 }
 
