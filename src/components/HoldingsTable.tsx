@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Position, PositionMetrics, PortfolioSummary } from '../types/portfolio';
 import { formatMoney, formatPercent, formatQuoteUpdatedLabel } from '../lib/format';
 import { isConcentrationRisk, roundPercent } from '../lib/portfolioMath';
@@ -188,6 +188,10 @@ interface HoldingsTableProps {
   availableQuantityByPositionId?: Record<string, number>;
   /** 있으면 '보유 종목' 제목 자리에 둔다 */
   heading?: ReactNode;
+  /** 관심 탭으로 표가 사라져도 부모가 정렬을 유지한다 */
+  sortKey: HoldingSortKey;
+  sortDir: SortDir;
+  onSort: (key: HoldingSortKey) => void;
 }
 
 export function HoldingsTable({
@@ -209,9 +213,10 @@ export function HoldingsTable({
   reachedTodoCountByPositionId = {},
   availableQuantityByPositionId = {},
   heading,
+  sortKey,
+  sortDir,
+  onSort,
 }: HoldingsTableProps) {
-  const [sortKey, setSortKey] = useState<HoldingSortKey>('name');
-  const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [mobileScrollLeft, setMobileScrollLeft] = useState(0);
   const [krBoardByTicker, setKrBoardByTicker] = useState<Map<string, string>>(
     () => new Map(),
@@ -221,16 +226,6 @@ export function HoldingsTable({
     'minmax(5.35rem,1.2fr) minmax(4.25rem,0.95fr) minmax(5.35rem,1.2fr) minmax(5.35rem,1.2fr)';
   const mobileMetricColsWidth = '20.3rem';
   const mobileTotalMinWidth = '27.55rem';
-
-  const handleSortHeader = useCallback((key: HoldingSortKey) => {
-    // setSortDir를 setSortKey 업데이트 함수 안에서 호출하면 배치 순서 때문에 토글이 누락될 수 있음
-    if (sortKey === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortKey(key);
-      setSortDir('asc');
-    }
-  }, [sortKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -359,7 +354,7 @@ export function HoldingsTable({
             placeholder="코드·종목 검색"
             value={filterText}
             onChange={(e) => onFilterChange(e.target.value)}
-            className="min-w-0 w-full rounded-md border border-border bg-background px-3 py-1.5 text-[13px] text-textMain outline-none focus:border-accent sm:max-w-[14rem] lg:max-w-[16rem]"
+            className="min-w-0 w-full flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-[13px] text-textMain outline-none focus:border-accent"
           />
           <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0 sm:justify-end">
             <button
@@ -406,7 +401,7 @@ export function HoldingsTable({
             <div className="sticky top-0 z-20 flex overflow-hidden rounded-t-lg border-b border-border/60 bg-surface/95 shadow-sm backdrop-blur">
               <button
                 type="button"
-                onClick={() => handleSortHeader('name')}
+                onClick={() => onSort('name')}
                 title={
                   sortKey === 'name'
                     ? sortDir === 'asc'
@@ -442,14 +437,14 @@ export function HoldingsTable({
                     columnKey="avg_price"
                     sortKey={sortKey}
                     sortDir={sortDir}
-                    onSort={handleSortHeader}
+                    onSort={onSort}
                   />
                   <HoldingHeaderCell
                     label="보유수량"
                     columnKey="quantity"
                     sortKey={sortKey}
                     sortDir={sortDir}
-                    onSort={handleSortHeader}
+                    onSort={onSort}
                     borderLeft
                   />
                   <HoldingHeaderCell
@@ -457,7 +452,7 @@ export function HoldingsTable({
                     columnKey="cost_basis"
                     sortKey={sortKey}
                     sortDir={sortDir}
-                    onSort={handleSortHeader}
+                    onSort={onSort}
                     borderLeft
                   />
                   <HoldingHeaderCell
@@ -465,7 +460,7 @@ export function HoldingsTable({
                     columnKey="market_value"
                     sortKey={sortKey}
                     sortDir={sortDir}
-                    onSort={handleSortHeader}
+                    onSort={onSort}
                     borderLeft
                   />
                   <HoldingHeaderCell
@@ -473,7 +468,7 @@ export function HoldingsTable({
                     columnKey="current_price"
                     sortKey={sortKey}
                     sortDir={sortDir}
-                    onSort={handleSortHeader}
+                    onSort={onSort}
                     borderTop
                   />
                   <HoldingHeaderCell
@@ -486,7 +481,7 @@ export function HoldingsTable({
                     columnKey="pnl"
                     sortKey={sortKey}
                     sortDir={sortDir}
-                    onSort={handleSortHeader}
+                    onSort={onSort}
                     borderTop
                     borderLeft
                   />
@@ -495,7 +490,7 @@ export function HoldingsTable({
                     columnKey="return_pct"
                     sortKey={sortKey}
                     sortDir={sortDir}
-                    onSort={handleSortHeader}
+                    onSort={onSort}
                     borderTop
                     borderLeft
                   />
@@ -671,7 +666,7 @@ export function HoldingsTable({
                 columnKey="ticker"
                 sortKey={sortKey}
                 sortDir={sortDir}
-                onSort={handleSortHeader}
+                onSort={onSort}
                 className="whitespace-nowrap px-2 py-2"
               />
               <SortableColumnHeader
@@ -679,7 +674,7 @@ export function HoldingsTable({
                 columnKey="name"
                 sortKey={sortKey}
                 sortDir={sortDir}
-                onSort={handleSortHeader}
+                onSort={onSort}
                 className="whitespace-nowrap px-2 py-2"
               />
               <SortableColumnHeader
@@ -687,7 +682,7 @@ export function HoldingsTable({
                 columnKey="day_change"
                 sortKey={sortKey}
                 sortDir={sortDir}
-                onSort={handleSortHeader}
+                onSort={onSort}
                 align="left"
                 className="whitespace-nowrap px-2 py-2 tabular-nums"
               />
@@ -696,7 +691,7 @@ export function HoldingsTable({
                 columnKey="current_price"
                 sortKey={sortKey}
                 sortDir={sortDir}
-                onSort={handleSortHeader}
+                onSort={onSort}
                 align="right"
                 className="whitespace-nowrap px-2 py-2 tabular-nums"
               />
@@ -705,7 +700,7 @@ export function HoldingsTable({
                 columnKey="avg_price"
                 sortKey={sortKey}
                 sortDir={sortDir}
-                onSort={handleSortHeader}
+                onSort={onSort}
                 align="right"
                 className="whitespace-nowrap px-2 py-2 tabular-nums"
               />
@@ -714,7 +709,7 @@ export function HoldingsTable({
                 columnKey="quantity"
                 sortKey={sortKey}
                 sortDir={sortDir}
-                onSort={handleSortHeader}
+                onSort={onSort}
                 align="right"
                 className="whitespace-nowrap px-2 py-2 tabular-nums"
               />
@@ -723,7 +718,7 @@ export function HoldingsTable({
                 columnKey="cost_basis"
                 sortKey={sortKey}
                 sortDir={sortDir}
-                onSort={handleSortHeader}
+                onSort={onSort}
                 align="right"
                 className="whitespace-nowrap px-2 py-2 tabular-nums"
               />
@@ -732,7 +727,7 @@ export function HoldingsTable({
                 columnKey="market_value"
                 sortKey={sortKey}
                 sortDir={sortDir}
-                onSort={handleSortHeader}
+                onSort={onSort}
                 align="right"
                 className="whitespace-nowrap px-2 py-2 tabular-nums"
               />
@@ -741,7 +736,7 @@ export function HoldingsTable({
                 columnKey="pnl"
                 sortKey={sortKey}
                 sortDir={sortDir}
-                onSort={handleSortHeader}
+                onSort={onSort}
                 align="right"
                 className="whitespace-nowrap px-2 py-2 tabular-nums"
               />
@@ -750,7 +745,7 @@ export function HoldingsTable({
                 columnKey="return_pct"
                 sortKey={sortKey}
                 sortDir={sortDir}
-                onSort={handleSortHeader}
+                onSort={onSort}
                 align="right"
                 className="whitespace-nowrap px-2 py-2 tabular-nums"
               />
@@ -759,7 +754,7 @@ export function HoldingsTable({
                 columnKey="weight"
                 sortKey={sortKey}
                 sortDir={sortDir}
-                onSort={handleSortHeader}
+                onSort={onSort}
                 align="right"
                 className="whitespace-nowrap px-2 py-2 tabular-nums"
               />

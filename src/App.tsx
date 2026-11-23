@@ -11,7 +11,7 @@ import {
 } from 'react';
 import { SummaryCards } from './components/SummaryCards';
 import { MarketPairSummaryCards } from './components/MarketPairSummaryCards';
-import { HoldingsTable } from './components/HoldingsTable';
+import { HoldingsTable, type HoldingSortKey, type SortDir } from './components/HoldingsTable';
 import { TradeJournal } from './components/TradeJournal';
 import { AppSettingsModal } from './components/AppSettingsModal';
 import { RealizedPnlPanel } from './components/RealizedPnlPanel';
@@ -411,6 +411,16 @@ export default function App() {
     () => getInitialAppState().watchItems ?? [],
   );
   const [assetView, setAssetView] = useState<'holdings' | 'watch'>('holdings');
+  const [holdingSortKey, setHoldingSortKey] = useState<HoldingSortKey>('name');
+  const [holdingSortDir, setHoldingSortDir] = useState<SortDir>('asc');
+  const handleHoldingSort = useCallback((key: HoldingSortKey) => {
+    if (holdingSortKey === key) {
+      setHoldingSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setHoldingSortKey(key);
+      setHoldingSortDir('asc');
+    }
+  }, [holdingSortKey]);
   const [holdingSeed, setHoldingSeed] = useState<{ ticker: string; name: string } | null>(
     null,
   );
@@ -3152,6 +3162,9 @@ export default function App() {
                 pendingTodoCountByPositionId={pendingTodoCountByPositionId}
                 reachedTodoCountByPositionId={reachedTodoCountByPositionId}
                 availableQuantityByPositionId={availableQuantityByPositionId}
+                sortKey={holdingSortKey}
+                sortDir={holdingSortDir}
+                onSort={handleHoldingSort}
               />
           )}
           </div>
