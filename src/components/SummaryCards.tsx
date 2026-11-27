@@ -1,7 +1,18 @@
+import { useEffect, useState } from 'react';
 import type { PortfolioSummary } from '../types/portfolio';
 import { formatMoney, formatPercent } from '../lib/format';
 import { ExpandableText } from './ExpandableText';
 import { pnlTextClass, pnlToneClass } from '../lib/pnlTone';
+
+const DESKTOP_SUMMARY_COLLAPSED_KEY = 'traderos-desktop-summary-collapsed-v1';
+
+function readDesktopSummaryCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(DESKTOP_SUMMARY_COLLAPSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 interface SummaryCardsProps {
   summary: PortfolioSummary;
@@ -14,6 +25,18 @@ export function SummaryCards({ summary, quoteDisclaimer }: SummaryCardsProps) {
   const koreanPnl = currency === 'KRW';
   const pnlClass = pnlTextClass(summary.total_pnl, koreanPnl);
   const pnlTone = summary.total_pnl >= 0 ? 'pos' : 'neg';
+  const [desktopCollapsed, setDesktopCollapsed] = useState(readDesktopSummaryCollapsed);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        DESKTOP_SUMMARY_COLLAPSED_KEY,
+        desktopCollapsed ? '1' : '0',
+      );
+    } catch {
+      /* 저장이 막혀도 이번 화면의 접기 상태는 유지한다 */
+    }
+  }, [desktopCollapsed]);
 
   return (
     <div className="space-y-1.5">
@@ -46,39 +69,69 @@ export function SummaryCards({ summary, quoteDisclaimer }: SummaryCardsProps) {
         </div>
       </div>
 
-      <div className="hidden rounded-xl border border-border/60 bg-surface/50 px-3 py-2.5 md:block">
-        <div className="grid grid-cols-4 gap-0">
-          <DesktopSummaryStat
-            label="투자금"
-            value={formatMoney(summary.total_cost_basis, currency)}
-          />
-          <DesktopSummaryStat
-            label="평가액"
-            value={formatMoney(summary.total_market_value, currency)}
-            bordered
-          />
-          <DesktopSummaryStat
-            label="평가손익"
-            value={formatMoney(summary.total_pnl, currency)}
-            tone={pnlTone}
-            koreanPnl={koreanPnl}
-            bordered
-            strong
-          />
-          <DesktopSummaryStat
-            label="수익률"
-            value={formatPercent(summary.total_return_pct, true)}
-            tone={pnlTone}
-            koreanPnl={koreanPnl}
-            bordered
-          />
-        </div>
+      <div className="hidden rounded-xl border border-border/60 bg-surface/50 md:block">
+        <button
+          type="button"
+          aria-expanded={!desktopCollapsed}
+          aria-controls="desktop-summary-body"
+          onClick={() => setDesktopCollapsed((open) => !open)}
+          className={`flex w-full items-center justify-between gap-3 px-3 text-left hover:bg-white/[0.03] ${
+            desktopCollapsed ? 'py-2' : 'pt-1.5'
+          }`}
+        >
+          {desktopCollapsed ? (
+            <span className="min-w-0 truncate text-[12px]">
+              <span className="font-medium text-textMuted">평가손익 </span>
+              <span className={`font-semibold tabular-nums ${pnlClass}`}>
+                {formatMoney(summary.total_pnl, currency)}
+              </span>
+              <span className={`ml-2 font-semibold tabular-nums ${pnlClass}`}>
+                {formatPercent(summary.total_return_pct, true)}
+              </span>
+            </span>
+          ) : (
+            <span className="text-[11px] font-medium text-textMuted">투자 요약</span>
+          )}
+          <span className="shrink-0 rounded px-2 py-0.5 text-[11px] font-medium text-textMuted">
+            {desktopCollapsed ? '펼치기' : '접기'}
+          </span>
+        </button>
+        {desktopCollapsed ? null : (
+          <div id="desktop-summary-body" className="grid grid-cols-4 gap-0 px-3 pb-2.5">
+            <DesktopSummaryStat
+              label="투자금"
+              value={formatMoney(summary.total_cost_basis, currency)}
+            />
+            <DesktopSummaryStat
+              label="평가액"
+              value={formatMoney(summary.total_market_value, currency)}
+              bordered
+            />
+            <DesktopSummaryStat
+              label="평가손익"
+              value={formatMoney(summary.total_pnl, currency)}
+              tone={pnlTone}
+              koreanPnl={koreanPnl}
+              bordered
+              strong
+            />
+            <DesktopSummaryStat
+              label="수익률"
+              value={formatPercent(summary.total_return_pct, true)}
+              tone={pnlTone}
+              koreanPnl={koreanPnl}
+              bordered
+            />
+          </div>
+        )}
       </div>
       {quoteDisclaimer ? (
         <>
-          <p className="hidden text-[10px] leading-relaxed text-textMuted md:block">
-            {quoteDisclaimer}
-          </p>
+          {desktopCollapsed ? null : (
+            <p className="hidden text-[10px] leading-relaxed text-textMuted md:block">
+              {quoteDisclaimer}
+            </p>
+          )}
           <ExpandableText
             text={quoteDisclaimer}
             maxChars={30}
