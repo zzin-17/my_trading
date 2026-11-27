@@ -2942,7 +2942,7 @@ export default function App() {
             : undefined
         }
       >
-      <header className="border-b border-border/70 bg-surface/80 px-4 pb-2.5 pt-[max(0.875rem,env(safe-area-inset-top,0px))] backdrop-blur sm:px-6">
+      <header className="border-b border-border/70 bg-surface/80 px-4 pb-2.5 pt-[max(0.875rem,env(safe-area-inset-top,0px))] backdrop-blur sm:px-6 md:pb-0">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-lg font-semibold tracking-tight text-textMain">
@@ -3020,7 +3020,7 @@ export default function App() {
         </div>
       ) : null}
       <main
-        className={`mx-auto max-w-7xl space-y-3 px-0 py-3 md:space-y-3 md:px-4 md:pt-3 lg:px-6 ${
+        className={`mx-auto flex max-w-7xl flex-col gap-3 px-0 py-3 md:px-4 md:pt-0 lg:px-6 ${
           marketTab === 'US'
             ? 'pb-24 md:pb-6'
             : 'pb-32 md:pb-12'

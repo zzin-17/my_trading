@@ -69,7 +69,7 @@ export function SummaryCards({ summary, quoteDisclaimer }: SummaryCardsProps) {
         </div>
       </div>
 
-      <div className="hidden rounded-xl border border-border/60 bg-surface/50 md:block">
+      <div className="hidden rounded-xl border border-border/60 bg-surface/50 md:!mt-0 md:block">
         <button
           type="button"
           aria-expanded={!desktopCollapsed}
