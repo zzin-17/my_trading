@@ -381,7 +381,7 @@ export function TradeJournal({
   };
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4 sm:p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
+    <div className="rounded-lg border border-border bg-surface p-4 sm:p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0 md:py-2">
       <div className="flex flex-col gap-2">
         <div className="flex flex-col gap-1.5 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start lg:gap-x-3">
           <div className="min-w-0">

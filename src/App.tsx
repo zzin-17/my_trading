@@ -3020,10 +3020,10 @@ export default function App() {
         </div>
       ) : null}
       <main
-        className={`mx-auto max-w-7xl space-y-4 px-0 py-4 md:space-y-5 md:px-4 lg:px-6 ${
+        className={`mx-auto max-w-7xl space-y-4 px-0 py-4 md:space-y-3 md:px-4 md:pt-3 lg:px-6 ${
           marketTab === 'US'
-            ? 'pb-32 md:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]'
-            : 'pb-40 md:pb-16'
+            ? 'pb-32 md:pb-6'
+            : 'pb-40 md:pb-6'
         }`}
       >
         <div className="md:hidden">
@@ -3045,7 +3045,7 @@ export default function App() {
         ) : null}
 
         <div className={mobileHomeTab === 'portfolio' ? 'md:block' : 'hidden md:block'}>
-          <div className="space-y-4 md:space-y-5">
+          <div className="space-y-4 md:space-y-2">
           {visiblePositions.length > 0 ? (
             <>
               {showMixedBanner && <MixedCurrencyBanner />}
@@ -3064,7 +3064,7 @@ export default function App() {
             </>
           ) : null}
           {assetView === 'watch' ? (
-            <section className="rounded-lg border border-border bg-surface p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
+            <section className="rounded-lg border border-border bg-surface p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0 md:py-2">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                 {assetTabs}
                 {lastKrQuoteBulkAt ? (
@@ -3170,7 +3170,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className={mobileHomeTab === 'journal' ? 'space-y-4 md:block md:space-y-5' : 'hidden space-y-4 md:block md:space-y-5'}>
+        <div className={mobileHomeTab === 'journal' ? 'space-y-4 md:block md:space-y-3' : 'hidden space-y-4 md:block md:space-y-3'}>
           {marketTab !== 'all' ? (
             <MarketTodoList
               market={marketTab}
@@ -3223,13 +3223,13 @@ export default function App() {
 
           <Suspense
             fallback={
-              <div className="grid grid-cols-1 gap-3 md:gap-5 xl:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                 <ChartSkeleton label="종목 비중 차트 불러오는 중…" />
                 <ChartSkeleton label="실현손익 차트 불러오는 중…" />
               </div>
             }
           >
-            <div className="space-y-3 md:space-y-5">
+            <div className="space-y-3">
               <div className="md:hidden">
                 <button
                   type="button"
@@ -3239,11 +3239,11 @@ export default function App() {
                   {mobileChartsOpen ? '차트 접기' : '차트 보기'}
                 </button>
               </div>
-              <div className={mobileChartsOpen ? 'space-y-3 md:space-y-5' : 'hidden md:block md:space-y-5'}>
+              <div className={mobileChartsOpen ? 'space-y-3' : 'hidden space-y-3 md:block'}>
                 {marketTab === 'all' ? (
                   <MarketSplitCard weights={marketSplitWeights} />
                 ) : null}
-                <div className="grid grid-cols-1 gap-3 md:gap-5 xl:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                   <StockBarChart
                     data={topStocks}
                     currency={summary.currency}

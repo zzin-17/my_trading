@@ -495,7 +495,7 @@ export function MarketTodoList({
       : '검색 조건에 맞는 계획이 없습니다.';
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
+    <div className="rounded-lg border border-border bg-surface p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0 md:py-2">
       <div className="mb-3 space-y-2">
         <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">

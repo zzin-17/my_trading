@@ -76,7 +76,7 @@ export function SummaryCards({ summary, quoteDisclaimer }: SummaryCardsProps) {
           aria-controls="desktop-summary-body"
           onClick={() => setDesktopCollapsed((open) => !open)}
           className={`flex w-full items-center justify-between gap-3 px-3 text-left hover:bg-white/[0.03] ${
-            desktopCollapsed ? 'py-2' : 'pt-1.5'
+            desktopCollapsed ? 'py-1.5' : 'pt-1'
           }`}
         >
           {desktopCollapsed ? (

@@ -326,7 +326,7 @@ export function HoldingsTable({
   }, [rows, sortKey, sortDir, krBoardByTicker, krPrevCloseByTicker]);
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0">
+    <div className="rounded-lg border border-border bg-surface p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0 md:py-2">
       <div className="flex flex-col gap-1.5">
         {heading ?? <h3 className="text-sm font-medium text-textMain">보유 종목</h3>}
         <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
