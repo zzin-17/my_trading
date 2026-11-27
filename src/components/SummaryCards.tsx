@@ -69,13 +69,13 @@ export function SummaryCards({ summary, quoteDisclaimer }: SummaryCardsProps) {
         </div>
       </div>
 
-      <div className="hidden rounded-xl border border-border/60 bg-surface/50 md:!mt-0 md:block">
+      <div className="hidden bg-transparent md:!mt-0 md:block">
         <button
           type="button"
           aria-expanded={!desktopCollapsed}
           aria-controls="desktop-summary-body"
           onClick={() => setDesktopCollapsed((open) => !open)}
-          className={`flex w-full items-center justify-between gap-3 px-3 text-left hover:bg-white/[0.03] ${
+          className={`flex w-full items-center justify-between gap-3 px-0 text-left ${
             desktopCollapsed ? 'py-1.5' : 'pt-1'
           }`}
         >
@@ -97,7 +97,7 @@ export function SummaryCards({ summary, quoteDisclaimer }: SummaryCardsProps) {
           </span>
         </button>
         {desktopCollapsed ? null : (
-          <div id="desktop-summary-body" className="grid grid-cols-4 gap-0 px-3 pb-2.5">
+          <div id="desktop-summary-body" className="grid grid-cols-4 gap-0 px-0 pb-2.5">
             <DesktopSummaryStat
               label="투자금"
               value={formatMoney(summary.total_cost_basis, currency)}
@@ -160,7 +160,9 @@ function DesktopSummaryStat({
   strong?: boolean;
 }) {
   return (
-    <div className={`min-w-0 px-3 py-1 ${bordered ? 'border-l border-border/60' : ''}`}>
+    <div
+      className={`min-w-0 py-1 ${bordered ? 'border-l border-border/60 px-3' : 'pr-3'}`}
+    >
       <p className="text-[11px] font-medium tracking-tight text-textMuted">{label}</p>
       <p
         className={`mt-1 truncate tabular-nums ${
