@@ -2942,16 +2942,11 @@ export default function App() {
             : undefined
         }
       >
-      <header className="border-b border-border/70 bg-surface/80 px-4 pb-2.5 pt-[max(0.875rem,env(safe-area-inset-top,0px))] backdrop-blur sm:px-6 md:pb-0">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight text-textMain">
-              TraderOS — Portfolio Visual
-            </h1>
-            <p className="hidden text-[11px] text-textMuted sm:block">
-              매매·보유·시세를 한 화면에서 확인
-            </p>
-          </div>
+      <header className="border-b border-border/70 bg-surface/80 px-4 pb-2.5 pt-[max(0.875rem,env(safe-area-inset-top,0px))] backdrop-blur sm:px-6 md:pb-1.5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-lg font-semibold tracking-tight text-textMain">
+            TraderOS — Portfolio Visual
+          </h1>
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
             <AlertBell
               reached={bellAlerts}
