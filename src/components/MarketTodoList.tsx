@@ -458,6 +458,19 @@ export function MarketTodoList({
         ) : null}
         <button
           type="button"
+          onClick={() => openEditModal(todo)}
+          className={`rounded border border-border font-medium text-textMain hover:bg-white/5 ${
+            options?.stacked
+              ? 'px-1.5 py-1 text-[10px] text-center'
+              : options?.small
+                ? 'flex-1 px-2 py-1 text-[10px] text-center'
+                : 'px-2 py-1 text-[11px]'
+          }`}
+        >
+          수정
+        </button>
+        <button
+          type="button"
           onClick={() => handleDeleteTodo(todo)}
           className={`rounded border border-negative/40 text-negative hover:bg-negative/10 ${
             options?.stacked
@@ -471,7 +484,7 @@ export function MarketTodoList({
         </button>
       </div>
     ),
-    [handleDeleteTodo, market, onCreateTrade, onOpenHoldingDetail, onToggleDone],
+    [handleDeleteTodo, market, onCreateTrade, onOpenHoldingDetail, onToggleDone, openEditModal],
   );
 
   const emptyListMessage =
@@ -615,7 +628,7 @@ export function MarketTodoList({
             className="rounded-md border border-border bg-background px-3 py-1.5 text-[13px] text-textMain outline-none focus:border-accent"
           />
           <input
-            placeholder="메모(선택)"
+            placeholder="비고(선택)"
             value={note}
             onChange={(e) => {
               setNote(e.target.value);
@@ -1113,7 +1126,7 @@ export function MarketTodoList({
               <input
                 value={editNote}
                 onChange={(e) => setEditNote(e.target.value)}
-                placeholder="메모(선택)"
+                placeholder="비고(선택)"
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-textMain outline-none focus:border-accent"
               />
               <div className="rounded-md border border-border bg-background/50 p-3">
