@@ -3020,10 +3020,10 @@ export default function App() {
         </div>
       ) : null}
       <main
-        className={`mx-auto max-w-7xl space-y-4 px-0 py-4 md:space-y-3 md:px-4 md:pt-3 lg:px-6 ${
+        className={`mx-auto max-w-7xl space-y-3 px-0 py-3 md:space-y-3 md:px-4 md:pt-3 lg:px-6 ${
           marketTab === 'US'
-            ? 'pb-32 md:pb-6'
-            : 'pb-40 md:pb-6'
+            ? 'pb-24 md:pb-6'
+            : 'pb-32 md:pb-12'
         }`}
       >
         <div className="md:hidden">
@@ -3045,7 +3045,7 @@ export default function App() {
         ) : null}
 
         <div className={mobileHomeTab === 'portfolio' ? 'md:block' : 'hidden md:block'}>
-          <div className="space-y-4 md:space-y-2">
+          <div className="space-y-3 md:space-y-2">
           {visiblePositions.length > 0 ? (
             <>
               {showMixedBanner && <MixedCurrencyBanner />}
@@ -3064,7 +3064,7 @@ export default function App() {
             </>
           ) : null}
           {assetView === 'watch' ? (
-            <section className="rounded-lg border border-border bg-surface p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0 md:py-2">
+            <section className="rounded-lg border border-border bg-surface p-3 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0 md:py-2">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                 {assetTabs}
                 {lastKrQuoteBulkAt ? (
@@ -3073,7 +3073,7 @@ export default function App() {
                   </p>
                 ) : null}
               </div>
-              <div className="mt-3 md:hidden">
+              <div className="mt-2 md:hidden">
                 <WatchlistPanel
                   bare
                   presentation="mobile"
@@ -3096,7 +3096,7 @@ export default function App() {
                   }}
                 />
               </div>
-              <div className="mt-3 hidden md:block">
+              <div className="mt-2 hidden md:block">
                 <WatchlistPanel
                   bare
                   presentation="desktop"
@@ -3170,7 +3170,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className={mobileHomeTab === 'journal' ? 'space-y-4 md:block md:space-y-3' : 'hidden space-y-4 md:block md:space-y-3'}>
+        <div className={mobileHomeTab === 'journal' ? 'space-y-3 md:block' : 'hidden space-y-3 md:block'}>
           {marketTab !== 'all' ? (
             <MarketTodoList
               market={marketTab}

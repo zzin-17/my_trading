@@ -266,7 +266,7 @@ export function RealizedPnlPanel({
         : Boolean(dayRangeStart) || Boolean(dayRangeEnd);
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4 sm:p-5 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0 md:py-2">
+    <div className="rounded-lg border border-border bg-surface p-3 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0 md:py-2">
       <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-center gap-2">
           <h3 className="shrink-0 text-sm font-semibold text-textMain tracking-tight">

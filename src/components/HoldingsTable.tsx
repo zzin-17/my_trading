@@ -326,7 +326,7 @@ export function HoldingsTable({
   }, [rows, sortKey, sortDir, krBoardByTicker, krPrevCloseByTicker]);
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0 md:py-2">
+    <div className="rounded-lg border border-border bg-surface p-3 md:rounded-none md:border-x-0 md:border-y md:bg-transparent md:px-0 md:py-2">
       <div className="flex flex-col gap-1.5">
         {heading ?? <h3 className="text-sm font-medium text-textMain">보유 종목</h3>}
         <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
@@ -389,7 +389,7 @@ export function HoldingsTable({
         </div>
       </div>
 
-      <div className="mt-3 md:hidden">
+      <div className="mt-2 md:hidden">
         {sortedRows.length === 0 && q ? (
           <div className="rounded-md border border-border/60 px-4 py-10 text-center text-[13px] text-textMuted">
             조건에 맞는 종목이 없습니다. 필터를 바꿔 보세요.
@@ -640,7 +640,7 @@ export function HoldingsTable({
 
       </div>
 
-      <div className="mt-3 hidden max-h-[min(65vh,720px)] overflow-auto rounded-md border border-border/60 md:block">
+      <div className="mt-2 hidden max-h-[min(65vh,720px)] overflow-auto rounded-md border border-border/60 md:block">
         <table className="w-full table-fixed min-w-[1180px] border-collapse text-left text-[12px]">
           <colgroup>
             {[
